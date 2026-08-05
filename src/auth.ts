@@ -141,9 +141,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return session
     },
+
+    async redirect({ url, baseUrl }) {
+      // Setelah Google OAuth, selalu arahkan ke /auth/callback untuk routing berdasarkan role
+      if (url.startsWith(baseUrl)) {
+        // Jika sudah ke halaman spesifik (bukan default), biarkan
+        if (url.includes("/auth/callback") || url.includes("/dashboard") || url.includes("/admin") || url.includes("/register")) {
+          return url
+        }
+        // Default redirect ke /auth/callback
+        return `${baseUrl}/auth/callback`
+      }
+      // URL eksternal — arahkan ke callback
+      return `${baseUrl}/auth/callback`
+    },
   },
   pages: {
     signIn: "/login",
-    error: "/login",   // Redirect error ke /login, bukan halaman error bawaan NextAuth
+    error: "/login",
   },
 })
