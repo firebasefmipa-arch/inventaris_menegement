@@ -3,6 +3,12 @@
  * Jalankan dengan: npx tsx scripts/create-super-admin.ts
  */
 
+import { config } from "dotenv";
+import { resolve } from "path";
+
+// Load .env.local dari root project
+config({ path: resolve(process.cwd(), ".env.local") });
+
 import { db } from "../src/db";
 import { users } from "../src/db/schema";
 import { eq } from "drizzle-orm";
