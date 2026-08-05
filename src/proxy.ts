@@ -11,9 +11,16 @@ export async function proxy(req: NextRequest) {
   const isUserDashboard = pathname.startsWith("/dashboard");
   const isCompleteProfile = pathname.startsWith("/register/complete");
 
+  const isHttps = process.env.NEXTAUTH_URL?.startsWith("https://");
+
   const token = await getToken({
     req,
     secret: process.env.NEXTAUTH_SECRET,
+    // Di production dengan HTTPS, NextAuth pakai cookie __Secure- prefix
+    secureCookie: isHttps,
+    cookieName: isHttps
+      ? "__Secure-authjs.session-token"
+      : "authjs.session-token",
   });
 
   const role = token?.role as string | undefined;
