@@ -37,8 +37,7 @@ export function Sidebar() {
 
   const handleLogout = async () => {
     try {
-      await signOut();
-      toast("Berhasil logout", "success");
+      await signOut({ redirectTo: "/admin/login" });
     } catch (error) {
       toast("Gagal logout", "error");
     }
