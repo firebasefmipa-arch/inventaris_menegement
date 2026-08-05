@@ -1,0 +1,60 @@
+# ── Dependencies ──────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Next.js build output ───────────────────────────────────────
+.next/
+out/
+build/
+
+# ── Environment variables (JANGAN pernah di-push!) ─────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# .env.example boleh di-push karena tidak berisi nilai asli
+
+# ── Database & SQL dumps ───────────────────────────────────────
+*.sql
+# Kecuali file migrasi resmi di folder database/ dan drizzle/
+!database/*.sql
+!drizzle/*.sql
+
+# ── TypeScript build info ──────────────────────────────────────
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# ── Script sekali pakai ────────────────────────────────────────
+*.mjs
+# Kecuali config resmi
+!postcss.config.mjs
+!eslint.config.mjs
+
+# ── File sementara / debug ─────────────────────────────────────
+change-password.mjs
+extract-pdf.js
+
+# ── PDF & dokumen sensitif ────────────────────────────────────
+*.pdf
+# Kecuali template publik
+!public/templates/*.pdf
+
+# ── OS & Editor ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# ── Logs ──────────────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ── Coverage & test output ────────────────────────────────────
+coverage/
+.nyc_output/

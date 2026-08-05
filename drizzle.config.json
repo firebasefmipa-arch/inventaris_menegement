@@ -1,0 +1,8 @@
+{
+  "dialect": "mysql",
+  "schema": "./src/db/schema.ts",
+  "out": "./drizzle",
+  "dbCredentials": {
+    "url": "mysql://root:@127.0.0.1:3306/modern_lending"
+  }
+}
