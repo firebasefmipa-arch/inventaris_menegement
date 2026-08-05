@@ -11,8 +11,11 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const session = await auth();
 
+  // Gunakan NEXTAUTH_URL sebagai base agar tidak redirect ke localhost
+  const base = process.env.NEXTAUTH_URL || `https://${req.headers.get("host")}`;
+
   if (!session?.user) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return NextResponse.redirect(new URL("/login", base));
   }
 
   const user = session.user as any;
@@ -20,14 +23,14 @@ export async function GET(req: NextRequest) {
 
   // Admin / super_admin → dashboard admin
   if (role === "admin" || role === "super_admin") {
-    return NextResponse.redirect(new URL("/admin", req.url));
+    return NextResponse.redirect(new URL("/admin", base));
   }
 
   // Profil belum lengkap → complete profile
   if (!user.phone || !user.department) {
-    return NextResponse.redirect(new URL("/register/complete", req.url));
+    return NextResponse.redirect(new URL("/register/complete", base));
   }
 
   // User biasa → halaman pinjam
-  return NextResponse.redirect(new URL("/dashboard/pinjam", req.url));
+  return NextResponse.redirect(new URL("/dashboard/pinjam", base));
 }
