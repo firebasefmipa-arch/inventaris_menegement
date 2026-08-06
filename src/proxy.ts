@@ -58,7 +58,7 @@ export async function proxy(req: NextRequest) {
       url.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(url);
     }
-    const profileComplete = token?.phone && token?.department;
+    const profileComplete = token?.phone && token?.department && token?.nim;
     if (!profileComplete && !isCompleteProfile) {
       return NextResponse.redirect(new URL("/register/complete", nextUrl.origin));
     }

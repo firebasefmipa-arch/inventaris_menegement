@@ -44,6 +44,7 @@ export const users = mysqlTable("user", {
   image: varchar("image", { length: 255 }),
   password: varchar("password", { length: 255 }),
   phone: varchar("phone", { length: 50 }),
+  nim: varchar("nim", { length: 50 }),
   department: varchar("department", { length: 100 }),
   status: mysqlEnum("status", ["pending", "active", "suspended"])
     .default("active"),
@@ -109,6 +110,8 @@ export const transactions = mysqlTable("transactions", {
   borrowerEmail: varchar("borrower_email", { length: 255 }),
   borrowerPhone: varchar("borrower_phone", { length: 50 }),
   borrowerDepartment: varchar("borrower_department", { length: 100 }),
+  borrowerNim: varchar("borrower_nim", { length: 50 }),
+  borrowerLocation: varchar("borrower_location", { length: 255 }),
   quantity: int("quantity").notNull().default(1),
   status: mysqlEnum("status", [
     "pending_signature",

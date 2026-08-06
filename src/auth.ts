@@ -95,6 +95,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = (user as any).role ?? "user"
         token.status = (user as any).status ?? "active"
         token.phone = (user as any).phone ?? null
+        token.nim = (user as any).nim ?? null
         token.department = (user as any).department ?? null
       }
 
@@ -107,6 +108,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               role: users.role,
               status: users.status,
               phone: users.phone,
+              nim: users.nim,
               department: users.department,
               name: users.name,
             })
@@ -118,6 +120,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.role = dbUser.role ?? "user"
             token.status = dbUser.status ?? "active"
             token.phone = dbUser.phone ?? null
+            token.nim = dbUser.nim ?? null
             token.department = dbUser.department ?? null
             if (dbUser.name) token.name = dbUser.name
           }
@@ -129,6 +132,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Trigger update manual (misal dari useSession().update())
       if (trigger === "update" && session) {
         if (session.phone !== undefined) token.phone = session.phone
+        if (session.nim !== undefined) token.nim = session.nim
         if (session.department !== undefined) token.department = session.department
         if (session.name) token.name = session.name
       }
@@ -142,6 +146,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = (token.role as any) ?? "user"
         session.user.status = (token.status as any) ?? "active"
         session.user.phone = (token.phone as any) ?? null
+        session.user.nim = (token.nim as any) ?? null
         session.user.department = (token.department as any) ?? null
       }
       return session

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { User, Mail, Phone, Building2, CheckCircle, PenLine, X } from "lucide-react";
+import { User, Mail, Phone, Building2, CheckCircle, PenLine, X, Hash } from "lucide-react";
 import { useToast } from "@/components/Toaster";
 import { completeRegistration } from "./actions";
 import { useSession, signOut } from "next-auth/react";
@@ -40,6 +40,7 @@ export default function CompleteRegistrationForm({
 }) {
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState("");
+  const [nim, setNim] = useState("");
   const [department, setDepartment] = useState("");
   const [customDepartment, setCustomDepartment] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,6 +65,10 @@ export default function CompleteRegistrationForm({
       toast("Nomor HP wajib diisi", "error");
       return;
     }
+    if (!nim.trim()) {
+      toast("NIM / NIK wajib diisi", "error");
+      return;
+    }
     if (!department) {
       toast("Program studi / divisi wajib dipilih", "error");
       return;
@@ -78,12 +83,13 @@ export default function CompleteRegistrationForm({
       const res = await completeRegistration({
         name,
         phone,
+        nim,
         department: finalDepartment,
       });
       if (!res.success) throw new Error(res.message);
 
       toast(res.message, "success");
-      await update({ phone, department: finalDepartment, name });
+      await update({ phone, nim, department: finalDepartment, name });
       router.push("/dashboard/pinjam");
     } catch (error: any) {
       toast(error.message, "error");
@@ -151,6 +157,26 @@ export default function CompleteRegistrationForm({
             onChange={(e) => setPhone(e.target.value)}
             className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
             placeholder="08123456789"
+          />
+        </div>
+      </div>
+
+      {/* NIM / NIK */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
+          NIM / NIK <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Hash className="h-4 w-4 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            required
+            value={nim}
+            onChange={(e) => setNim(e.target.value)}
+            className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+            placeholder="Nomor Induk Mahasiswa / Nomor Induk Karyawan"
           />
         </div>
       </div>

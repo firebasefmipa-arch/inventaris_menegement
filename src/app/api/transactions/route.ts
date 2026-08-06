@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transactions, items } from "@/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { transactions, transactionItems, items } from "@/db/schema";
+import { eq, desc, and, inArray } from "drizzle-orm";
+import { auth } from "@/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,67 +51,126 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { itemId, borrowerName, borrowerDepartment, borrowerEmail, borrowerPhone, quantity, expectedReturnDate, notes } = body;
+    const {
+      cart,
+      borrowerName,
+      borrowerDepartment,
+      borrowerEmail,
+      borrowerPhone,
+      borrowerNim,
+      borrowerLocation,
+      expectedReturnDate,
+      notes,
+    } = body;
 
-    if (!itemId || !borrowerName || !expectedReturnDate) {
+    if (!borrowerName || !borrowerDepartment || !expectedReturnDate) {
       return NextResponse.json(
-        { error: "Item, peminjam, dan tanggal kembali wajib diisi" },
+        { error: "Nama peminjam, divisi/prodi, dan tanggal kembali wajib diisi" },
         { status: 400 }
       );
     }
 
-    // Check availability
-    const [item] = await db.select().from(items).where(eq(items.id, itemId));
-    if (!item) {
+    // Validasi cart
+    if (!cart || !Array.isArray(cart) || cart.length === 0) {
       return NextResponse.json(
-        { error: "Item tidak ditemukan" },
-        { status: 404 }
-      );
-    }
-
-    const qty = quantity || 1;
-    if (item.availableQuantity < qty) {
-      return NextResponse.json(
-        { error: `Stok tidak mencukupi. Tersedia: ${item.availableQuantity}` },
+        { error: "Pilih minimal satu barang" },
         { status: 400 }
       );
     }
 
-    // Create transaction
-    const [{ id }] = await db
+    const cartItems = cart.map((c: any) => ({
+      itemId: Number(c.itemId),
+      quantity: Math.max(1, Number(c.quantity) || 1),
+      notes: c.notes?.trim() || "",
+    }));
+
+    const itemIds = cartItems.map((c: any) => c.itemId);
+
+    // Ambil semua item sekaligus
+    const dbItems = await db
+      .select()
+      .from(items)
+      .where(inArray(items.id, itemIds));
+
+    const itemMap = new Map(dbItems.map((i) => [i.id, i]));
+
+    // Validasi stok semua item
+    for (const cartItem of cartItems) {
+      const dbItem = itemMap.get(cartItem.itemId);
+      if (!dbItem) {
+        return NextResponse.json(
+          { error: `Barang ID ${cartItem.itemId} tidak ditemukan` },
+          { status: 404 }
+        );
+      }
+      if (dbItem.availableQuantity < cartItem.quantity) {
+        return NextResponse.json(
+          { error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` },
+          { status: 400 }
+        );
+      }
+    }
+
+    const returnDate = new Date(expectedReturnDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (isNaN(returnDate.getTime()) || returnDate < today) {
+      return NextResponse.json(
+        { error: "Tanggal kembali tidak valid" },
+        { status: 400 }
+      );
+    }
+
+    // Buat transaksi utama
+    const [{ id: txId }] = await db
       .insert(transactions)
       .values({
-        itemId,
+        userId: null, // transaksi dari admin, bukan user terdaftar
+        itemId: null, // multi-item, pakai transaction_items
         borrowerName,
         borrowerDepartment: borrowerDepartment || null,
         borrowerEmail: borrowerEmail || null,
         borrowerPhone: borrowerPhone || null,
-        quantity: qty,
-        expectedReturnDate: new Date(expectedReturnDate),
-        notes: notes || null,
+        borrowerNim: borrowerNim || null,
+        borrowerLocation: borrowerLocation || null,
+        quantity: cartItems.reduce((sum: number, c: any) => sum + c.quantity, 0),
+        status: "active", // admin langsung aktif, tanpa perlu TTD
+        expectedReturnDate: returnDate,
+        notes: notes?.trim() || null,
       })
       .$returningId();
 
-    // Update item availability
-    const newAvailable = item.availableQuantity - qty;
-    const newStatus = newAvailable === 0 ? "borrowed" : "available";
+    // Insert semua item ke transaction_items
+    await db.insert(transactionItems).values(
+      cartItems.map((c: any) => ({
+        transactionId: txId,
+        itemId: c.itemId,
+        quantity: c.quantity,
+        notes: c.notes || null,
+      }))
+    );
 
-    await db
-      .update(items)
-      .set({
-        availableQuantity: newAvailable,
-        status: newStatus as "available" | "borrowed",
-        updatedAt: new Date(),
-      })
-      .where(eq(items.id, itemId));
+    // Kurangi stok semua item
+    for (const cartItem of cartItems) {
+      const dbItem = itemMap.get(cartItem.itemId)!;
+      const newAvailable = dbItem.availableQuantity - cartItem.quantity;
+      await db
+        .update(items)
+        .set({
+          availableQuantity: newAvailable,
+          status: newAvailable === 0 ? "borrowed" : "available",
+          updatedAt: new Date(),
+        })
+        .where(eq(items.id, dbItem.id));
+    }
 
-    const [transaction] = await db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.id, id));
-
-    return NextResponse.json(transaction, { status: 201 });
+    return NextResponse.json({ id: txId }, { status: 201 });
   } catch (error) {
     console.error("POST /api/transactions error:", error);
     return NextResponse.json(

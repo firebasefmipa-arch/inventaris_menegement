@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { X, Save, Search, Check } from "lucide-react";
+import { X, Save, Search, Check, Plus, Trash2, Package } from "lucide-react";
 import { useToast } from "@/components/Toaster";
 import { format } from "date-fns";
 
@@ -12,6 +12,12 @@ type Item = {
   category: string;
   availableQuantity: number;
   status: string;
+};
+
+type CartItem = {
+  item: Item;
+  quantity: number;
+  notes: string;
 };
 
 interface BorrowModalProps {
@@ -25,16 +31,20 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
 
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  // Cart
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Search state
   const [itemSearch, setItemSearch] = useState("");
   const [showItemDropdown, setShowItemDropdown] = useState(false);
 
+  // Borrower info
   const [borrowerName, setBorrowerName] = useState("");
   const [borrowerDepartment, setBorrowerDepartment] = useState("");
   const [borrowerEmail, setBorrowerEmail] = useState("");
   const [borrowerPhone, setBorrowerPhone] = useState("");
-
-  const [quantity, setQuantity] = useState("1");
+  const [borrowerNim, setBorrowerNim] = useState("");
+  const [borrowerLocation, setBorrowerLocation] = useState("");
   const [returnDate, setReturnDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() + 3);
@@ -46,13 +56,12 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
 
   useEffect(() => {
     if (isOpen) {
-      fetch("/api/items?status=available")
+      fetch("/api/items?limit=200")
         .then((r) => r.json())
-        .then(setItems);
+        .then((data) => setItems(Array.isArray(data) ? data : data.items || []));
     }
   }, [isOpen]);
 
-  // Close on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -68,14 +77,15 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
   }, [isOpen, onClose]);
 
   const resetForm = () => {
-    setSelectedItem(null);
+    setCart([]);
     setItemSearch("");
     setShowItemDropdown(false);
     setBorrowerName("");
     setBorrowerDepartment("");
     setBorrowerEmail("");
     setBorrowerPhone("");
-    setQuantity("1");
+    setBorrowerNim("");
+    setBorrowerLocation("");
     setReturnDate(() => {
       const date = new Date();
       date.setDate(date.getDate() + 3);
@@ -89,15 +99,48 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
     onClose();
   };
 
+  // Items yang sudah ada di cart tidak ditampilkan di dropdown
+  const cartItemIds = new Set(cart.map((c) => c.item.id));
   const filteredItems = items.filter(
     (item) =>
       item.availableQuantity > 0 &&
+      !cartItemIds.has(item.id) &&
       item.name.toLowerCase().includes(itemSearch.toLowerCase())
   );
 
+  const addToCart = (item: Item) => {
+    setCart((prev) => [...prev, { item, quantity: 1, notes: "" }]);
+    setItemSearch("");
+    setShowItemDropdown(false);
+  };
+
+  const removeFromCart = (itemId: number) => {
+    setCart((prev) => prev.filter((c) => c.item.id !== itemId));
+  };
+
+  const updateCartQuantity = (itemId: number, qty: number) => {
+    setCart((prev) =>
+      prev.map((c) =>
+        c.item.id === itemId
+          ? { ...c, quantity: Math.max(1, Math.min(qty, c.item.availableQuantity)) }
+          : c
+      )
+    );
+  };
+
+  const updateCartNotes = (itemId: number, notes: string) => {
+    setCart((prev) =>
+      prev.map((c) => (c.item.id === itemId ? { ...c, notes } : c))
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedItem || !borrowerName || !returnDate) {
+    if (cart.length === 0) {
+      toast("Pilih minimal satu barang", "error");
+      return;
+    }
+    if (!borrowerName || !borrowerDepartment || !returnDate) {
       toast("Lengkapi semua data yang diperlukan", "error");
       return;
     }
@@ -108,12 +151,18 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          itemId: selectedItem.id,
+          // Multi-item cart
+          cart: cart.map((c) => ({
+            itemId: c.item.id,
+            quantity: c.quantity,
+            notes: c.notes || null,
+          })),
           borrowerName,
           borrowerDepartment,
-          borrowerEmail,
-          borrowerPhone,
-          quantity: parseInt(quantity),
+          borrowerEmail: borrowerEmail || null,
+          borrowerPhone: borrowerPhone || null,
+          borrowerNim: borrowerNim || null,
+          borrowerLocation: borrowerLocation || null,
           expectedReturnDate: returnDate,
           notes: notes || null,
         }),
@@ -124,7 +173,7 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
         throw new Error(data.error || "Gagal menyimpan transaksi");
       }
 
-      toast("Barang berhasil dipinjamkan", "success");
+      toast(`${cart.length} barang berhasil dipinjamkan`, "success");
       handleClose();
       router.refresh();
     } catch (err) {
@@ -150,14 +199,14 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl animate-[slideUp_300ms_ease-out] max-h-[90vh] flex flex-col"
+        className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl animate-[slideUp_300ms_ease-out] max-h-[90vh] flex flex-col"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Pinjam Barang</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Catat peminjaman barang baru
+              Catat peminjaman — bisa lebih dari 1 barang sekaligus
             </p>
           </div>
           <button
@@ -171,113 +220,132 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
         {/* Body (scrollable) */}
         <div className="overflow-y-auto px-6 py-5 flex-1">
           <form id="borrow-form" onSubmit={handleSubmit} className="space-y-5">
-            {/* Informasi Barang */}
+
+            {/* ── Tanggal Kembali (global) ── */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Tanggal Kembali <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={returnDate}
+                onChange={(e) => setReturnDate(e.target.value)}
+                min={format(new Date(), "yyyy-MM-dd")}
+                required
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+            </div>
+
+            {/* ── Daftar Barang (Cart) ── */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-gray-900 border-b pb-1.5">
-                Informasi Barang
+              <h3 className="text-sm font-semibold text-gray-900 border-b pb-1.5 flex items-center gap-2">
+                <Package className="w-4 h-4 text-indigo-500" />
+                Daftar Barang
+                {cart.length > 0 && (
+                  <span className="ml-auto text-xs font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                    {cart.length} barang
+                  </span>
+                )}
               </h3>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Pilih Barang <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Cari barang..."
-                    value={itemSearch}
-                    onChange={(e) => {
-                      setItemSearch(e.target.value);
-                      setShowItemDropdown(true);
-                    }}
-                    onFocus={() => setShowItemDropdown(true)}
-                    onBlur={() =>
-                      setTimeout(() => setShowItemDropdown(false), 200)
-                    }
-                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
-                  {showItemDropdown && filteredItems.length > 0 && (
-                    <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                      {filteredItems.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setSelectedItem(item);
-                            setShowItemDropdown(false);
-                            setItemSearch(item.name);
-                            setQuantity("1");
-                          }}
-                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center justify-between"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {item.name}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {item.category} • {item.availableQuantity}{" "}
-                              tersedia
-                            </p>
-                          </div>
-                          {selectedItem?.id === item.id && (
-                            <Check className="w-4 h-4 text-indigo-600" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {selectedItem && (
-                  <div className="mt-2 bg-indigo-50 rounded-xl p-2.5 flex items-center gap-3">
-                    <Check className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-indigo-900">
-                        {selectedItem.name}
-                      </p>
-                      <p className="text-xs text-indigo-700">
-                        Tersedia: {selectedItem.availableQuantity} unit
-                      </p>
-                    </div>
+              {/* Search tambah barang */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cari dan tambah barang..."
+                  value={itemSearch}
+                  onChange={(e) => {
+                    setItemSearch(e.target.value);
+                    setShowItemDropdown(true);
+                  }}
+                  onFocus={() => setShowItemDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowItemDropdown(false), 200)}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+                {showItemDropdown && filteredItems.length > 0 && (
+                  <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                    {filteredItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => addToCart(item)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 flex items-center justify-between transition-colors"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {item.category} • {item.availableQuantity} tersedia
+                          </p>
+                        </div>
+                        <Plus className="w-4 h-4 text-indigo-500 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showItemDropdown && itemSearch && filteredItems.length === 0 && (
+                  <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm text-gray-400">
+                    Tidak ada barang tersedia
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Jumlah <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={selectedItem?.availableQuantity || 1}
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
+              {/* Cart items */}
+              {cart.length === 0 ? (
+                <div className="text-center py-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                  <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">Belum ada barang dipilih</p>
+                  <p className="text-xs text-gray-300 mt-1">Cari dan tambah barang di atas</p>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Tanggal Kembali <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
-                    min={format(new Date(), "yyyy-MM-dd")}
-                    required
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
+              ) : (
+                <div className="space-y-2">
+                  {cart.map((c, idx) => (
+                    <div
+                      key={c.item.id}
+                      className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-indigo-600 bg-indigo-100 rounded-lg w-6 h-6 flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{c.item.name}</p>
+                          <p className="text-xs text-gray-500">{c.item.category} • maks {c.item.availableQuantity}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="text-xs text-gray-500">Jml:</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={c.item.availableQuantity}
+                            value={c.quantity}
+                            onChange={(e) => updateCartQuantity(c.item.id, parseInt(e.target.value) || 1)}
+                            className="w-16 px-2 py-1 bg-white border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(c.item.id)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={c.notes}
+                        onChange={(e) => updateCartNotes(c.item.id, e.target.value)}
+                        placeholder="Catatan untuk barang ini (opsional)"
+                        className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      />
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Informasi Peminjam */}
+            {/* ── Informasi Peminjam ── */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-gray-900 border-b pb-1.5">
                 Informasi Peminjam
@@ -300,13 +368,40 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
 
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Departemen / Kelas
+                    Divisi / Prodi <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={borrowerDepartment}
                     onChange={(e) => setBorrowerDepartment(e.target.value)}
-                    placeholder="Contoh: IT / XII RPL"
+                    required
+                    placeholder="Contoh: Divisi TI / S1 Statistika"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    NIM / NIK
+                  </label>
+                  <input
+                    type="text"
+                    value={borrowerNim}
+                    onChange={(e) => setBorrowerNim(e.target.value)}
+                    placeholder="Opsional"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Lokasi
+                  </label>
+                  <input
+                    type="text"
+                    value={borrowerLocation}
+                    onChange={(e) => setBorrowerLocation(e.target.value)}
+                    placeholder="Gedung A Lt.2 (opsional)"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   />
                 </div>
@@ -340,12 +435,12 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
 
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Catatan Peminjaman
+                  Catatan Umum
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Tambahkan catatan jika perlu..."
+                  placeholder="Tambahkan catatan umum jika perlu..."
                   rows={2}
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
                 />
@@ -366,33 +461,23 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
           <button
             type="submit"
             form="borrow-form"
-            disabled={loading || !selectedItem || !borrowerName || !returnDate}
+            disabled={loading || cart.length === 0 || !borrowerName || !borrowerDepartment || !returnDate}
             className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
-            {loading ? "Menyimpan..." : "Simpan Peminjaman"}
+            {loading ? "Menyimpan..." : `Simpan${cart.length > 0 ? ` (${cart.length} barang)` : ""}`}
           </button>
         </div>
       </div>
 
       <style jsx>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
         @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px) scale(0.97);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
+          from { opacity: 0; transform: translateY(20px) scale(0.97); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
       `}</style>
     </div>

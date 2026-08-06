@@ -8,6 +8,7 @@ import { auth } from "@/auth";
 export async function completeRegistration(formData: {
   name: string;
   phone: string;
+  nim: string;
   department: string;
 }) {
   try {
@@ -18,9 +19,15 @@ export async function completeRegistration(formData: {
     }
 
     const userId = session.user.id;
+
+    if (!formData.nim?.trim()) {
+      throw new Error("NIM / NIK wajib diisi");
+    }
+
     const updateData: any = {
       name: formData.name,
       phone: formData.phone,
+      nim: formData.nim.trim(),
       department: formData.department,
     };
 

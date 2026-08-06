@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transactions, transactionItems, items } from "@/db/schema";
+import { transactions, transactionItems, items, users } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { auth } from "@/auth";
 import { generateBorrowingPDF } from "@/lib/pdf-generator";
@@ -73,9 +73,20 @@ export async function GET(
       return new NextResponse("No items found for this transaction", { status: 404 });
     }
 
+    // Ambil nim dari tabel user jika userId tersedia
+    let nimValue = "";
+    if (tx.userId) {
+      const [txUser] = await db
+        .select({ nim: users.nim })
+        .from(users)
+        .where(eq(users.id, tx.userId))
+        .limit(1);
+      nimValue = txUser?.nim || "";
+    }
+
     const pdfBuffer = await generateBorrowingPDF({
       borrowerName: tx.borrowerName,
-      borrowerId: tx.borrowerEmail || session.user.id || "",
+      borrowerId: nimValue,
       department: tx.borrowerDepartment || "",
       phone: tx.borrowerPhone || "",
       notes: tx.notes || "",

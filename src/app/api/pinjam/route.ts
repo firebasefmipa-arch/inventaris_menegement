@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     const name = (borrowerInput.name || session.user.name || "").trim();
     const email = (borrowerInput.email || session.user.email || "").trim();
     const phone = (borrowerInput.phone || (session.user as any).phone || "").trim();
+    const nim = (borrowerInput.nim || (session.user as any).nim || "").trim();
     const department = (borrowerInput.department || (session.user as any).department || "").trim();
     const userId = session.user.id;
     const { expectedReturnDate, notes, cart } = body;
@@ -150,6 +151,7 @@ export async function POST(request: NextRequest) {
         code: `PB-${String(txId).padStart(4, "0")}`,
         transactionId: txId,
         borrowerName: name,
+        borrowerNim: nim || null,
         itemNames,
         totalItems: cartItems.length,
         totalQuantity: cartItems.reduce((sum, c) => sum + c.quantity, 0),

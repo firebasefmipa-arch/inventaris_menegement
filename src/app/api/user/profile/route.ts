@@ -19,6 +19,7 @@ export async function GET() {
         name: users.name,
         email: users.email,
         phone: users.phone,
+        nim: users.nim,
         department: users.department,
         image: users.image,
         status: users.status,
@@ -45,11 +46,11 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, phone, department } = await req.json();
+    const { name, phone, nim, department } = await req.json();
 
-    if (!name?.trim() || !phone?.trim() || !department?.trim()) {
+    if (!name?.trim() || !phone?.trim() || !nim?.trim() || !department?.trim()) {
       return NextResponse.json(
-        { error: "Nama, nomor HP, dan program studi/divisi wajib diisi" },
+        { error: "Nama, nomor HP, NIM/NIK, dan program studi/divisi wajib diisi" },
         { status: 400 }
       );
     }
@@ -59,6 +60,7 @@ export async function PATCH(req: Request) {
       .set({
         name: name.trim(),
         phone: phone.trim(),
+        nim: nim.trim(),
         department: department.trim(),
       })
       .where(eq(users.id, session.user.id));
