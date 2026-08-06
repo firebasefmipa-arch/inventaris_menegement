@@ -91,7 +91,17 @@ export async function POST(
       }
     }
 
-    // Update status transaksi jadi rejected (cancelled)
+    // Jika belum upload dokumen (pending_signature + belum ada file) → hapus transaksi
+    // Jika sudah upload tapi menunggu approval → set rejected agar history tetap ada
+    if (tx.status === "pending_signature" && !tx.signedDocumentUrl) {
+      // Hapus transaction_items dulu (CASCADE seharusnya handle ini, tapi eksplisit lebih aman)
+      await db.delete(transactionItems).where(eq(transactionItems.transactionId, txId));
+      await db.delete(transactions).where(eq(transactions.id, txId));
+
+      return NextResponse.json({ success: true, message: "Peminjaman berhasil dibatalkan dan dihapus" });
+    }
+
+    // Sudah upload dokumen → simpan sebagai rejected agar history tetap ada
     await db
       .update(transactions)
       .set({
