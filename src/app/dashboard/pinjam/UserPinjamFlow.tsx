@@ -160,12 +160,21 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
             name: user?.name || "",
             email: user?.email || "",
             phone: user?.phone || "",
+            nim: user?.nim || "",
             department: user?.department || "",
           },
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal mengirim permintaan");
+      if (!res.ok) {
+        // Jika NIM belum diisi, arahkan ke halaman profil
+        if (res.status === 422 && data.error === "NIM_REQUIRED") {
+          toast("Lengkapi NIM/NIK di profil kamu sebelum meminjam", "error");
+          router.push("/dashboard/profil");
+          return;
+        }
+        throw new Error(data.error || "Gagal mengirim permintaan");
+      }
       setResult(data);
       setRedirectCountdown(5);
       setStep("success");

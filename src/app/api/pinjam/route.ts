@@ -36,6 +36,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Cek NIM — wajib ada sebelum bisa meminjam
+    if (!nim) {
+      return NextResponse.json(
+        { error: "NIM_REQUIRED" },
+        { status: 422 }
+      );
+    }
+      return NextResponse.json(
+        { error: "Nama, nomor HP, dan tanggal kembali wajib diisi." },
+        { status: 400 }
+      );
+    }
+
     // Validasi cart
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
       return NextResponse.json(
