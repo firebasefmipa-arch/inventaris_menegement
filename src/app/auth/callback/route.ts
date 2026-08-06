@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +17,26 @@ export async function GET(req: NextRequest) {
   // Gunakan NEXTAUTH_URL sebagai base agar tidak redirect ke localhost
   const base = process.env.NEXTAUTH_URL || `https://${req.headers.get("host")}`;
 
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.redirect(new URL("/login", base));
   }
 
-  const user = session.user as any;
-  const role = user.role;
+  // Baca langsung dari DB — jangan andalkan token JWT yang mungkin stale
+  const [dbUser] = await db
+    .select({
+      role: users.role,
+      phone: users.phone,
+      department: users.department,
+    })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
+  if (!dbUser) {
+    return NextResponse.redirect(new URL("/login", base));
+  }
+
+  const { role, phone, department } = dbUser;
 
   // Admin / super_admin → dashboard admin
   if (role === "admin" || role === "super_admin") {
@@ -27,7 +44,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Profil belum lengkap → complete profile
-  if (!user.phone || !user.department) {
+  if (!phone || !department) {
     return NextResponse.redirect(new URL("/register/complete", base));
   }
 
