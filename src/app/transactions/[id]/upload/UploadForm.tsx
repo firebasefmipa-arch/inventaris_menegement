@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Download, UploadCloud, CheckCircle, FileText, Loader2 } from "lucide-react";
+import { Download, UploadCloud, CheckCircle, FileText, Loader2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function UploadForm({ transactionId, currentStatus }: { transactionId: number, currentStatus: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [success, setSuccess] = useState(currentStatus === "pending_approval");
   const router = useRouter();
 
@@ -32,12 +33,25 @@ export default function UploadForm({ transactionId, currentStatus }: { transacti
 
       setSuccess(true);
       router.refresh();
-      // Setelah upload berhasil, redirect ke riwayat setelah 2 detik
       setTimeout(() => router.push("/dashboard/riwayat"), 2000);
     } catch (error) {
       alert("Gagal mengunggah file.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!confirm("Yakin ingin membatalkan peminjaman ini? Stok barang akan dikembalikan dan tindakan ini tidak dapat diurungkan.")) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/user/transactions/${transactionId}/cancel`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal membatalkan");
+      router.push("/dashboard/riwayat");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal membatalkan peminjaman");
+      setCancelling(false);
     }
   };
 
@@ -133,6 +147,29 @@ export default function UploadForm({ transactionId, currentStatus }: { transacti
           )}
         </div>
       </div>
+
+      {/* Tombol Batalkan — hanya untuk pending_signature */}
+      {currentStatus === "pending_signature" && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={handleCancel}
+            disabled={cancelling || uploading}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 disabled:opacity-50 transition-colors"
+          >
+            {cancelling ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Membatalkan...
+              </>
+            ) : (
+              <>
+                <XCircle className="w-4 h-4" />
+                Batalkan Peminjaman
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

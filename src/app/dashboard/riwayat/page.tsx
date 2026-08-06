@@ -63,6 +63,7 @@ export default function RiwayatPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -86,6 +87,21 @@ export default function RiwayatPage() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
+
+  const handleCancel = async (txId: number) => {
+    if (!confirm("Yakin ingin membatalkan peminjaman ini? Tindakan ini tidak dapat diurungkan.")) return;
+    setCancellingId(txId);
+    try {
+      const res = await fetch(`/api/user/transactions/${txId}/cancel`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal membatalkan");
+      await fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal membatalkan peminjaman");
+    } finally {
+      setCancellingId(null);
+    }
   };
 
   const filtered = transactions.filter((t) => {
@@ -293,6 +309,24 @@ export default function RiwayatPage() {
                             <FileText className="w-3 h-3" /> Upload Dokumen
                             <ArrowUpRight className="w-3 h-3" />
                           </Link>
+                        )}
+                        {/* Tombol Batalkan — hanya untuk pending_signature dan pending_approval */}
+                        {(tx.status === "pending_signature" || tx.status === "pending_approval") && (
+                          <button
+                            onClick={() => handleCancel(tx.id)}
+                            disabled={cancellingId === tx.id}
+                            className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full hover:bg-red-100 disabled:opacity-50 transition-colors"
+                          >
+                            {cancellingId === tx.id ? (
+                              <>
+                                <RefreshCcw className="w-3 h-3 animate-spin" /> Membatalkan...
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="w-3 h-3" /> Batalkan
+                              </>
+                            )}
+                          </button>
                         )}
                       </div>
                     </div>
