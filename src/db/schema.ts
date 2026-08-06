@@ -128,6 +128,7 @@ export const transactions = mysqlTable("transactions", {
   expectedReturnDate: datetime("expected_return_date").notNull(),
   actualReturnDate: datetime("actual_return_date"),
   notes: text("notes"),
+  purpose: text("purpose"),
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

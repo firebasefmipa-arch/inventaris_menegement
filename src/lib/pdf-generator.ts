@@ -7,6 +7,7 @@ interface TransactionData {
   borrowerId?: string;
   department?: string;
   phone?: string;
+  purpose?: string;
   notes?: string;
   borrowDate: Date;
   returnDate: Date;
@@ -220,7 +221,7 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
     ['NIM / NIK',      data.borrowerId   || ''],
     ['Departemen',     data.department   || ''],
     ['No. HP',         data.phone        || ''],
-    ['Keperluan',      cleanNotes(data.notes)],
+    ['Keperluan',      cleanNotes(data.purpose)],
     ['Tanggal Pinjam', formatDate(data.borrowDate)],
     ['Tanggal Kembali',formatDate(data.returnDate)],
   ];

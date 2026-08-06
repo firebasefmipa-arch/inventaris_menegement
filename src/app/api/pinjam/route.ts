@@ -26,12 +26,20 @@ export async function POST(request: NextRequest) {
     const nim = (borrowerInput.nim || (session.user as any).nim || "").trim();
     const department = (borrowerInput.department || (session.user as any).department || "").trim();
     const userId = session.user.id;
-    const { expectedReturnDate, notes, cart } = body;
+    const { expectedReturnDate, notes, purpose, cart } = body;
 
     // Validasi field wajib
     if (!expectedReturnDate || !name || !phone) {
       return NextResponse.json(
         { error: "Nama, nomor HP, dan tanggal kembali wajib diisi." },
+        { status: 400 }
+      );
+    }
+
+    // Keperluan wajib diisi
+    if (!purpose?.trim()) {
+      return NextResponse.json(
+        { error: "Keperluan peminjaman wajib diisi." },
         { status: 400 }
       );
     }
@@ -111,6 +119,7 @@ export async function POST(request: NextRequest) {
         borrowerDepartment: department || null,
         quantity: cartItems.reduce((sum, c) => sum + c.quantity, 0),
         expectedReturnDate: returnDate,
+        purpose: purpose.trim(),
         notes: notes?.trim() || null,
       })
       .$returningId();

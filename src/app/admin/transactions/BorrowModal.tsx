@@ -51,6 +51,7 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
     return format(date, "yyyy-MM-dd");
   });
   const [notes, setNotes] = useState("");
+  const [purpose, setPurpose] = useState("");
 
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +93,7 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
       return format(date, "yyyy-MM-dd");
     });
     setNotes("");
+    setPurpose("");
   };
 
   const handleClose = () => {
@@ -144,6 +146,10 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
       toast("Lengkapi semua data yang diperlukan", "error");
       return;
     }
+    if (!purpose.trim()) {
+      toast("Keperluan peminjaman wajib diisi", "error");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -164,6 +170,7 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
           borrowerNim: borrowerNim || null,
           borrowerLocation: borrowerLocation || null,
           expectedReturnDate: returnDate,
+          purpose: purpose.trim(),
           notes: notes || null,
         }),
       });
@@ -435,12 +442,26 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
 
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Catatan Umum
+                  Keperluan <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  required
+                  placeholder="Keperluan peminjaman barang..."
+                  rows={2}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Catatan Lain
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Tambahkan catatan umum jika perlu..."
+                  placeholder="Catatan tambahan jika ada... (opsional)"
                   rows={2}
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
                 />

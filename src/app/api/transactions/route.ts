@@ -66,12 +66,20 @@ export async function POST(request: NextRequest) {
       borrowerNim,
       borrowerLocation,
       expectedReturnDate,
+      purpose,
       notes,
     } = body;
 
     if (!borrowerName || !borrowerDepartment || !expectedReturnDate) {
       return NextResponse.json(
         { error: "Nama peminjam, divisi/prodi, dan tanggal kembali wajib diisi" },
+        { status: 400 }
+      );
+    }
+
+    if (!purpose?.trim()) {
+      return NextResponse.json(
+        { error: "Keperluan peminjaman wajib diisi" },
         { status: 400 }
       );
     }
@@ -142,6 +150,7 @@ export async function POST(request: NextRequest) {
         quantity: cartItems.reduce((sum: number, c: any) => sum + c.quantity, 0),
         status: "active", // admin langsung aktif, tanpa perlu TTD
         expectedReturnDate: returnDate,
+        purpose: purpose.trim(),
         notes: notes?.trim() || null,
       })
       .$returningId();

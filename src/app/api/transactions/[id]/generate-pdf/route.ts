@@ -89,6 +89,7 @@ export async function GET(
       borrowerId: nimValue,
       department: tx.borrowerDepartment || "",
       phone: tx.borrowerPhone || "",
+      purpose: tx.purpose || "",
       notes: tx.notes || "",
       borrowDate: tx.borrowDate,
       returnDate: tx.expectedReturnDate,

@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS `transactions` (
   `expected_return_date` datetime NOT NULL,
   `actual_return_date` datetime DEFAULT NULL,
   `notes` text DEFAULT NULL,
+  `purpose` text DEFAULT NULL,
   `rejection_reason` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),

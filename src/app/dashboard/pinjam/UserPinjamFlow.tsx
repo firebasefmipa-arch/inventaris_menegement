@@ -75,7 +75,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
   const [category, setCategory] = useState("Semua");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
-  const [form, setForm] = useState({ returnDate: defaultReturnDate(), notes: "" });
+  const [form, setForm] = useState({ returnDate: defaultReturnDate(), purpose: "", notes: "" });
   const [redirectCountdown, setRedirectCountdown] = useState(5);
 
   const user = session?.user as any;
@@ -146,6 +146,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
     e.preventDefault();
     if (cart.length === 0) { toast("Pilih minimal satu barang", "error"); return; }
     if (!form.returnDate) { toast("Pilih tanggal pengembalian", "error"); return; }
+    if (!form.purpose.trim()) { toast("Keperluan peminjaman wajib diisi", "error"); return; }
 
     setSubmitting(true);
     try {
@@ -155,6 +156,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
         body: JSON.stringify({
           cart: cart.map((c) => ({ itemId: c.item.id, quantity: c.quantity, notes: c.notes })),
           expectedReturnDate: form.returnDate,
+          purpose: form.purpose,
           notes: form.notes,
           borrower: {
             name: user?.name || "",
@@ -188,7 +190,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
   function resetAll() {
     setCart([]);
     setResult(null);
-    setForm({ returnDate: defaultReturnDate(), notes: "" });
+    setForm({ returnDate: defaultReturnDate(), purpose: "", notes: "" });
     setStep("item");
     router.refresh();
   }
@@ -398,11 +400,20 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Catatan Umum <span className="text-gray-400">(opsional)</span></label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Keperluan <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <StickyNote className="absolute left-3 top-3 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <textarea value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })}
+                    placeholder="Keperluan peminjaman barang..." rows={2} required
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Catatan Lain <span className="text-gray-400">(opsional)</span></label>
                 <div className="relative">
                   <StickyNote className="absolute left-3 top-3 w-4 h-4 text-gray-400 pointer-events-none" />
                   <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    placeholder="Keperluan atau catatan tambahan..." rows={3}
+                    placeholder="Catatan tambahan jika ada..." rows={2}
                     className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none" />
                 </div>
               </div>
