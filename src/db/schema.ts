@@ -145,3 +145,44 @@ export const transactionItems = mysqlTable("transaction_items", {
   quantity: int("quantity").notNull().default(1),
   notes: text("notes"),
 });
+
+// ── Serah Terima (permanen, stok berkurang permanen) ──────────────────────
+
+export const handovers = mysqlTable("handovers", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: varchar("user_id", { length: 255 })
+    .references(() => users.id, { onDelete: "set null" }),
+  // Informasi penerima
+  receiverName: varchar("receiver_name", { length: 255 }).notNull(),
+  receiverNim: varchar("receiver_nim", { length: 50 }),
+  unitName: varchar("unit_name", { length: 255 }),
+  department: varchar("department", { length: 100 }),
+  phone: varchar("phone", { length: 50 }),
+  location: varchar("location", { length: 255 }),
+  purpose: text("purpose"),
+  notes: text("notes"),
+  // Dokumen TTD
+  signedDocumentUrl: varchar("signed_document_url", { length: 500 }),
+  // Status flow: pending_signature → pending_approval → completed / rejected
+  status: mysqlEnum("status", [
+    "pending_signature",
+    "pending_approval",
+    "completed",
+    "rejected",
+  ]).notNull().default("pending_signature"),
+  rejectionReason: text("rejection_reason"),
+  handoverDate: timestamp("handover_date").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const handoverItems = mysqlTable("handover_items", {
+  id: int("id").autoincrement().primaryKey(),
+  handoverId: int("handover_id")
+    .notNull()
+    .references(() => handovers.id, { onDelete: "cascade" }),
+  itemId: int("item_id")
+    .notNull()
+    .references(() => items.id, { onDelete: "cascade" }),
+  quantity: int("quantity").notNull().default(1),
+  notes: text("notes"),
+});

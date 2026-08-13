@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ClipboardList, History,
-  UserCircle, Menu, X, Boxes, LogOut, ChevronRight,
+  UserCircle, Menu, X, Boxes, LogOut, ChevronRight, ClipboardCheck,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useToast } from "./Toaster";
@@ -53,9 +53,10 @@ export function UserSidebar() {
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/dashboard/pinjam", label: "Pinjam Barang", icon: ClipboardList },
+    { href: "/dashboard/serah-terima", label: "Serah Terima", icon: ClipboardCheck },
     {
       href: "/dashboard/riwayat",
-      label: "Riwayat Peminjaman",
+      label: "Riwayat",
       icon: History,
       badge: pendingDocs > 0 ? pendingDocs : 0,
       badgeTitle: "Dokumen belum diupload",

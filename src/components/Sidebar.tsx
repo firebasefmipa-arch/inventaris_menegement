@@ -16,6 +16,7 @@ import {
   LogOut,
   ShieldCheck,
   Shield,
+  ClipboardCheck,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useToast } from "./Toaster";
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/items", label: "Daftar Barang", icon: Package },
   { href: "/admin/transactions", label: "Peminjaman", icon: ArrowLeftRight },
+  { href: "/admin/handovers", label: "Serah Terima", icon: ClipboardCheck },
   { href: "/admin/users", label: "Daftar Pengguna", icon: Users },
 ];
 

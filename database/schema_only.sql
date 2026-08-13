@@ -149,3 +149,45 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- Selesai. Lanjutkan dengan:
 --   npm run setup:superadmin
 -- ============================================================
+
+-- ------------------------------------------------------------
+-- Tabel: handovers (serah terima barang — permanen)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `handovers` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` varchar(255) DEFAULT NULL,
+  `receiver_name` varchar(255) NOT NULL,
+  `receiver_nim` varchar(50) DEFAULT NULL,
+  `unit_name` varchar(255) DEFAULT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `phone` varchar(50) DEFAULT NULL,
+  `purpose` text DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `signed_document_url` varchar(500) DEFAULT NULL,
+  `status` enum('pending_signature','pending_approval','completed','rejected') NOT NULL DEFAULT 'pending_signature',
+  `rejection_reason` text DEFAULT NULL,
+  `handover_date` timestamp NOT NULL DEFAULT current_timestamp(),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `handovers_user_id_idx` (`user_id`),
+  CONSTRAINT `handovers_user_id_fk`
+    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Tabel: handover_items (detail barang per serah terima)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `handover_items` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `handover_id` int(11) NOT NULL,
+  `item_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL DEFAULT 1,
+  `notes` text DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `hi_handover_id_idx` (`handover_id`),
+  KEY `hi_item_id_idx` (`item_id`),
+  CONSTRAINT `hi_handover_id_fk`
+    FOREIGN KEY (`handover_id`) REFERENCES `handovers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `hi_item_id_fk`
+    FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
