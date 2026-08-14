@@ -278,41 +278,27 @@ export function ItemsClient({ items, categories }: Props) {
               className="w-full py-2 text-sm bg-transparent outline-none placeholder:text-gray-400 text-gray-900"
             />
           </div>
-
-          <button
-            onClick={() => {/* search is live */}}
-            className="px-5 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium transition-colors shrink-0"
-          >
-            Cari
-          </button>
-
-          <div className="relative" ref={filterRef}>
+          <div className="relative shrink-0" ref={filterRef}>
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors border shrink-0 ${
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border ${
                 statusFilter
                   ? "border-indigo-200 bg-indigo-50 text-indigo-700"
                   : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
               }`}
             >
-              <SlidersHorizontal className="w-4 h-4" />
-              Filter
-              <ChevronDown className="w-3.5 h-3.5" />
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Filter</span>
+              <ChevronDown className="w-3 h-3" />
             </button>
-
             {showFilterDropdown && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-20">
+              <div className="absolute right-0 top-full mt-2 w-44 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-20">
                 {filterOptions.map((opt) => (
                   <button
                     key={opt.key}
-                    onClick={() => {
-                      setStatusFilter(opt.key);
-                      setShowFilterDropdown(false);
-                    }}
+                    onClick={() => { setStatusFilter(opt.key); setShowFilterDropdown(false); }}
                     className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                      statusFilter === opt.key
-                        ? "bg-indigo-50 text-indigo-700 font-medium"
-                        : "text-gray-700 hover:bg-gray-50"
+                      statusFilter === opt.key ? "bg-indigo-50 text-indigo-700 font-medium" : "text-gray-700 hover:bg-gray-50"
                     }`}
                   >
                     {opt.label}
@@ -321,23 +307,15 @@ export function ItemsClient({ items, categories }: Props) {
               </div>
             )}
           </div>
-
-          {/* Select Mode Toggle */}
           <button
             type="button"
-            onClick={() => {
-              const next = !selectMode;
-              setSelectMode(next);
-              if (!next) setSelectedIds(new Set());
-            }}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors border shrink-0 ${
-              selectMode
-                ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            onClick={() => { const next = !selectMode; setSelectMode(next); if (!next) setSelectedIds(new Set()); }}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border shrink-0 ${
+              selectMode ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            <CheckSquare className="w-4 h-4" />
-            Select
+            <CheckSquare className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Select</span>
           </button>
         </div>
 
@@ -379,7 +357,7 @@ export function ItemsClient({ items, categories }: Props) {
       ) : (
         <div>
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
               {filteredItems.map((item, idx) => {
                 const IconComponent = item.imageUrl && AVAILABLE_ICONS_MAP[item.imageUrl]
                   ? AVAILABLE_ICONS_MAP[item.imageUrl]
@@ -508,93 +486,97 @@ export function ItemsClient({ items, categories }: Props) {
                 const percentage = Math.min(100, Math.max(0, (item.availableQuantity / item.quantity) * 100));
 
                 return (
-                  <div key={item.id} className={`group rounded-2xl border p-4 hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 relative ${selectedIds.has(item.id) ? 'bg-indigo-50/50 border-indigo-300 ring-1 ring-indigo-300' : 'bg-white border-gray-100 hover:border-indigo-100'}`}>
-                    {selectMode && (
-                      <div className="absolute top-4 left-4 z-10 md:relative md:top-0 md:left-0">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(item.id)}
-                          onChange={() => toggleSelect(item.id)}
-                          className="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shadow-sm"
-                        />
+                  <div key={item.id} className={`group rounded-2xl border hover:shadow-md transition-all relative ${selectedIds.has(item.id) ? 'bg-indigo-50/50 border-indigo-300 ring-1 ring-indigo-300' : 'bg-white border-gray-100 hover:border-indigo-100'}`}>
+                    {/* ── Mobile: baris ringkas horizontal ── */}
+                    <div className="flex md:hidden items-center gap-3 p-3">
+                      {selectMode && (
+                        <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)}
+                          className="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0" />
+                      )}
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600 border border-indigo-100/50">
+                        <IconComponent className="w-4 h-4" />
                       </div>
-                    )}
-                    <div className={`flex items-start md:items-center gap-4 flex-1 min-w-0 ${selectMode ? 'pl-7 md:pl-0' : ''}`}>
-                      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600 border border-indigo-100/50 hidden md:flex">
-                        <IconComponent className="w-5 h-5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{item.name}</p>
+                        <p className="text-xs text-gray-400">{item.category} · {item.availableQuantity}/{item.quantity} unit</p>
                       </div>
-                      <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                        <div className="md:col-span-4">
-                          <h3 className="font-semibold text-gray-900 truncate pr-8 md:pr-0" title={item.name}>{item.name}</h3>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {item.category && (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${CATEGORY_MAP[item.category] ? `${CATEGORY_MAP[item.category].bg}/10 ${CATEGORY_MAP[item.category].color}` : 'bg-gray-100 text-gray-600'}`}>
-                                {(() => { const CatIcon = CATEGORY_MAP[item.category]?.icon; return CatIcon ? <CatIcon className="w-3 h-3" /> : null; })()}
-                                {item.category}
-                              </span>
-                            )}
-                            <p className="text-xs text-gray-500 truncate" title={item.description || 'Tidak ada spesifikasi'}>{item.description || 'Tidak ada spesifikasi'}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="md:col-span-4 flex flex-col gap-1 text-xs text-gray-600 font-mono bg-gray-50 md:bg-transparent p-2 md:p-0 rounded-lg">
-                          <div className="flex justify-between md:justify-start md:gap-2">
-                            <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">Inv:</span> 
-                            <span className="truncate">{item.inventoryNumber || '-'}</span>
-                          </div>
-                          <div className="flex justify-between md:justify-start md:gap-2">
-                            <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">Ast:</span> 
-                            <span className="truncate">{item.assetNumber || '-'}</span>
-                          </div>
-                        </div>
-
-                        <div className="md:col-span-4 flex flex-col gap-1 text-xs text-gray-600 bg-gray-50 md:bg-transparent p-2 md:p-0 rounded-lg">
-                          <div className="flex justify-between md:justify-start md:gap-2 font-mono">
-                            <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">SN:</span> 
-                            <span className="truncate">{item.sn || '-'}</span>
-                          </div>
-                          <div className="flex items-center justify-between md:justify-start gap-2 mt-0.5">
-                            <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700 truncate max-w-[80px]">
-                              {item.condition || 'Tidak diketahui'}
-                            </span>
-                            <span className="text-[10px] text-gray-400 truncate flex items-center gap-1">
-                              {item.lastCheckDate || 'Belum dicek'}
-                            </span>
-                          </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {statusBadge(item.status)}
+                        <div className="item-dropdown-container relative">
+                          <button onClick={() => setActiveDropdownId(activeDropdownId === item.id ? null : item.id)}
+                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          {activeDropdownId === item.id && (
+                            <div className="absolute right-0 top-full mt-1 w-28 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden py-1 z-30">
+                              <Link href={`/admin/items/${item.id}/edit`}
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                                <Edit2 className="w-4 h-4" /> Edit
+                              </Link>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    <div className="shrink-0 w-full md:w-32 flex flex-row md:flex-col items-center md:items-stretch justify-between md:justify-center border-t md:border-t-0 border-gray-100 pt-3 md:pt-0 mt-2 md:mt-0">
-                      <div className="flex-1 md:flex-none">
-                        <div className="flex justify-between items-center mb-1.5 text-xs">
-                          <span className="text-gray-500 hidden md:inline">Stok</span>
-                          <span className="font-bold text-gray-900">{item.availableQuantity} <span className="text-gray-400 font-normal">/ {item.quantity}</span></span>
+                    {/* ── Desktop: layout list penuh ── */}
+                    <div className="hidden md:flex items-center justify-between gap-4 p-4">
+                      {selectMode && (
+                        <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)}
+                          className="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0" />
+                      )}
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600 border border-indigo-100/50">
+                          <IconComponent className="w-5 h-5" />
                         </div>
-                        <div className="h-1.5 w-full md:w-full bg-gray-100 rounded-full overflow-hidden max-w-[120px] md:max-w-none">
-                          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+                        <div className="flex-1 min-w-0 grid grid-cols-12 gap-4 items-center">
+                          <div className="col-span-4">
+                            <h3 className="font-semibold text-gray-900 truncate" title={item.name}>{item.name}</h3>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {item.category && (
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${CATEGORY_MAP[item.category] ? `${CATEGORY_MAP[item.category].bg}/10 ${CATEGORY_MAP[item.category].color}` : 'bg-gray-100 text-gray-600'}`}>
+                                  {(() => { const CatIcon = CATEGORY_MAP[item.category]?.icon; return CatIcon ? <CatIcon className="w-3 h-3" /> : null; })()}
+                                  {item.category}
+                                </span>
+                              )}
+                              <p className="text-xs text-gray-500 truncate">{item.description || 'Tidak ada spesifikasi'}</p>
+                            </div>
+                          </div>
+                          <div className="col-span-4 flex flex-col gap-1 text-xs text-gray-600 font-mono">
+                            <div className="flex gap-2"><span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">Inv:</span><span className="truncate">{item.inventoryNumber || '-'}</span></div>
+                            <div className="flex gap-2"><span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">Ast:</span><span className="truncate">{item.assetNumber || '-'}</span></div>
+                          </div>
+                          <div className="col-span-4 flex flex-col gap-1 text-xs text-gray-600">
+                            <div className="flex gap-2 font-mono"><span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">SN:</span><span className="truncate">{item.sn || '-'}</span></div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700">{item.condition || 'Tidak diketahui'}</span>
+                              <span className="text-[10px] text-gray-400">{item.lastCheckDate || 'Belum dicek'}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      {/* Actions Dropdown */}
-                      <div className="absolute top-2 right-2 md:relative md:top-0 md:right-0 md:mt-2.5 flex justify-end item-dropdown-container z-20">
-                        <button
-                          onClick={() => setActiveDropdownId(activeDropdownId === item.id ? null : item.id)}
-                          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <MoreVertical className="w-5 h-5 md:w-4 md:h-4" />
-                        </button>
-                        
-                        {activeDropdownId === item.id && (
-                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden py-1">
-                            <Link
-                              href={`/admin/items/${item.id}/edit`}
-                              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                              Edit
-                            </Link>
-                          </div>
-                        )}
+                      <div className="shrink-0 w-32 flex flex-col items-stretch">
+                        <div className="flex justify-between items-center mb-1.5 text-xs">
+                          <span className="text-gray-500">Stok</span>
+                          <span className="font-bold text-gray-900">{item.availableQuantity} <span className="text-gray-400 font-normal">/ {item.quantity}</span></span>
+                        </div>
+                        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+                        </div>
+                        <div className="mt-2 flex justify-end item-dropdown-container relative">
+                          <button onClick={() => setActiveDropdownId(activeDropdownId === item.id ? null : item.id)}
+                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          {activeDropdownId === item.id && (
+                            <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden py-1 z-30">
+                              <Link href={`/admin/items/${item.id}/edit`}
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                                <Edit2 className="w-4 h-4" /> Edit
+                              </Link>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
