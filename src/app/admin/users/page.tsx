@@ -209,7 +209,7 @@ export default async function UsersPage() {
                   {/* Aksi — hanya tampil jika ada aksi yang relevan */}
                   {(!isCurrentUser && targetRole !== "super_admin") && (
                     <div className="mt-3 pl-[52px] flex items-center gap-2 flex-wrap">
-                      {isSuperAdmin && targetRole !== "super_admin" && !isCurrentUser && (
+                      {isSuperAdmin && !isCurrentUser && (
                         <UserRoleButton userId={user.id} currentRole={targetRole} isCurrentUser={false} />
                       )}
                       <UserStatusButton
@@ -219,7 +219,7 @@ export default async function UsersPage() {
                         callerRole={currentRole}
                         targetRole={targetRole}
                       />
-                      {isSuperAdmin && !isCurrentUser && targetRole !== "super_admin" && (
+                      {isSuperAdmin && !isCurrentUser && (
                         <DeleteUserButtons userId={user.id} userName={user.name || user.email || "User"} />
                       )}
                     </div>
