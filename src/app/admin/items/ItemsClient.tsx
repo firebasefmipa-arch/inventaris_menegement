@@ -357,7 +357,7 @@ export function ItemsClient({ items, categories }: Props) {
       ) : (
         <div>
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredItems.map((item, idx) => {
                 const IconComponent = item.imageUrl && AVAILABLE_ICONS_MAP[item.imageUrl]
                   ? AVAILABLE_ICONS_MAP[item.imageUrl]

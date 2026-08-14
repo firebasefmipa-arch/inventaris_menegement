@@ -164,66 +164,76 @@ export default async function UsersPage() {
 
               return (
                 <div key={user.id} className={clsx(
-                  "p-4",
+                  "px-4 py-3.5",
                   targetRole === "super_admin" && "bg-purple-50/40"
                 )}>
-                  {/* Baris atas: avatar + nama + role badge */}
+                  {/* Baris 1: avatar + nama/email + role badge */}
                   <div className="flex items-center gap-3">
                     <div className={clsx(
-                      "w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0",
+                      "w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0",
                       avatarColor
                     )}>
                       {initials}
                     </div>
+
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900 text-sm">{user.name || "-"}</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-semibold text-gray-900 text-sm truncate">{user.name || "-"}</span>
                         {isCurrentUser && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">Anda</span>
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">Anda</span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 truncate mt-0.5">{user.email}</p>
+                      <p className="text-xs text-gray-400 truncate mt-0.5">{user.email}</p>
                     </div>
-                    <div className="shrink-0">{getRoleBadge(targetRole)}</div>
+
+                    {/* Role badge — shrink-0 agar tidak terpotong */}
+                    <div className="shrink-0 ml-1">{getRoleBadge(targetRole)}</div>
                   </div>
 
-                  {/* Baris info: dept + no HP + status */}
-                  <div className="mt-3 ml-13 flex flex-wrap items-center gap-2 pl-[52px]">
-                    {user.department && (
-                      <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{user.department}</span>
-                    )}
-                    {user.phone && (
-                      <span className="text-xs text-gray-400">{user.phone}</span>
-                    )}
-                    {user.status === "active" ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Aktif
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Suspended
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Aksi — hanya tampil jika ada aksi yang relevan */}
-                  {(!isCurrentUser && targetRole !== "super_admin") && (
-                    <div className="mt-3 pl-[52px] flex items-center gap-2 flex-wrap">
-                      {isSuperAdmin && !isCurrentUser && (
-                        <UserRoleButton userId={user.id} currentRole={targetRole} isCurrentUser={false} />
+                  {/* Baris 2: dept + status (stack vertikal di kiri, rata dengan konten di atas) */}
+                  <div className="mt-2.5 pl-[48px] space-y-1.5">
+                    {/* Dept + HP satu baris, wrap kalau panjang */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      {user.department && (
+                        <span className="text-xs text-gray-500">{user.department}</span>
                       )}
-                      <UserStatusButton
-                        userId={user.id}
-                        currentStatus={user.status ?? "active"}
-                        isCurrentUser={isCurrentUser}
-                        callerRole={currentRole}
-                        targetRole={targetRole}
-                      />
-                      {isSuperAdmin && !isCurrentUser && (
-                        <DeleteUserButtons userId={user.id} userName={user.name || user.email || "User"} />
+                      {user.phone && (
+                        <span className="text-xs text-gray-400">{user.phone}</span>
                       )}
                     </div>
-                  )}
+
+                    {/* Status badge */}
+                    <div>
+                      {user.status === "active" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Aktif
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Suspended
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Tombol aksi */}
+                    {(!isCurrentUser && targetRole !== "super_admin") && (
+                      <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                        {isSuperAdmin && !isCurrentUser && (
+                          <UserRoleButton userId={user.id} currentRole={targetRole} isCurrentUser={false} />
+                        )}
+                        <UserStatusButton
+                          userId={user.id}
+                          currentStatus={user.status ?? "active"}
+                          isCurrentUser={isCurrentUser}
+                          callerRole={currentRole}
+                          targetRole={targetRole}
+                        />
+                        {isSuperAdmin && !isCurrentUser && (
+                          <DeleteUserButtons userId={user.id} userName={user.name || user.email || "User"} />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })
