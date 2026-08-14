@@ -102,6 +102,7 @@ Isi:
 DATABASE_URL=mysql://appuser:password-kuat-disini@127.0.0.1:3306/modern_lending
 NEXTAUTH_URL=https://domain-kamu.com
 NEXTAUTH_SECRET=isi-hasil-perintah-openssl-dibawah
+ENCRYPTION_KEY=isi-hasil-perintah-openssl-hex-dibawah
 GOOGLE_CLIENT_ID=dari-google-cloud-console
 GOOGLE_CLIENT_SECRET=dari-google-cloud-console
 ```
@@ -110,6 +111,12 @@ Generate `NEXTAUTH_SECRET`:
 
 ```bash
 openssl rand -base64 32
+```
+
+Generate `ENCRYPTION_KEY` (wajib — untuk enkripsi password akun native):
+
+```bash
+openssl rand -hex 32
 ```
 
 ---
@@ -129,6 +136,11 @@ mysql -u appuser -p modern_lending -e "
   ALTER TABLE account MODIFY COLUMN access_token TEXT;
   ALTER TABLE account MODIFY COLUMN id_token TEXT;
   ALTER TABLE account MODIFY COLUMN refresh_token TEXT;
+"
+
+# Migrasi kolom plain_password untuk akun native
+mysql -u appuser -p modern_lending -e "
+  ALTER TABLE user ADD COLUMN IF NOT EXISTS plain_password varchar(255) DEFAULT NULL AFTER password;
 "
 
 # Migrasi tabel serah terima (handovers)
@@ -214,12 +226,32 @@ server {
 
     client_max_body_size 10M;
 
+    # ── Rate limiting untuk endpoint login (cegah brute force) ──
+    # Definisikan zone di http block nginx.conf, bukan di sini
+    # Lihat catatan di bawah untuk konfigurasi http block
+
     # Serve file upload langsung via Nginx (tidak lewat Next.js)
     # Ini penting agar file yang diupload tidak hilang setelah npm run build
     location /uploads/ {
         alias /var/www/inventaris_menegement/public/uploads/;
         expires 7d;
         add_header Cache-Control "public";
+    }
+
+    # Rate limit endpoint auth (login)
+    location /api/auth/ {
+        limit_req zone=login burst=10 nodelay;
+        limit_req_status 429;
+
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
     }
 
     location / {
@@ -235,6 +267,15 @@ server {
     }
 }
 ```
+
+> **Tambahkan rate limit zone di `/etc/nginx/nginx.conf`** dalam block `http { ... }`:
+> ```nginx
+> http {
+>     # Rate limiting — max 5 request/menit per IP untuk login
+>     limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+>     ...
+> }
+> ```
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/pinjam-app /etc/nginx/sites-enabled/

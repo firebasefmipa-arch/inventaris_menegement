@@ -5,6 +5,7 @@ import { asc } from "drizzle-orm";
 import { UserStatusButton } from "./UserStatusButton";
 import { UserRoleButton } from "./UserRoleButton";
 import { DeleteUserButtons } from "./DeleteUserButtons";
+import { NativePasswordButton } from "./NativePasswordButton";
 import { auth } from "@/auth";
 import { Shield, ShieldCheck, User as UserIcon, UserPlus } from "lucide-react";
 import clsx from "clsx";
@@ -21,7 +22,18 @@ export default async function UsersPage() {
   const currentRole = (session?.user as any)?.role as string;
   const isSuperAdmin = currentRole === "super_admin";
 
-  const allUsers = await db.select().from(users).orderBy(asc(users.name));
+  const allUsers = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    phone: users.phone,
+    nim: users.nim,
+    department: users.department,
+    status: users.status,
+    role: users.role,
+    password: users.password,
+    // plain_password TIDAK dikirim ke client — hanya didekripsi on-demand via server action
+  }).from(users).orderBy(asc(users.name));
 
   const sortedUsers = allUsers.sort((a, b) => {
     const order = { super_admin: 0, admin: 1, user: 2 };
@@ -68,7 +80,7 @@ export default async function UsersPage() {
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-sm shadow-indigo-500/20 transition-colors shrink-0"
           >
             <UserPlus className="w-4 h-4" />
-            Buat Admin Native
+            Buat Akun Native
           </Link>
         )}
       </div>
@@ -84,13 +96,14 @@ export default async function UsersPage() {
                 <th className="px-5 py-4">Departemen</th>
                 <th className="px-5 py-4">Role</th>
                 <th className="px-5 py-4">Status</th>
+                {isSuperAdmin && <th className="px-5 py-4">Password</th>}
                 <th className="px-5 py-4 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {sortedUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                  <tr>
+                  <td colSpan={isSuperAdmin ? 7 : 6} className="px-6 py-10 text-center text-gray-400">
                     Belum ada data pengguna.
                   </td>
                 </tr>
@@ -127,6 +140,19 @@ export default async function UsersPage() {
                           </span>
                         )}
                       </td>
+                      {/* Kolom password — hanya superadmin, hanya akun native */}
+                      {isSuperAdmin && (
+                        <td className="px-5 py-4">
+                          {user.password ? (
+                            <NativePasswordButton
+                              userId={user.id}
+                              userName={user.name || user.email || "User"}
+                            />
+                          ) : (
+                            <span className="text-xs text-gray-300 italic">OAuth</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-2 flex-wrap">
                           {isSuperAdmin && targetRole !== "super_admin" && !isCurrentUser && (
@@ -214,6 +240,16 @@ export default async function UsersPage() {
                         </span>
                       )}
                     </div>
+
+                    {/* Password — hanya superadmin, hanya akun native */}
+                    {isSuperAdmin && user.password && (
+                      <div>
+                        <NativePasswordButton
+                          userId={user.id}
+                          userName={user.name || user.email || "User"}
+                        />
+                      </div>
+                    )}
 
                     {/* Tombol aksi */}
                     {(!isCurrentUser && targetRole !== "super_admin") && (

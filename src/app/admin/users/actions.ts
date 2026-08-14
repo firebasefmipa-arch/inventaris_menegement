@@ -5,6 +5,7 @@ import { users, transactions } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { encryptPassword, decryptPassword, isCipherText } from "@/lib/crypto";
 
 export async function toggleUserStatus(userId: string, currentStatus: string) {
   try {
@@ -19,15 +20,12 @@ export async function toggleUserStatus(userId: string, currentStatus: string) {
       throw new Error("Tidak dapat mengubah status akun sendiri");
     }
 
-    // Ambil data target user
     const [target] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!target) throw new Error("User tidak ditemukan");
 
-    // Admin biasa TIDAK bisa suspend super_admin
     if (callerRole === "admin" && target.role === "super_admin") {
       throw new Error("Admin tidak dapat menangguhkan akun Super Admin");
     }
-    // Admin biasa tidak bisa suspend admin lain
     if (callerRole === "admin" && target.role === "admin") {
       throw new Error("Admin tidak dapat menangguhkan akun Admin lain");
     }
@@ -69,11 +67,6 @@ export async function changeUserRole(userId: string, newRole: "user" | "admin") 
   }
 }
 
-/**
- * Hapus user (tanpa hapus history transaksinya).
- * userId di transactions akan menjadi NULL (SET NULL).
- * Hanya super_admin.
- */
 export async function deleteUser(userId: string) {
   try {
     const session = await auth();
@@ -91,10 +84,7 @@ export async function deleteUser(userId: string) {
     if (!target) throw new Error("User tidak ditemukan");
     if (target.role === "super_admin") throw new Error("Tidak dapat menghapus akun Super Admin lain");
 
-    // Set userId di transactions menjadi NULL agar history tetap ada
     await db.update(transactions).set({ userId: null }).where(eq(transactions.userId, userId));
-
-    // Hapus user (accounts & sessions ikut terhapus via cascade di DB)
     await db.delete(users).where(eq(users.id, userId));
 
     revalidatePath("/admin/users");
@@ -104,10 +94,6 @@ export async function deleteUser(userId: string) {
   }
 }
 
-/**
- * Hapus semua history transaksi milik user tertentu.
- * Hanya super_admin.
- */
 export async function deleteUserTransactions(userId: string) {
   try {
     const session = await auth();
@@ -121,7 +107,7 @@ export async function deleteUserTransactions(userId: string) {
     const [target] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!target) throw new Error("User tidak ditemukan");
 
-    const deleted = await db.delete(transactions).where(eq(transactions.userId, userId));
+    await db.delete(transactions).where(eq(transactions.userId, userId));
 
     revalidatePath("/admin/users");
     revalidatePath("/admin/transactions");
@@ -132,15 +118,17 @@ export async function deleteUserTransactions(userId: string) {
 }
 
 /**
- * Buat akun admin native (username + password).
- * Akun ini bisa login di /admin/login tanpa Google OAuth.
+ * Buat akun native (admin atau user biasa) dengan username + password.
+ * Menyimpan plain_password agar superadmin bisa melihatnya.
  * Hanya super_admin yang bisa membuat.
  */
-export async function createNativeAdmin(data: {
+export async function createNativeUser(data: {
   name: string;
   email: string;
   password: string;
+  role: "admin" | "user";
   phone?: string;
+  nim?: string;
   department?: string;
 }) {
   try {
@@ -149,10 +137,10 @@ export async function createNativeAdmin(data: {
 
     const callerRole = (session.user as any).role;
     if (callerRole !== "super_admin") {
-      throw new Error("Hanya Super Admin yang dapat membuat akun Admin native");
+      throw new Error("Hanya Super Admin yang dapat membuat akun native");
     }
 
-    const { name, email, password, phone, department } = data;
+    const { name, email, password, role, phone, nim, department } = data;
 
     if (!name.trim() || !email.trim() || !password.trim()) {
       throw new Error("Nama, email, dan password wajib diisi");
@@ -160,8 +148,10 @@ export async function createNativeAdmin(data: {
     if (password.length < 8) {
       throw new Error("Password minimal 8 karakter");
     }
+    if (!["admin", "user"].includes(role)) {
+      throw new Error("Role tidak valid");
+    }
 
-    // Cek email sudah dipakai
     const [existing] = await db
       .select({ id: users.id })
       .from(users)
@@ -170,7 +160,6 @@ export async function createNativeAdmin(data: {
 
     if (existing) throw new Error(`Email "${email}" sudah terdaftar`);
 
-    // Hash password dengan bcrypt
     const bcrypt = (await import("bcryptjs")).default;
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -178,16 +167,102 @@ export async function createNativeAdmin(data: {
       name: name.trim(),
       email: email.trim(),
       password: hashedPassword,
+      plainPassword: encryptPassword(password), // enkripsi sebelum simpan
       phone: phone?.trim() || null,
+      nim: nim?.trim() || null,
       department: department?.trim() || null,
-      role: "admin",
+      role,
       status: "active",
       emailVerified: new Date(),
     });
 
     revalidatePath("/admin/users");
-    return { success: true, message: `Akun Admin "${name.trim()}" berhasil dibuat` };
+    const roleLabel = role === "admin" ? "Admin" : "User";
+    return { success: true, message: `Akun ${roleLabel} native "${name.trim()}" berhasil dibuat` };
   } catch (error: any) {
     return { success: false, message: error.message || "Terjadi kesalahan" };
+  }
+}
+
+// Alias untuk backward-compat dengan halaman create lama
+export const createNativeAdmin = createNativeUser;
+
+/**
+ * Reset password akun native — generate password baru.
+ * Hanya super_admin, hanya untuk akun yang punya password (native).
+ */
+export async function resetNativePassword(userId: string, newPassword: string) {
+  try {
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
+    const callerRole = (session.user as any).role;
+    if (callerRole !== "super_admin") {
+      throw new Error("Hanya Super Admin yang dapat mereset password");
+    }
+
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error("Password baru minimal 8 karakter");
+    }
+
+    const [target] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!target) throw new Error("User tidak ditemukan");
+    if (!target.password) throw new Error("Akun ini bukan akun native (tidak punya password)");
+    if (target.role === "super_admin") throw new Error("Tidak dapat mereset password Super Admin lain");
+
+    const bcrypt = (await import("bcryptjs")).default;
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await db.update(users).set({
+      password: hashedPassword,
+      plainPassword: encryptPassword(newPassword), // enkripsi sebelum simpan
+    }).where(eq(users.id, userId));
+
+    revalidatePath("/admin/users");
+    return { success: true, message: `Password akun "${target.name || target.email}" berhasil direset` };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Terjadi kesalahan" };
+  }
+}
+
+/**
+ * Dekripsi plain_password untuk ditampilkan di UI.
+ * Hanya super_admin, hanya akun native.
+ */
+export async function getDecryptedPassword(userId: string): Promise<{ success: boolean; password?: string; message?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
+    const callerRole = (session.user as any).role;
+    if (callerRole !== "super_admin") {
+      throw new Error("Hanya Super Admin yang dapat melihat password");
+    }
+
+    const [target] = await db
+      .select({ plainPassword: users.plainPassword, password: users.password, name: users.name })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!target) throw new Error("User tidak ditemukan");
+    if (!target.password) throw new Error("Akun ini bukan akun native");
+    if (!target.plainPassword) return { success: true, password: "(tidak tersedia)" };
+
+    // Dekripsi — handle backward-compat jika ada data lama yang belum terenkripsi
+    let decrypted: string;
+    if (isCipherText(target.plainPassword)) {
+      decrypted = decryptPassword(target.plainPassword);
+    } else {
+      // Data lama (plain text) — enkripsi sekarang untuk update
+      await db.update(users)
+        .set({ plainPassword: encryptPassword(target.plainPassword) })
+        .where(eq(users.id, userId));
+      decrypted = target.plainPassword;
+    }
+
+    return { success: true, password: decrypted };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal mendekripsi password" };
   }
 }

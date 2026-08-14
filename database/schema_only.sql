@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `emailVerified` timestamp(3) DEFAULT NULL,
   `image` varchar(255) DEFAULT NULL,
   `password` varchar(255) DEFAULT NULL,
+  `plain_password` varchar(255) DEFAULT NULL,
   `phone` varchar(50) DEFAULT NULL,
   `nim` varchar(50) DEFAULT NULL,
   `department` varchar(100) DEFAULT NULL,

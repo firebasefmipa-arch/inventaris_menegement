@@ -43,6 +43,7 @@ export const users = mysqlTable("user", {
   }),
   image: varchar("image", { length: 255 }),
   password: varchar("password", { length: 255 }),
+  plainPassword: varchar("plain_password", { length: 255 }),
   phone: varchar("phone", { length: 50 }),
   nim: varchar("nim", { length: 50 }),
   department: varchar("department", { length: 100 }),

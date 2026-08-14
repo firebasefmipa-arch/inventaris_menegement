@@ -45,8 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           .limit(1)
 
         if (!user || !user.password) return null
-        // Hanya akun native (punya password) dengan role admin/super_admin yang bisa login di sini
-        if (user.role !== "super_admin" && user.role !== "admin") return null
+        // Semua role native (punya password) bisa login lewat credentials
         if (user.status === "suspended") return null
 
         const valid = await bcrypt.compare(password, user.password)
