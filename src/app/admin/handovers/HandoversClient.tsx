@@ -201,15 +201,15 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
               )}>
                 {/* Pending approval banner */}
                 {needsAction && (
-                  <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-blue-50 border-b border-blue-200 rounded-t-2xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 bg-blue-50 border-b border-blue-200 rounded-t-2xl">
                     <span className="text-xs font-semibold text-blue-700">Menunggu persetujuan admin</span>
                     <div className="flex gap-2">
                       <button onClick={() => { setActionId(hv.id); setActionType("approve"); }}
-                        className="text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-3 py-1.5 rounded-lg transition-colors">
+                        className="flex-1 sm:flex-none text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg transition-colors text-center">
                         Setujui
                       </button>
                       <button onClick={() => { setActionId(hv.id); setActionType("reject"); }}
-                        className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors">
+                        className="flex-1 sm:flex-none text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors text-center">
                         Tolak
                       </button>
                     </div>

@@ -74,7 +74,8 @@ export default async function UsersPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-100">
               <tr>
@@ -97,28 +98,17 @@ export default async function UsersPage() {
                 sortedUsers.map((user) => {
                   const isCurrentUser = session?.user?.id === user.id;
                   const targetRole = user.role ?? "user";
-
                   return (
-                    <tr
-                      key={user.id}
-                      className={clsx(
-                        "hover:bg-gray-50/50 transition-colors",
-                        targetRole === "super_admin" && "bg-purple-50/30"
-                      )}
-                    >
+                    <tr key={user.id} className={clsx("hover:bg-gray-50/50 transition-colors", targetRole === "super_admin" && "bg-purple-50/30")}>
                       <td className="px-5 py-4">
                         <div className="font-medium text-gray-900">{user.name || "-"}</div>
                         {isCurrentUser && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
-                            Anda
-                          </span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">Anda</span>
                         )}
                       </td>
                       <td className="px-5 py-4">
                         <div className="text-gray-900 text-xs">{user.email}</div>
-                        <div className="text-gray-500 text-xs mt-0.5">
-                          {user.phone || "Belum diisi"}
-                        </div>
+                        <div className="text-gray-500 text-xs mt-0.5">{user.phone || "Belum diisi"}</div>
                       </td>
                       <td className="px-5 py-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -129,44 +119,24 @@ export default async function UsersPage() {
                       <td className="px-5 py-4">
                         {user.status === "active" ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Aktif
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Aktif
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                            Suspended
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Suspended
                           </span>
                         )}
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-2 flex-wrap">
-                          {/* Promote / Demote — hanya super_admin, tidak untuk dirinya sendiri */}
                           {isSuperAdmin && targetRole !== "super_admin" && !isCurrentUser && (
-                            <UserRoleButton
-                              userId={user.id}
-                              currentRole={targetRole}
-                              isCurrentUser={false}
-                            />
+                            <UserRoleButton userId={user.id} currentRole={targetRole} isCurrentUser={false} />
                           )}
-
-                          {/* Suspend / Aktifkan */}
                           {!isCurrentUser && targetRole !== "super_admin" && (
-                            <UserStatusButton
-                              userId={user.id}
-                              currentStatus={user.status ?? "active"}
-                              isCurrentUser={isCurrentUser}
-                              callerRole={currentRole}
-                              targetRole={targetRole}
-                            />
+                            <UserStatusButton userId={user.id} currentStatus={user.status ?? "active"} isCurrentUser={isCurrentUser} callerRole={currentRole} targetRole={targetRole} />
                           )}
-
-                          {/* Hapus akun & hapus history — hanya super_admin, tidak untuk dirinya sendiri & bukan super_admin lain */}
                           {isSuperAdmin && !isCurrentUser && targetRole !== "super_admin" && (
-                            <DeleteUserButtons
-                              userId={user.id}
-                              userName={user.name || user.email || "User"}
-                            />
+                            <DeleteUserButtons userId={user.id} userName={user.name || user.email || "User"} />
                           )}
                         </div>
                       </td>
@@ -176,6 +146,65 @@ export default async function UsersPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card list */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {sortedUsers.length === 0 ? (
+            <div className="px-6 py-10 text-center text-gray-400">Belum ada data pengguna.</div>
+          ) : (
+            sortedUsers.map((user) => {
+              const isCurrentUser = session?.user?.id === user.id;
+              const targetRole = user.role ?? "user";
+              return (
+                <div key={user.id} className={clsx("p-4 space-y-3", targetRole === "super_admin" && "bg-purple-50/30")}>
+                  {/* Nama + badge */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-gray-900 flex items-center gap-2 flex-wrap">
+                        {user.name || "-"}
+                        {isCurrentUser && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Anda</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5 truncate">{user.email}</div>
+                      {user.phone && <div className="text-xs text-gray-400">{user.phone}</div>}
+                    </div>
+                    <div className="shrink-0">{getRoleBadge(targetRole)}</div>
+                  </div>
+
+                  {/* Dept + Status */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      {user.department || "-"}
+                    </span>
+                    {user.status === "active" ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Aktif
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Suspended
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Aksi */}
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    {isSuperAdmin && targetRole !== "super_admin" && !isCurrentUser && (
+                      <UserRoleButton userId={user.id} currentRole={targetRole} isCurrentUser={false} />
+                    )}
+                    {!isCurrentUser && targetRole !== "super_admin" && (
+                      <UserStatusButton userId={user.id} currentStatus={user.status ?? "active"} isCurrentUser={isCurrentUser} callerRole={currentRole} targetRole={targetRole} />
+                    )}
+                    {isSuperAdmin && !isCurrentUser && targetRole !== "super_admin" && (
+                      <DeleteUserButtons userId={user.id} userName={user.name || user.email || "User"} />
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

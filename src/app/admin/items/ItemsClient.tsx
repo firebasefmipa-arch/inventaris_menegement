@@ -216,27 +216,27 @@ export function ItemsClient({ items, categories }: Props) {
               Kelola semua barang yang tersedia untuk dipinjam
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 justify-end items-center">
-            <div className="inline-flex items-center gap-2 bg-white border border-gray-100 rounded-xl p-1">
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="inline-flex items-center gap-1 bg-white border border-gray-100 rounded-xl p-1">
               <button
                 type="button"
                 onClick={() => setViewMode('grid')}
                 className={clsx(
-                  "px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-1.5",
+                  "px-2.5 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1",
                   viewMode === 'grid' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
                 )}
               >
-                <LayoutGrid className="w-4 h-4" /> Grid
+                <LayoutGrid className="w-3.5 h-3.5" /> Grid
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('list')}
                 className={clsx(
-                  "px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-1.5",
+                  "px-2.5 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1",
                   viewMode === 'list' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
                 )}
               >
-                <List className="w-4 h-4" /> List
+                <List className="w-3.5 h-3.5" /> List
               </button>
             </div>
 
@@ -244,16 +244,16 @@ export function ItemsClient({ items, categories }: Props) {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={importLoading}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-sm text-sm font-medium"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-sm text-xs font-medium"
             >
-              <Upload className="w-4 h-4" />
-              {importLoading ? "Memproses..." : "Impor Spreadsheet"}
+              <Upload className="w-3.5 h-3.5" />
+              {importLoading ? "Memproses..." : "Impor"}
             </button>
             <button
               onClick={() => setShowItemModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-600/25 text-sm font-medium"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-600/25 text-xs font-medium"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Tambah Barang
             </button>
           </div>
