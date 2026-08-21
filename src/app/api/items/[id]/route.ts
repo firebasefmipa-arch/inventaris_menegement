@@ -62,7 +62,16 @@ export async function PUT(
         ...(assetNumber !== undefined && { assetNumber }),
         ...(lastCheckDate !== undefined && { lastCheckDate }),
         ...(condition !== undefined && { condition }),
-        ...(quantity !== undefined && { quantity }),
+        ...(quantity !== undefined && {
+          quantity,
+          // availableQuantity ikut bertambah/berkurang sebesar selisih perubahan quantity
+          // Contoh: quantity lama 5, baru 8 → availableQuantity +3
+          // Contoh: quantity lama 5, baru 3 → availableQuantity -2 (tidak boleh < 0)
+          availableQuantity: Math.max(
+            0,
+            existing.availableQuantity + (quantity - existing.quantity)
+          ),
+        }),
         ...(location !== undefined && { location }),
         ...(imageUrl !== undefined && { imageUrl }),
         ...(status !== undefined && { status }),

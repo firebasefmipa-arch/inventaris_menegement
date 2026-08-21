@@ -94,29 +94,6 @@ export async function deleteUser(userId: string) {
   }
 }
 
-export async function deleteUserTransactions(userId: string) {
-  try {
-    const session = await auth();
-    if (!session?.user) throw new Error("Unauthorized");
-
-    const callerRole = (session.user as any).role;
-    if (callerRole !== "super_admin") {
-      throw new Error("Hanya Super Admin yang dapat menghapus history transaksi");
-    }
-
-    const [target] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    if (!target) throw new Error("User tidak ditemukan");
-
-    await db.delete(transactions).where(eq(transactions.userId, userId));
-
-    revalidatePath("/admin/users");
-    revalidatePath("/admin/transactions");
-    return { success: true, message: `History transaksi "${target.name || target.email}" berhasil dihapus` };
-  } catch (error: any) {
-    return { success: false, message: error.message || "Terjadi kesalahan" };
-  }
-}
-
 /**
  * Buat akun native (admin atau user biasa) dengan username + password.
  * Menyimpan plain_password agar superadmin bisa melihatnya.
