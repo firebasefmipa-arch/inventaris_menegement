@@ -5,8 +5,8 @@ import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import {
   Clock, CheckCircle2, ArrowLeftRight, User, Plus,
-  Search, SlidersHorizontal, ChevronDown, Trash2,
-  CheckSquare, XCircle, AlertTriangle,
+  Search, SlidersHorizontal, ChevronDown,
+  XCircle, AlertTriangle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -47,10 +47,6 @@ export function TransactionsClient({ transactions }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const { data: session } = useSession();
-  const isSuperAdmin = (session?.user as any)?.role === "super_admin";
-
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Reject modal state
   const [rejectModal, setRejectModal] = useState<{
@@ -85,43 +81,6 @@ export function TransactionsClient({ transactions }: Props) {
       return true;
     });
   }, [transactions, searchQuery, statusFilter]);
-
-  const handleBulkDelete = async () => {
-    if (selectedIds.size === 0) return;
-    if (!confirm(`Yakin ingin menghapus ${selectedIds.size} transaksi?`)) return;
-
-    setIsDeleting(true);
-    try {
-      const response = await fetch("/api/transactions/bulk-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: Array.from(selectedIds) }),
-      });
-      if (!response.ok) throw new Error("Gagal menghapus transaksi");
-      toast(`Berhasil menghapus ${selectedIds.size} transaksi`, "success");
-      setSelectedIds(new Set());
-      router.refresh();
-    } catch {
-      toast("Terjadi kesalahan saat menghapus", "error");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const toggleSelect = (id: number) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedIds(newSet);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredTransactions.map((tx) => tx.id)));
-    }
-  };
 
   const handleApprove = async (txId: number) => {
     if (!confirm("Yakin ingin menyetujui peminjaman ini?")) return;
@@ -177,19 +136,6 @@ export function TransactionsClient({ transactions }: Props) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 justify-end items-center">
-            {/* Pilih semua hanya untuk super_admin (yang bisa hapus) */}
-            {isSuperAdmin && (
-              <button
-                type="button"
-                onClick={toggleSelectAll}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-sm text-sm font-medium"
-              >
-                <CheckSquare className="w-4 h-4" />
-                {selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0
-                  ? "Batal Pilih Semua"
-                  : "Pilih Semua"}
-              </button>
-            )}
             <button
               onClick={() => setShowBorrowModal(true)}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-600/25 text-sm font-medium"
@@ -265,26 +211,12 @@ export function TransactionsClient({ transactions }: Props) {
                 <div
                   key={tx.id}
                   className={`rounded-2xl shadow-sm border p-4 sm:p-5 hover:shadow-md transition-all ${
-                    selectedIds.has(tx.id)
-                      ? "bg-indigo-50/50 border-indigo-300 ring-1 ring-indigo-300"
-                      : isOverdue
+                    isOverdue
                       ? "border-red-200 bg-red-50/30"
                       : "bg-white border-gray-100"
                   }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    {/* Checkbox — hanya super_admin */}
-                    {isSuperAdmin && (
-                      <div className="hidden md:flex items-center justify-center pt-1 shrink-0">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(tx.id)}
-                          onChange={() => toggleSelect(tx.id)}
-                          className="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
-                        />
-                      </div>
-                    )}
-
                     {/* Status Icon */}
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                       tx.status === "returned"           ? "bg-emerald-100"
@@ -407,35 +339,6 @@ export function TransactionsClient({ transactions }: Props) {
           </div>
         )}
       </div>
-
-      {/* Floating delete bar — hanya super_admin */}
-      {isSuperAdmin && selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900/95 backdrop-blur-md text-white px-6 py-3.5 rounded-full shadow-2xl flex items-center gap-5 z-50">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-500 text-xs font-bold">
-              {selectedIds.size}
-            </span>
-            <span className="text-sm font-medium">terpilih</span>
-          </div>
-          <div className="w-px h-5 bg-gray-700" />
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-            >
-              Batal
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
-              className="px-4 py-1.5 text-sm font-semibold text-red-100 bg-red-500 hover:bg-red-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              <Trash2 className="w-4 h-4" />
-              {isDeleting ? "Menghapus..." : "Hapus"}
-            </button>
-          </div>
-        </div>
-      )}
 
       <BorrowModal isOpen={showBorrowModal} onClose={() => setShowBorrowModal(false)} />
 
