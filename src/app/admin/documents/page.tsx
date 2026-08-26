@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   FileText, Download, RefreshCcw, FolderOpen,
   FileArchive, AlertCircle, HardDrive,
-  File, Eye,
+  File, Eye, Trash2, AlertTriangle, ShieldAlert,
 } from "lucide-react";
 import clsx from "clsx";
 import { format } from "date-fns";
@@ -59,6 +59,11 @@ export default function DocumentsPage() {
   const [activeTab, setActiveTab] = useState<"signed_forms" | "handovers">("signed_forms");
   const [exporting, setExporting] = useState<ExportTarget | null>(null);
   const [showExportModal, setShowExportModal] = useState<ExportTarget | null>(null);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<DocumentFile | null>(null);
+  const [backupConfirmed, setBackupConfirmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -126,6 +131,27 @@ export default function DocumentsPage() {
     if (target === "all") return data.totalFiles;
     if (target === "signed_forms") return data.signedForms.length;
     return data.handovers.length;
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget || !backupConfirmed) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/admin/documents/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder: deleteTarget.folder, filename: deleteTarget.name }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menghapus");
+      setDeleteTarget(null);
+      setBackupConfirmed(false);
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || "Gagal menghapus file");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const activeFiles = activeTab === "signed_forms" ? data?.signedForms ?? [] : data?.handovers ?? [];
@@ -304,10 +330,10 @@ export default function DocumentsPage() {
           <div className="divide-y divide-gray-50">
             {/* Header tabel */}
             <div className="grid grid-cols-12 gap-4 px-5 py-2.5 bg-gray-50 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              <div className="col-span-6">Nama File</div>
+              <div className="col-span-5">Nama File</div>
               <div className="col-span-2 text-right">Ukuran</div>
               <div className="col-span-3">Tanggal Upload</div>
-              <div className="col-span-1 text-center">Aksi</div>
+              <div className="col-span-2 text-center">Aksi</div>
             </div>
 
             {activeFiles.map((file) => (
@@ -316,7 +342,7 @@ export default function DocumentsPage() {
                 className="grid grid-cols-12 gap-4 px-5 py-3 items-center hover:bg-gray-50/50 transition-colors"
               >
                 {/* Nama file */}
-                <div className="col-span-6 flex items-center gap-2.5 min-w-0">
+                <div className="col-span-5 flex items-center gap-2.5 min-w-0">
                   {getFileIcon(file.name)}
                   <span className="text-sm text-gray-800 font-medium truncate" title={file.name}>
                     {file.name}
@@ -334,7 +360,7 @@ export default function DocumentsPage() {
                 </div>
 
                 {/* Aksi */}
-                <div className="col-span-1 flex items-center justify-center gap-1">
+                <div className="col-span-2 flex items-center justify-center gap-1">
                   <a
                     href={file.url}
                     target="_blank"
@@ -352,6 +378,14 @@ export default function DocumentsPage() {
                   >
                     <Download className="w-3.5 h-3.5" />
                   </a>
+                  <button
+                    type="button"
+                    onClick={() => { setDeleteTarget(file); setBackupConfirmed(false); }}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    title="Hapus dokumen"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -418,6 +452,87 @@ export default function DocumentsPage() {
               >
                 <Download className="w-4 h-4" />
                 Download ZIP
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => { setDeleteTarget(null); setBackupConfirmed(false); }}
+          />
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Hapus Dokumen?</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Tindakan ini tidak dapat diurungkan</p>
+              </div>
+            </div>
+
+            {/* Nama file */}
+            <div className="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3 border border-gray-100">
+              {getFileIcon(deleteTarget.name)}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{deleteTarget.name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {FOLDER_LABELS[deleteTarget.folder]} · {formatBytes(deleteTarget.size)}
+                </p>
+              </div>
+            </div>
+
+            {/* Peringatan backup */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                <p className="text-sm font-bold text-amber-800">Pastikan sudah dibackup!</p>
+              </div>
+              <p className="text-xs text-amber-700 leading-relaxed">
+                File yang dihapus <strong>tidak bisa dipulihkan</strong>. Pastikan kamu sudah
+                mendownload backup dokumen ini sebelum melanjutkan. Gunakan tombol{" "}
+                <strong>Export / Backup</strong> di atas jika belum.
+              </p>
+            </div>
+
+            {/* Checkbox konfirmasi backup */}
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={backupConfirmed}
+                onChange={(e) => setBackupConfirmed(e.target.checked)}
+                className="w-4 h-4 mt-0.5 text-red-600 bg-white border-gray-300 rounded focus:ring-red-500 cursor-pointer shrink-0"
+              />
+              <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">
+                Saya sudah melakukan backup dan memahami bahwa file ini akan dihapus permanen
+              </span>
+            </label>
+
+            {/* Tombol */}
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setDeleteTarget(null); setBackupConfirmed(false); }}
+                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={!backupConfirmed || deleting}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {deleting ? (
+                  <><RefreshCcw className="w-4 h-4 animate-spin" /> Menghapus...</>
+                ) : (
+                  <><Trash2 className="w-4 h-4" /> Hapus Permanen</>
+                )}
               </button>
             </div>
           </div>
