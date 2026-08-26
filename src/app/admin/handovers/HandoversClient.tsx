@@ -173,7 +173,7 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
       </div>
 
       {/* Search + Filter bar terpadu */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
         {/* Baris 1: Search */}
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
@@ -182,7 +182,7 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
             className="w-full py-1.5 text-sm bg-transparent outline-none placeholder:text-gray-400 text-gray-900" />
         </div>
         {/* Baris 2: Filter */}
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-gray-50/50">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-gray-50/50 rounded-b-2xl">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Filter:</span>
           <FilterBar
             filter={advFilter}

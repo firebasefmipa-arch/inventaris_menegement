@@ -343,7 +343,7 @@ export default function DocumentsPage() {
       )}
 
       {/* File list */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
         {/* Tabs + Select mode toggle */}
         <div className="flex items-center border-b border-gray-100">
           <div className="flex flex-1">

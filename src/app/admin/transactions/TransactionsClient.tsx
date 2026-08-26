@@ -159,7 +159,7 @@ export function TransactionsClient({ transactions }: Props) {
         </div>
 
         {/* Search + Filter bar terpadu */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
           {/* Baris 1: Search */}
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />
@@ -172,7 +172,7 @@ export function TransactionsClient({ transactions }: Props) {
             />
           </div>
           {/* Baris 2: Filter */}
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-gray-50/50">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-gray-50/50 rounded-b-2xl">
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Filter:</span>
             <FilterBar
               filter={advFilter}
@@ -196,7 +196,7 @@ export function TransactionsClient({ transactions }: Props) {
                 <ChevronDown className="w-3 h-3" />
               </button>
               {showFilterDropdown && (
-                <div className="absolute left-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-20">
+                <div className="absolute left-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-30">
                   {filterOptions.map((opt) => (
                     <button
                       key={opt.key}
