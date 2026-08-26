@@ -68,10 +68,10 @@ export function UserSidebar() {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="hidden lg:flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-        <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={36} height={36} className="rounded-xl object-contain" />
-        <div>
-          <h1 className="font-bold text-lg text-gray-900">Manajemen Inventaris</h1>
+      <div className="hidden lg:flex items-center gap-3 px-4 py-4 border-b border-gray-100">
+        <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain shrink-0" />
+        <div className="min-w-0">
+          <h1 className="font-bold text-sm text-gray-900 leading-tight">Manajemen Inventaris</h1>
           <p className="text-xs text-gray-500">Portal Mahasiswa</p>
         </div>
       </div>
