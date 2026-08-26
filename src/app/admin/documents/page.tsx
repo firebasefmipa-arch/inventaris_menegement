@@ -119,9 +119,9 @@ export default function DocumentsPage() {
     return applyTimeFilter(result, (f) => new Date(f.createdAt), docFilter.timePreset, docFilter.dateFrom, docFilter.dateTo);
   }, [rawActiveFiles, docFilter]);
 
-  // Daftar nama unik untuk dropdown filter user
+  // Daftar nama unik untuk dropdown filter user — termasuk "Tidak diketahui" untuk file lama
   const uniqueDocUsers = useMemo(() =>
-    [...new Set(rawActiveFiles.map((f) => f.uploaderName).filter((n) => n && n !== "Tidak diketahui") as string[])].sort(),
+    [...new Set(rawActiveFiles.map((f) => f.uploaderName).filter(Boolean) as string[])].sort(),
     [rawActiveFiles]
   );
 
@@ -254,6 +254,23 @@ export default function DocumentsPage() {
     setSelectedFiles(new Set());
   };
 
+  const [renamingLegacy, setRenamingLegacy] = useState(false);
+
+  const handleRenameLegacy = async () => {
+    if (!confirm("Rename semua file lama ke format NamaPeminjam_Tanggal? URL di database akan ikut diupdate.")) return;
+    setRenamingLegacy(true);
+    try {
+      const res = await fetch("/api/admin/documents/rename-legacy", { method: "POST" });
+      const json = await res.json();
+      alert(json.message || "Selesai");
+      await fetchData();
+    } catch {
+      alert("Gagal melakukan sinkronisasi nama file");
+    } finally {
+      setRenamingLegacy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -264,11 +281,19 @@ export default function DocumentsPage() {
             Kelola dan backup semua dokumen formulir yang telah diupload
           </p>
         </div>
-        <button onClick={fetchData} disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors self-start sm:self-auto">
-          <RefreshCcw className={clsx("w-4 h-4", loading && "animate-spin")} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button onClick={handleRenameLegacy} disabled={renamingLegacy || loading}
+            title="Rename file lama ke format NamaPeminjam_Tanggal"
+            className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            <RefreshCcw className={clsx("w-3.5 h-3.5", renamingLegacy && "animate-spin")} />
+            {renamingLegacy ? "Merename..." : "Sinkron Nama File"}
+          </button>
+          <button onClick={fetchData} disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            <RefreshCcw className={clsx("w-4 h-4", loading && "animate-spin")} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error && (
