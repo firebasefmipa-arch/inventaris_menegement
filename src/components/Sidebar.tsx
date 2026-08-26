@@ -11,7 +11,6 @@ import {
   Users,
   Menu,
   X,
-  Globe,
   Lightbulb,
   LogOut,
   ShieldCheck,
@@ -150,13 +149,6 @@ export function Sidebar() {
             </div>
           )}
 
-          <Link
-            href="/"
-            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-all"
-          >
-            <Globe className="w-4 h-4" />
-            Portal Peminjaman
-          </Link>
           <button
             onClick={handleLogout}
             className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:opacity-95 transition-all"
