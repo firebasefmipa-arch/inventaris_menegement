@@ -187,7 +187,7 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
   // ── Logo ──
   let y = PAGE_H - 50;
   try {
-    const logoBytes = await fs.readFile(path.join(process.cwd(), 'public', 'logo.png'));
+    const logoBytes = await fs.readFile(path.join(process.cwd(), 'public', 'fmipa-logo.png'));
     const logoImg   = await pdfDoc.embedPng(logoBytes);
     const dims      = logoImg.scaleToFit(340, 55);
     const logoY     = PAGE_H - 45 - dims.height;

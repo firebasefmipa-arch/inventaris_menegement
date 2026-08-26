@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Boxes, ArrowRight, Package, Clock, ShieldCheck, ChevronRight } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight, Package, Clock, ShieldCheck, ChevronRight } from "lucide-react";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { gt, count } from "drizzle-orm";
@@ -10,7 +11,7 @@ import { gt, count } from "drizzle-orm";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "PinjamBarang - Portal Peminjaman",
+  title: "Manajemen Inventaris - Portal Peminjaman",
   description: "Pinjam peralatan dengan mudah. Login dulu, pilih barang, dan ajukan peminjaman.",
 };
 
@@ -38,10 +39,8 @@ export default async function HomePage() {
       {/* Navbar */}
       <nav className="border-b border-gray-100 px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between max-w-7xl mx-auto w-full">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md shadow-indigo-500/25">
-            <Boxes className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-gray-900 text-lg tracking-tight">PinjamBarang</span>
+          <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={36} height={36} className="rounded-xl object-contain" />
+          <span className="font-bold text-gray-900 text-lg tracking-tight">Manajemen Inventaris</span>
         </div>
         <div className="flex items-center gap-3">
           <Link
@@ -133,7 +132,7 @@ export default async function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-100 py-6 text-center text-xs text-gray-400">
-        PinjamBarang &copy; {new Date().getFullYear()} &mdash; Sistem Peminjaman Barang
+        Manajemen Inventaris &copy; {new Date().getFullYear()} &mdash; Sistem Peminjaman Barang
       </footer>
     </div>
   );

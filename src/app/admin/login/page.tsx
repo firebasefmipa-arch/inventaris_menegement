@@ -3,7 +3,8 @@
 import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShieldCheck, User, Lock, Eye, EyeOff, Boxes } from "lucide-react";
+import { ShieldCheck, User, Lock, Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
 import clsx from "clsx";
 
 function AdminLoginForm() {
@@ -57,10 +58,10 @@ function AdminLoginForm() {
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-xl shadow-indigo-500/30 mb-4">
-            <Boxes className="w-7 h-7 text-white" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl shadow-xl shadow-indigo-500/30 mb-4 bg-white overflow-hidden">
+            <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={56} height={56} className="object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-white">PinjamBarang</h1>
+          <h1 className="text-2xl font-bold text-white">Manajemen Inventaris</h1>
           <p className="text-gray-400 text-sm mt-1">Panel Admin</p>
         </div>
 

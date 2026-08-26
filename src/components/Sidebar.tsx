@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   LayoutDashboard,
   Package,
@@ -10,7 +11,6 @@ import {
   Users,
   Menu,
   X,
-  Boxes,
   Globe,
   Lightbulb,
   LogOut,
@@ -52,10 +52,8 @@ export function Sidebar() {
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <Link href="/admin" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center">
-            <Boxes className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-gray-900">PinjamBarang</span>
+          <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain" />
+          <span className="font-bold text-gray-900">Manajemen Inventaris</span>
         </Link>
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -82,11 +80,9 @@ export function Sidebar() {
         )}
       >
         <div className="hidden lg:flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
-            <Boxes className="w-5 h-5 text-white" />
-          </div>
+          <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={36} height={36} className="rounded-xl object-contain" />
           <div>
-            <h1 className="font-bold text-lg text-gray-900">PinjamBarang</h1>
+            <h1 className="font-bold text-lg text-gray-900">Manajemen Inventaris</h1>
             <p className="text-xs text-gray-500">Manajemen Aset</p>
           </div>
         </div>

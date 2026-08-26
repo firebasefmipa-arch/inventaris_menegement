@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Boxes,
   Sparkles,
   Search,
   Check,
@@ -37,6 +36,7 @@ import {
   RefreshCcw,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import clsx from "clsx";
 import { format, addDays } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
@@ -255,12 +255,10 @@ export function PinjamFlow({ items }: { items: PublicItem[] }) {
       <header className="sticky top-0 z-50 border-b border-indigo-100/60 bg-white/75 backdrop-blur-xl">
         <div className="relative max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <Boxes className="w-5 h-5 text-white" />
-            </div>
+            <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={36} height={36} className="rounded-xl object-contain" />
             <div>
               <p className="font-bold text-gray-900 leading-none">
-                PinjamBarang
+                Manajemen Inventaris
               </p>
               <p className="text-[11px] text-gray-500 mt-0.5">
                 Portal Peminjaman
@@ -897,7 +895,7 @@ export function PinjamFlow({ items }: { items: PublicItem[] }) {
         {/* Footer */}
         <footer className="border-t border-gray-100 py-8 text-center">
           <p className="text-xs text-gray-400">
-            PinjamBarang — Sistem Peminjaman Barang Internal. Butuh bantuan?
+            Manajemen Inventaris — Sistem Peminjaman Barang Internal. Butuh bantuan?
             Hubungi admin di kantor.
           </p>
         </footer>
