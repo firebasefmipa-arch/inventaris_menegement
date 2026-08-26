@@ -149,9 +149,18 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
 
   return (
     <div className="space-y-5">
-      {/* Header actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex gap-2 overflow-x-auto pb-1 flex-1">
+      {/* Header: tombol tambah */}
+      <div className="flex justify-end">
+        <button onClick={() => setModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition-colors shadow-sm shrink-0">
+          <Plus className="w-4 h-4" /> Catat Serah Terima
+        </button>
+      </div>
+
+      {/* Search + Filter + Status dalam satu card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        {/* Baris 1: Status tabs + Refresh */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 overflow-x-auto">
           {STATUS_TABS.map((tab) => (
             <button key={tab.key} onClick={() => { setStatusFilter(tab.key); fetchData(tab.key); }}
               className={clsx("shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all",
@@ -162,26 +171,20 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
             </button>
           ))}
           <button onClick={() => fetchData()}
-            className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-all">
+            className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-all ml-auto">
             <RefreshCcw className={clsx("w-3.5 h-3.5", loading && "animate-spin")} /> Refresh
           </button>
         </div>
-        <button onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition-colors shadow-sm shrink-0">
-          <Plus className="w-4 h-4" /> Catat Serah Terima
-        </button>
-      </div>
 
-      {/* Search + Filter bar terpadu */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-        {/* Baris 1: Search */}
+        {/* Baris 2: Search */}
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Cari nama penerima, divisi, atau barang..."
             className="w-full py-1.5 text-sm bg-transparent outline-none placeholder:text-gray-400 text-gray-900" />
         </div>
-        {/* Baris 2: Filter */}
+
+        {/* Baris 3: Filter */}
         <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-gray-50/50 rounded-b-2xl">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Filter:</span>
           <FilterBar

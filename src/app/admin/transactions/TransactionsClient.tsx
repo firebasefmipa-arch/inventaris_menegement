@@ -196,7 +196,7 @@ export function TransactionsClient({ transactions }: Props) {
                 <ChevronDown className="w-3 h-3" />
               </button>
               {showFilterDropdown && (
-                <div className="absolute left-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-30">
+                <div className="absolute left-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-30 py-1">
                   {filterOptions.map((opt) => (
                     <button
                       key={opt.key}
@@ -220,7 +220,6 @@ export function TransactionsClient({ transactions }: Props) {
             )}
           </div>
         </div>
-        {/* List */}
         {filteredTransactions.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
             <ArrowLeftRight className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -382,3 +381,4 @@ export function TransactionsClient({ transactions }: Props) {
     </>
   );
 }
+
