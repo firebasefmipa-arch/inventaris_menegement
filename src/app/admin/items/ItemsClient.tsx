@@ -450,6 +450,12 @@ export function ItemsClient({ items, categories }: Props) {
                           <div className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Serial Number</div>
                           <div className="text-xs font-medium text-gray-700 font-mono truncate" title={item.sn || '-'}>{item.sn || '-'}</div>
                         </div>
+                        {item.location && (
+                          <div className="bg-gray-50 rounded-lg p-2 border border-gray-100/50 col-span-2">
+                            <div className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Lokasi</div>
+                            <div className="text-xs font-medium text-gray-700 truncate" title={item.location}>{item.location}</div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Spesifikasi */}

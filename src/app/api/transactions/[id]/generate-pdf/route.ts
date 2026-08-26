@@ -99,11 +99,26 @@ export async function GET(
     return new NextResponse(pdfBuffer as any, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="Formulir_Peminjaman_PB-${String(txId).padStart(4, "0")}.pdf"`,
+        "Content-Disposition": `attachment; filename="${sanitizeFilename(tx.borrowerName)}_${formatDateFilename(tx.borrowDate)}.pdf"`,
       },
     });
   } catch (error) {
     console.error("PDF generation error:", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }
+}
+
+function sanitizeFilename(name: string): string {
+  return (name || "Peminjam")
+    .replace(/[^a-zA-Z0-9_\-\s]/g, "")
+    .replace(/\s+/g, "_")
+    .slice(0, 50);
+}
+
+function formatDateFilename(date: Date): string {
+  const d = new Date(date);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}${mm}${yyyy}`;
 }
