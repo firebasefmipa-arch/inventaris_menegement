@@ -40,11 +40,12 @@ const TIME_PRESETS: { key: TimePreset; label: string }[] = [
 interface Props {
   filter: FilterState;
   onChange: (f: FilterState) => void;
-  userList?: string[]; // daftar nama user/peminjam unik
-  userLabel?: string;  // label placeholder user dropdown
+  userList?: string[];
+  userLabel?: string;
+  showUserFilter?: boolean; // eksplisit tampilkan/sembunyikan filter user
 }
 
-export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua User" }: Props) {
+export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua User", showUserFilter = true }: Props) {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
   const [userSearch, setUserSearch] = useState("");
@@ -74,8 +75,8 @@ export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua 
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Filter User */}
-      {userList.length > 0 && (
+      {/* Filter User — tampil jika showUserFilter=true */}
+      {showUserFilter && (
         <div className="relative" ref={userRef}>
           <button
             onClick={() => { setShowUserDropdown(!showUserDropdown); setShowTimeDropdown(false); }}

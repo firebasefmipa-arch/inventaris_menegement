@@ -186,6 +186,7 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
         onChange={setAdvFilter}
         userList={uniqueUsers}
         userLabel="Semua Penerima"
+        showUserFilter={true}
       />
 
       {/* List */}

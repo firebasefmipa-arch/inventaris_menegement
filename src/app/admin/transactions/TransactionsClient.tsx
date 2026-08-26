@@ -164,6 +164,7 @@ export function TransactionsClient({ transactions }: Props) {
           onChange={setAdvFilter}
           userList={uniqueUsers}
           userLabel="Semua Peminjam"
+          showUserFilter={true}
         />
 
         {/* Search Bar + Filter Status */}

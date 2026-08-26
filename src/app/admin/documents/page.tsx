@@ -378,7 +378,7 @@ export default function DocumentsPage() {
             <FilterBar
               filter={docFilter}
               onChange={setDocFilter}
-              userLabel="Semua Waktu"
+              showUserFilter={false}
             />
           </div>
         )}
