@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search, Check, Monitor, Speaker, Camera, Tent, Dumbbell, Car, Package,
-  ArrowLeft, ArrowRight, MapPin, Phone, Mail, Building2, Minus, Plus,
-  CalendarDays, StickyNote, ShieldCheck, Receipt, PartyPopper, History,
+  ArrowLeft, ArrowRight, MapPin, Phone, Mail, Building2, Minus, Plus,  CalendarDays, StickyNote, ShieldCheck, Receipt, PartyPopper, History,
   Send, RefreshCcw, ShoppingCart, Trash2, FileText, type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
@@ -75,7 +74,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
   const [category, setCategory] = useState("Semua");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
-  const [form, setForm] = useState({ returnDate: defaultReturnDate(), purpose: "", notes: "" });
+  const [form, setForm] = useState({ returnDate: defaultReturnDate(), purpose: "", notes: "", location: "" });
   const [redirectCountdown, setRedirectCountdown] = useState(5);
 
   const user = session?.user as any;
@@ -147,6 +146,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
     if (cart.length === 0) { toast("Pilih minimal satu barang", "error"); return; }
     if (!form.returnDate) { toast("Pilih tanggal pengembalian", "error"); return; }
     if (!form.purpose.trim()) { toast("Keperluan peminjaman wajib diisi", "error"); return; }
+    if (!form.location.trim()) { toast("Tempat/lokasi wajib diisi", "error"); return; }
 
     setSubmitting(true);
     try {
@@ -158,6 +158,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
           expectedReturnDate: form.returnDate,
           purpose: form.purpose,
           notes: form.notes,
+          location: form.location,
           borrower: {
             name: user?.name || "",
             email: user?.email || "",
@@ -190,7 +191,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
   function resetAll() {
     setCart([]);
     setResult(null);
-    setForm({ returnDate: defaultReturnDate(), purpose: "", notes: "" });
+    setForm({ returnDate: defaultReturnDate(), purpose: "", notes: "", location: "" });
     setStep("item");
     router.refresh();
   }
@@ -396,6 +397,16 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
                   <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                   <input type="date" value={form.returnDate} min={todayStr} required
                     onChange={(e) => setForm({ ...form, returnDate: e.target.value })}
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Tempat / Lokasi <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <input type="text" value={form.location} required
+                    onChange={(e) => setForm({ ...form, location: e.target.value })}
+                    placeholder="Contoh: Gedung FMIPA Lt.2 Ruang Server"
                     className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
                 </div>
               </div>

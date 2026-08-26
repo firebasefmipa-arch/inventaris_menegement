@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const nim = (borrowerInput.nim || (session.user as any).nim || "").trim();
     const department = (borrowerInput.department || (session.user as any).department || "").trim();
     const userId = session.user.id;
-    const { expectedReturnDate, notes, purpose, cart } = body;
+    const { expectedReturnDate, notes, purpose, location, cart } = body;
 
     // Validasi field wajib
     if (!expectedReturnDate || !name || !phone) {
@@ -40,6 +40,14 @@ export async function POST(request: NextRequest) {
     if (!purpose?.trim()) {
       return NextResponse.json(
         { error: "Keperluan peminjaman wajib diisi." },
+        { status: 400 }
+      );
+    }
+
+    // Tempat/lokasi wajib diisi
+    if (!location?.trim()) {
+      return NextResponse.json(
+        { error: "Tempat/lokasi peminjaman wajib diisi." },
         { status: 400 }
       );
     }
@@ -121,6 +129,7 @@ export async function POST(request: NextRequest) {
         expectedReturnDate: returnDate,
         purpose: purpose.trim(),
         notes: notes?.trim() || null,
+        borrowerLocation: location?.trim() || null,
       })
       .$returningId();
 
