@@ -287,7 +287,7 @@ export function PinjamFlow({ items }: { items: PublicItem[] }) {
           {/* Stats */}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-white border border-gray-100 shadow-sm">
-              <Boxes className="w-4 h-4 text-indigo-600" />
+              <Package className="w-4 h-4 text-indigo-600" />
               <span className="text-sm font-bold text-gray-900">
                 {items.length}
               </span>
