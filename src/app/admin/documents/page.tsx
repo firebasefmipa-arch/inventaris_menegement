@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
   FileText, Download, RefreshCcw, FolderOpen,
   FileArchive, AlertCircle, HardDrive,
   File, Eye, Trash2, AlertTriangle, ShieldAlert,
+  CheckSquare, Square, MinusSquare, X,
 } from "lucide-react";
 import clsx from "clsx";
 import { format } from "date-fns";
@@ -57,11 +58,18 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"signed_forms" | "handovers">("signed_forms");
+
+  // Export state
   const [exporting, setExporting] = useState<ExportTarget | null>(null);
   const [showExportModal, setShowExportModal] = useState<ExportTarget | null>(null);
 
-  // Delete state
-  const [deleteTarget, setDeleteTarget] = useState<DocumentFile | null>(null);
+  // Select mode
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set()); // key: folder/name
+
+  // Delete state — single & bulk
+  const [deleteTarget, setDeleteTarget] = useState<DocumentFile | null>(null); // single
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [backupConfirmed, setBackupConfirmed] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -82,7 +90,6 @@ export default function DocumentsPage() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Guard — hanya super_admin
   useEffect(() => {
     if (status === "authenticated") {
       const role = (session?.user as any)?.role;
@@ -90,16 +97,51 @@ export default function DocumentsPage() {
     }
   }, [status, session, router]);
 
+  // Reset selection saat ganti tab
+  useEffect(() => {
+    setSelectedFiles(new Set());
+  }, [activeTab]);
+
+  const activeFiles = activeTab === "signed_forms" ? data?.signedForms ?? [] : data?.handovers ?? [];
+
+  const fileKey = (f: DocumentFile) => `${f.folder}/${f.name}`;
+
+  const toggleSelect = (file: DocumentFile) => {
+    const key = fileKey(file);
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedFiles.size === activeFiles.length && activeFiles.length > 0) {
+      setSelectedFiles(new Set());
+    } else {
+      setSelectedFiles(new Set(activeFiles.map(fileKey)));
+    }
+  };
+
+  const selectAllState: "none" | "some" | "all" =
+    selectedFiles.size === 0 ? "none"
+    : selectedFiles.size === activeFiles.length ? "all"
+    : "some";
+
+  const selectedFileObjects = useMemo(() =>
+    activeFiles.filter((f) => selectedFiles.has(fileKey(f))),
+    [activeFiles, selectedFiles]
+  );
+
+  const selectedTotalSize = selectedFileObjects.reduce((s, f) => s + f.size, 0);
+
   const handleExport = async (target: ExportTarget) => {
     setExporting(target);
     setShowExportModal(null);
     try {
       const param = target === "all" ? "" : `?folder=${target}`;
       const res = await fetch(`/api/admin/documents/export${param}`);
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Gagal mengekspor dokumen");
-      }
+      if (!res.ok) throw new Error(await res.text() || "Gagal mengekspor");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -118,7 +160,6 @@ export default function DocumentsPage() {
     }
   };
 
-  // Hitung size per target export
   const getSizeForTarget = (target: ExportTarget): number => {
     if (!data) return 0;
     if (target === "all") return data.totalSize;
@@ -133,7 +174,8 @@ export default function DocumentsPage() {
     return data.handovers.length;
   };
 
-  const handleDelete = async () => {
+  // Hapus satu file
+  const handleDeleteSingle = async () => {
     if (!deleteTarget || !backupConfirmed) return;
     setDeleting(true);
     try {
@@ -146,6 +188,11 @@ export default function DocumentsPage() {
       if (!res.ok) throw new Error(json.error || "Gagal menghapus");
       setDeleteTarget(null);
       setBackupConfirmed(false);
+      setSelectedFiles((prev) => {
+        const next = new Set(prev);
+        next.delete(fileKey(deleteTarget));
+        return next;
+      });
       await fetchData();
     } catch (err: any) {
       alert(err.message || "Gagal menghapus file");
@@ -154,7 +201,37 @@ export default function DocumentsPage() {
     }
   };
 
-  const activeFiles = activeTab === "signed_forms" ? data?.signedForms ?? [] : data?.handovers ?? [];
+  // Hapus banyak file
+  const handleBulkDelete = async () => {
+    if (!backupConfirmed || selectedFileObjects.length === 0) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/admin/documents/bulk-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: selectedFileObjects.map((f) => ({ folder: f.folder, filename: f.name })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menghapus");
+      alert(json.message);
+      setShowBulkDeleteModal(false);
+      setBackupConfirmed(false);
+      setSelectedFiles(new Set());
+      setSelectMode(false);
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || "Gagal menghapus file");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedFiles(new Set());
+  };
 
   return (
     <div className="space-y-6">
@@ -166,17 +243,13 @@ export default function DocumentsPage() {
             Kelola dan backup semua dokumen formulir yang telah diupload
           </p>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors self-start sm:self-auto"
-        >
+        <button onClick={fetchData} disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors self-start sm:self-auto">
           <RefreshCcw className={clsx("w-4 h-4", loading && "animate-spin")} />
           Refresh
         </button>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
@@ -187,7 +260,6 @@ export default function DocumentsPage() {
       {/* Stats cards */}
       {data && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Total semua */}
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
@@ -198,8 +270,6 @@ export default function DocumentsPage() {
             <p className="text-2xl font-bold text-gray-900">{data.totalFiles} file</p>
             <p className="text-sm text-gray-500 mt-1">{formatBytes(data.totalSize)}</p>
           </div>
-
-          {/* Formulir Peminjaman */}
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
@@ -208,12 +278,8 @@ export default function DocumentsPage() {
               <span className="text-sm font-semibold text-gray-700">Formulir Peminjaman</span>
             </div>
             <p className="text-2xl font-bold text-gray-900">{data.signedForms.length} file</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {formatBytes(data.signedForms.reduce((s, f) => s + f.size, 0))}
-            </p>
+            <p className="text-sm text-gray-500 mt-1">{formatBytes(data.signedForms.reduce((s, f) => s + f.size, 0))}</p>
           </div>
-
-          {/* Formulir Serah Terima */}
           <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">
@@ -222,9 +288,7 @@ export default function DocumentsPage() {
               <span className="text-sm font-semibold text-gray-700">Formulir Serah Terima</span>
             </div>
             <p className="text-2xl font-bold text-gray-900">{data.handovers.length} file</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {formatBytes(data.handovers.reduce((s, f) => s + f.size, 0))}
-            </p>
+            <p className="text-sm text-gray-500 mt-1">{formatBytes(data.handovers.reduce((s, f) => s + f.size, 0))}</p>
           </div>
         </div>
       )}
@@ -236,41 +300,20 @@ export default function DocumentsPage() {
             <FileArchive className="w-4 h-4 text-indigo-500" />
             Export / Backup Dokumen
           </h2>
-          <p className="text-xs text-gray-500">
-            Download semua dokumen sebagai file ZIP untuk backup lokal.
-          </p>
+          <p className="text-xs text-gray-500">Download semua dokumen sebagai file ZIP untuk backup lokal.</p>
           <div className="flex flex-wrap gap-3">
             {(["all", "signed_forms", "handovers"] as ExportTarget[]).map((target) => {
               const count = getCountForTarget(target);
-              const size = getSizeForTarget(target);
-              const label =
-                target === "all" ? "Semua Dokumen" :
-                target === "signed_forms" ? "Formulir Peminjaman" : "Formulir Serah Terima";
-              const color =
-                target === "all" ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20" :
-                target === "signed_forms" ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20" :
-                "bg-teal-600 hover:bg-teal-700 shadow-teal-500/20";
+              const label = target === "all" ? "Semua Dokumen" : target === "signed_forms" ? "Formulir Peminjaman" : "Formulir Serah Terima";
+              const color = target === "all" ? "bg-indigo-600 hover:bg-indigo-700" : target === "signed_forms" ? "bg-amber-500 hover:bg-amber-600" : "bg-teal-600 hover:bg-teal-700";
               const isExporting = exporting === target;
-
               return (
-                <button
-                  key={target}
-                  onClick={() => setShowExportModal(target)}
+                <button key={target} onClick={() => setShowExportModal(target)}
                   disabled={count === 0 || exporting !== null}
-                  className={clsx(
-                    "flex items-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-xl shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-                    color
-                  )}
-                >
-                  {isExporting ? (
-                    <RefreshCcw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4" />
-                  )}
+                  className={clsx("flex items-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-xl shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed", color)}>
+                  {isExporting ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                   {isExporting ? "Memproses..." : label}
-                  {!isExporting && count > 0 && (
-                    <span className="text-xs opacity-75">({count} file)</span>
-                  )}
+                  {!isExporting && count > 0 && <span className="text-xs opacity-75">({count} file)</span>}
                 </button>
               );
             })}
@@ -280,126 +323,164 @@ export default function DocumentsPage() {
 
       {/* File list */}
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100">
-          {(["signed_forms", "handovers"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={clsx(
-                "flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-colors border-b-2",
-                activeTab === tab
-                  ? tab === "signed_forms"
-                    ? "border-amber-500 text-amber-600"
-                    : "border-teal-500 text-teal-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              )}
-            >
-              <FolderOpen className="w-4 h-4" />
-              {FOLDER_LABELS[tab]}
-              {data && (
-                <span className={clsx(
-                  "text-xs px-1.5 py-0.5 rounded-full font-medium",
+        {/* Tabs + Select mode toggle */}
+        <div className="flex items-center border-b border-gray-100">
+          <div className="flex flex-1">
+            {(["signed_forms", "handovers"] as const).map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={clsx(
+                  "flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-colors border-b-2",
                   activeTab === tab
-                    ? tab === "signed_forms" ? "bg-amber-100 text-amber-700" : "bg-teal-100 text-teal-700"
-                    : "bg-gray-100 text-gray-500"
+                    ? tab === "signed_forms" ? "border-amber-500 text-amber-600" : "border-teal-500 text-teal-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 )}>
-                  {tab === "signed_forms" ? data.signedForms.length : data.handovers.length}
-                </span>
-              )}
+                <FolderOpen className="w-4 h-4" />
+                {FOLDER_LABELS[tab]}
+                {data && (
+                  <span className={clsx("text-xs px-1.5 py-0.5 rounded-full font-medium",
+                    activeTab === tab
+                      ? tab === "signed_forms" ? "bg-amber-100 text-amber-700" : "bg-teal-100 text-teal-700"
+                      : "bg-gray-100 text-gray-500")}>
+                    {tab === "signed_forms" ? data.signedForms.length : data.handovers.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          {/* Tombol aktifkan/nonaktifkan select mode */}
+          {!loading && activeFiles.length > 0 && (
+            <button
+              onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+              className={clsx(
+                "flex items-center gap-1.5 px-4 py-2 mr-2 text-xs font-semibold rounded-lg transition-colors border",
+                selectMode
+                  ? "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200"
+                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+              )}>
+              <CheckSquare className="w-3.5 h-3.5" />
+              {selectMode ? "Batal Pilih" : "Pilih"}
             </button>
-          ))}
+          )}
         </div>
 
         {/* File list content */}
         {loading ? (
           <div className="p-8 space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />
-            ))}
+            {[1, 2, 3].map((i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
           </div>
         ) : activeFiles.length === 0 ? (
           <div className="text-center py-16">
             <FolderOpen className="w-12 h-12 text-gray-200 mx-auto mb-3" />
             <p className="text-sm font-semibold text-gray-500">Belum ada dokumen</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Dokumen akan muncul setelah user mengupload formulir
-            </p>
+            <p className="text-xs text-gray-400 mt-1">Dokumen akan muncul setelah user mengupload formulir</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
             {/* Header tabel */}
-            <div className="grid grid-cols-12 gap-4 px-5 py-2.5 bg-gray-50 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              <div className="col-span-5">Nama File</div>
-              <div className="col-span-2 text-right">Ukuran</div>
-              <div className="col-span-3">Tanggal Upload</div>
-              <div className="col-span-2 text-center">Aksi</div>
-            </div>
-
-            {activeFiles.map((file) => (
-              <div
-                key={file.name}
-                className="grid grid-cols-12 gap-4 px-5 py-3 items-center hover:bg-gray-50/50 transition-colors"
-              >
-                {/* Nama file */}
-                <div className="col-span-5 flex items-center gap-2.5 min-w-0">
-                  {getFileIcon(file.name)}
-                  <span className="text-sm text-gray-800 font-medium truncate" title={file.name}>
-                    {file.name}
-                  </span>
-                </div>
-
-                {/* Ukuran */}
-                <div className="col-span-2 text-right text-xs text-gray-500 font-mono">
-                  {formatBytes(file.size)}
-                </div>
-
-                {/* Tanggal */}
-                <div className="col-span-3 text-xs text-gray-500">
-                  {format(new Date(file.createdAt), "dd MMM yyyy, HH:mm", { locale: idLocale })}
-                </div>
-
-                {/* Aksi */}
-                <div className="col-span-2 flex items-center justify-center gap-1">
-                  <a
-                    href={file.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                    title="Lihat dokumen"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                  </a>
-                  <a
-                    href={file.url}
-                    download
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                    title="Download"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => { setDeleteTarget(file); setBackupConfirmed(false); }}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                    title="Hapus dokumen"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
+            <div className="grid gap-4 px-5 py-2.5 bg-gray-50 text-xs font-semibold text-gray-400 uppercase tracking-wide"
+              style={{ gridTemplateColumns: selectMode ? "2rem 1fr 5rem 7rem 5rem" : "1fr 5rem 7rem 5rem" }}>
+              {selectMode && (
+                <div className="flex items-center justify-center">
+                  <button onClick={toggleSelectAll} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                    {selectAllState === "all"
+                      ? <CheckSquare className="w-4 h-4 text-indigo-600" />
+                      : selectAllState === "some"
+                      ? <MinusSquare className="w-4 h-4 text-indigo-400" />
+                      : <Square className="w-4 h-4" />}
                   </button>
                 </div>
-              </div>
-            ))}
+              )}
+              <div>Nama File</div>
+              <div className="text-right">Ukuran</div>
+              <div>Tanggal Upload</div>
+              <div className="text-center">Aksi</div>
+            </div>
+
+            {activeFiles.map((file) => {
+              const key = fileKey(file);
+              const isSelected = selectedFiles.has(key);
+              return (
+                <div key={file.name}
+                  onClick={() => selectMode && toggleSelect(file)}
+                  className={clsx(
+                    "grid gap-4 px-5 py-3 items-center transition-colors",
+                    selectMode ? "cursor-pointer" : "",
+                    isSelected ? "bg-indigo-50/60" : "hover:bg-gray-50/50"
+                  )}
+                  style={{ gridTemplateColumns: selectMode ? "2rem 1fr 5rem 7rem 5rem" : "1fr 5rem 7rem 5rem" }}>
+
+                  {/* Checkbox */}
+                  {selectMode && (
+                    <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(file)}
+                        className="w-4 h-4 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500 cursor-pointer" />
+                    </div>
+                  )}
+
+                  {/* Nama file */}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {getFileIcon(file.name)}
+                    <span className="text-sm text-gray-800 font-medium truncate" title={file.name}>{file.name}</span>
+                  </div>
+
+                  {/* Ukuran */}
+                  <div className="text-right text-xs text-gray-500 font-mono">{formatBytes(file.size)}</div>
+
+                  {/* Tanggal */}
+                  <div className="text-xs text-gray-500">
+                    {format(new Date(file.createdAt), "dd MMM yyyy, HH:mm", { locale: idLocale })}
+                  </div>
+
+                  {/* Aksi */}
+                  <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <a href={file.url} target="_blank" rel="noreferrer"
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Lihat">
+                      <Eye className="w-3.5 h-3.5" />
+                    </a>
+                    <a href={file.url} download
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Download">
+                      <Download className="w-3.5 h-3.5" />
+                    </a>
+                    <button type="button" onClick={() => { setDeleteTarget(file); setBackupConfirmed(false); }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Hapus">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Export Confirmation Modal */}
+      {/* Floating bar saat ada yang dipilih */}
+      {selectMode && selectedFiles.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-gray-900/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-500 text-xs font-bold shrink-0">
+              {selectedFiles.size}
+            </span>
+            <span className="text-sm font-medium">file dipilih</span>
+            <span className="text-xs text-gray-400">({formatBytes(selectedTotalSize)})</span>
+          </div>
+          <div className="w-px h-5 bg-gray-700" />
+          <div className="flex items-center gap-2">
+            <button onClick={exitSelectMode}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">
+              <X className="w-3.5 h-3.5" /> Batal
+            </button>
+            <button onClick={() => { setShowBulkDeleteModal(true); setBackupConfirmed(false); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">
+              <Trash2 className="w-3.5 h-3.5" /> Hapus {selectedFiles.size} file
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
       {showExportModal && data && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowExportModal(null)}
-          />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowExportModal(null)} />
           <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
@@ -407,65 +488,39 @@ export default function DocumentsPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-gray-900">Konfirmasi Export</h3>
-                <p className="text-xs text-gray-500">
-                  {showExportModal === "all"
-                    ? "Semua Dokumen"
-                    : FOLDER_LABELS[showExportModal]}
-                </p>
+                <p className="text-xs text-gray-500">{showExportModal === "all" ? "Semua Dokumen" : FOLDER_LABELS[showExportModal]}</p>
               </div>
             </div>
-
-            {/* Info size */}
             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Jumlah file</span>
-                <span className="font-semibold text-gray-900">
-                  {getCountForTarget(showExportModal)} file
-                </span>
+                <span className="font-semibold text-gray-900">{getCountForTarget(showExportModal)} file</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Total ukuran</span>
-                <span className="font-semibold text-gray-900">
-                  {formatBytes(getSizeForTarget(showExportModal))}
-                </span>
+                <span className="font-semibold text-gray-900">{formatBytes(getSizeForTarget(showExportModal))}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Format</span>
                 <span className="font-semibold text-gray-900">ZIP</span>
               </div>
             </div>
-
-            <p className="text-xs text-gray-500">
-              File akan diunduh ke komputer kamu. Simpan di tempat yang aman untuk backup.
-            </p>
-
+            <p className="text-xs text-gray-500">File akan diunduh ke komputer kamu. Simpan di tempat yang aman.</p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowExportModal(null)}
-                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
-              >
-                Batal
-              </button>
-              <button
-                onClick={() => handleExport(showExportModal)}
-                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Download ZIP
+              <button onClick={() => setShowExportModal(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">Batal</button>
+              <button onClick={() => handleExport(showExportModal)} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+                <Download className="w-4 h-4" /> Download ZIP
               </button>
             </div>
           </div>
         </div>
       )}
-      {/* Delete Confirmation Modal */}
+
+      {/* Delete Single Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => { setDeleteTarget(null); setBackupConfirmed(false); }}
-          />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setDeleteTarget(null); setBackupConfirmed(false); }} />
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4">
-            {/* Header */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
@@ -475,64 +530,100 @@ export default function DocumentsPage() {
                 <p className="text-xs text-gray-500 mt-0.5">Tindakan ini tidak dapat diurungkan</p>
               </div>
             </div>
-
-            {/* Nama file */}
             <div className="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3 border border-gray-100">
               {getFileIcon(deleteTarget.name)}
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-800 truncate">{deleteTarget.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {FOLDER_LABELS[deleteTarget.folder]} · {formatBytes(deleteTarget.size)}
-                </p>
+                <p className="text-xs text-gray-400 mt-0.5">{FOLDER_LABELS[deleteTarget.folder]} · {formatBytes(deleteTarget.size)}</p>
               </div>
             </div>
-
-            {/* Peringatan backup */}
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
                 <p className="text-sm font-bold text-amber-800">Pastikan sudah dibackup!</p>
               </div>
               <p className="text-xs text-amber-700 leading-relaxed">
-                File yang dihapus <strong>tidak bisa dipulihkan</strong>. Pastikan kamu sudah
-                mendownload backup dokumen ini sebelum melanjutkan. Gunakan tombol{" "}
-                <strong>Export / Backup</strong> di atas jika belum.
+                File yang dihapus <strong>tidak bisa dipulihkan</strong>. Gunakan tombol <strong>Export / Backup</strong> di atas jika belum backup.
               </p>
             </div>
-
-            {/* Checkbox konfirmasi backup */}
             <label className="flex items-start gap-3 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={backupConfirmed}
-                onChange={(e) => setBackupConfirmed(e.target.checked)}
-                className="w-4 h-4 mt-0.5 text-red-600 bg-white border-gray-300 rounded focus:ring-red-500 cursor-pointer shrink-0"
-              />
+              <input type="checkbox" checked={backupConfirmed} onChange={(e) => setBackupConfirmed(e.target.checked)}
+                className="w-4 h-4 mt-0.5 text-red-600 bg-white border-gray-300 rounded focus:ring-red-500 cursor-pointer shrink-0" />
               <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">
                 Saya sudah melakukan backup dan memahami bahwa file ini akan dihapus permanen
               </span>
             </label>
-
-            {/* Tombol */}
             <div className="flex gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => { setDeleteTarget(null); setBackupConfirmed(false); }}
-                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
-              >
-                Batal
+              <button type="button" onClick={() => { setDeleteTarget(null); setBackupConfirmed(false); }}
+                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">Batal</button>
+              <button type="button" onClick={handleDeleteSingle} disabled={!backupConfirmed || deleting}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+                {deleting ? <><RefreshCcw className="w-4 h-4 animate-spin" /> Menghapus...</> : <><Trash2 className="w-4 h-4" /> Hapus Permanen</>}
               </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={!backupConfirmed || deleting}
-                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {deleting ? (
-                  <><RefreshCcw className="w-4 h-4 animate-spin" /> Menghapus...</>
-                ) : (
-                  <><Trash2 className="w-4 h-4" /> Hapus Permanen</>
-                )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setShowBulkDeleteModal(false); setBackupConfirmed(false); }} />
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Hapus {selectedFileObjects.length} Dokumen?</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Tindakan ini tidak dapat diurungkan</p>
+              </div>
+            </div>
+
+            {/* Daftar file yang akan dihapus */}
+            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 space-y-1.5 max-h-40 overflow-y-auto">
+              {selectedFileObjects.map((f) => (
+                <div key={fileKey(f)} className="flex items-center gap-2">
+                  {getFileIcon(f.name)}
+                  <span className="text-xs text-gray-700 truncate flex-1">{f.name}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{formatBytes(f.size)}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Total size */}
+            <div className="flex justify-between text-sm bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-100">
+              <span className="text-gray-600 font-medium">Total ukuran</span>
+              <span className="font-bold text-gray-900">{formatBytes(selectedTotalSize)}</span>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                <p className="text-sm font-bold text-amber-800">Pastikan sudah dibackup!</p>
+              </div>
+              <p className="text-xs text-amber-700 leading-relaxed">
+                Semua file yang dipilih akan <strong>dihapus permanen</strong> dan tidak bisa dipulihkan.
+                Gunakan <strong>Export / Backup</strong> terlebih dahulu jika belum.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input type="checkbox" checked={backupConfirmed} onChange={(e) => setBackupConfirmed(e.target.checked)}
+                className="w-4 h-4 mt-0.5 text-red-600 bg-white border-gray-300 rounded focus:ring-red-500 cursor-pointer shrink-0" />
+              <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">
+                Saya sudah melakukan backup dan memahami bahwa <strong>{selectedFileObjects.length} file</strong> ini akan dihapus permanen
+              </span>
+            </label>
+
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => { setShowBulkDeleteModal(false); setBackupConfirmed(false); }}
+                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">Batal</button>
+              <button type="button" onClick={handleBulkDelete} disabled={!backupConfirmed || deleting}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+                {deleting
+                  ? <><RefreshCcw className="w-4 h-4 animate-spin" /> Menghapus...</>
+                  : <><Trash2 className="w-4 h-4" /> Hapus {selectedFileObjects.length} File</>}
               </button>
             </div>
           </div>
