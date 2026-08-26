@@ -158,60 +158,68 @@ export function TransactionsClient({ transactions }: Props) {
           </div>
         </div>
 
-        {/* FilterBar — user + waktu */}
-        <FilterBar
-          filter={advFilter}
-          onChange={setAdvFilter}
-          userList={uniqueUsers}
-          userLabel="Semua Peminjam"
-          showUserFilter={true}
-        />
-
-        {/* Search Bar + Filter Status */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2 pl-3">
+        {/* Search + Filter bar terpadu */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Baris 1: Search */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               type="text"
               placeholder="Cari barang atau peminjam..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full py-2 text-sm bg-transparent outline-none placeholder:text-gray-400 text-gray-900"
+              className="w-full py-1.5 text-sm bg-transparent outline-none placeholder:text-gray-400 text-gray-900"
             />
           </div>
-          <div className="relative" ref={filterRef}>
-            <button
-              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors border shrink-0 ${
-                statusFilter
-                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              {filterOptions.find((f) => f.key === statusFilter)?.label || "Filter"}
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            {showFilterDropdown && (
-              <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-20">
-                {filterOptions.map((opt) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => { setStatusFilter(opt.key); setShowFilterDropdown(false); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                      statusFilter === opt.key
-                        ? "bg-indigo-50 text-indigo-700 font-medium"
-                        : "text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+          {/* Baris 2: Filter */}
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-gray-50/50">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Filter:</span>
+            <FilterBar
+              filter={advFilter}
+              onChange={setAdvFilter}
+              userList={uniqueUsers}
+              userLabel="Semua Peminjam"
+              showUserFilter={true}
+            />
+            {/* Filter Status */}
+            <div className="relative" ref={filterRef}>
+              <button
+                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors border ${
+                  statusFilter
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                {filterOptions.find((f) => f.key === statusFilter)?.label || "Semua Status"}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {showFilterDropdown && (
+                <div className="absolute left-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-20">
+                  {filterOptions.map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => { setStatusFilter(opt.key); setShowFilterDropdown(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-xs transition-colors ${
+                        statusFilter === opt.key
+                          ? "bg-indigo-50 text-indigo-700 font-medium"
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {filteredTransactions.length !== transactions.length && (
+              <span className="ml-auto text-xs text-gray-400 shrink-0">
+                {filteredTransactions.length} dari {transactions.length} hasil
+              </span>
             )}
           </div>
         </div>
-
         {/* List */}
         {filteredTransactions.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">

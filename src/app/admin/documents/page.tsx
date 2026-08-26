@@ -369,34 +369,37 @@ export default function DocumentsPage() {
             ))}
           </div>
           {/* Tombol aktifkan/nonaktifkan select mode */}
-          {!loading && activeFiles.length > 0 && (
+          {!loading && (
             <button
               onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
               className={clsx(
-                "flex items-center gap-1.5 px-4 py-2 mr-2 text-xs font-semibold rounded-lg transition-colors border",
+                "flex items-center gap-1.5 px-3 py-2 mr-3 text-xs font-semibold rounded-lg transition-colors border shrink-0",
                 selectMode
                   ? "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200"
                   : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
               )}>
               <CheckSquare className="w-3.5 h-3.5" />
-              {selectMode ? "Batal Pilih" : "Pilih"}
+              {selectMode ? "Batal" : "Pilih"}
             </button>
           )}
         </div>
 
-        {/* Filter waktu */}
-        {!loading && (
-          <div className="px-5 py-3 border-b border-gray-50">
-            <FilterBar
-              filter={docFilter}
-              onChange={setDocFilter}
-              userList={uniqueDocUsers}
-              userLabel="Semua Pengunggah"
-              showUserFilter={true}
-            />
-          </div>
-        )}
-
+        {/* Filter bar — pengunggah + waktu */}
+        <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/50 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Filter:</span>
+          <FilterBar
+            filter={docFilter}
+            onChange={setDocFilter}
+            userList={uniqueDocUsers}
+            userLabel="Semua Pengunggah"
+            showUserFilter={true}
+          />
+          {activeFiles.length !== rawActiveFiles.length && (
+            <span className="ml-auto text-xs text-gray-400">
+              {activeFiles.length} dari {rawActiveFiles.length} dokumen
+            </span>
+          )}
+        </div>
         {/* File list content */}
         {loading ? (
           <div className="p-8 space-y-3">
