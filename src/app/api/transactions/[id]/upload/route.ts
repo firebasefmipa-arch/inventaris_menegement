@@ -93,8 +93,14 @@ export async function POST(
     // mkdir dengan recursive:true sudah idempoten — tidak perlu existsSync
     await mkdir(uploadDir, { recursive: true });
 
-    // Nama file aman: hanya angka + ekstensi yang sudah divalidasi
-    const safeFilename = `signed_${txId}_${Date.now()}${originalExt}`;
+    // Nama file: NamaPeminjam_DDMMYYYY_timestamp (timestamp untuk hindari duplikat)
+    const borrowerSafe = (tx.borrowerName || "Peminjam")
+      .replace(/[^a-zA-Z0-9\s]/g, "")
+      .replace(/\s+/g, "_")
+      .slice(0, 40);
+    const d = tx.borrowDate;
+    const dateStr = `${String(new Date(d).getDate()).padStart(2,"0")}${String(new Date(d).getMonth()+1).padStart(2,"0")}${new Date(d).getFullYear()}`;
+    const safeFilename = `${borrowerSafe}_${dateStr}${originalExt}`;
     const filePath = path.join(uploadDir, safeFilename);
 
     await writeFile(filePath, buffer);

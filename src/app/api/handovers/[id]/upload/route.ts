@@ -56,7 +56,14 @@ export async function POST(
     const uploadDir = path.join(process.cwd(), "public", "uploads", "handovers");
     await mkdir(uploadDir, { recursive: true });
 
-    const safeFilename = `handover_${hvId}_${Date.now()}${originalExt}`;
+    // Nama file: NamaPenerima_DDMMYYYY (format konsisten dengan peminjaman)
+    const receiverSafe = (hv.receiverName || "Penerima")
+      .replace(/[^a-zA-Z0-9\s]/g, "")
+      .replace(/\s+/g, "_")
+      .slice(0, 40);
+    const d = hv.handoverDate;
+    const dateStr = `${String(new Date(d).getDate()).padStart(2,"0")}${String(new Date(d).getMonth()+1).padStart(2,"0")}${new Date(d).getFullYear()}`;
+    const safeFilename = `${receiverSafe}_${dateStr}${originalExt}`;
     const filePath = path.join(uploadDir, safeFilename);
     await writeFile(filePath, buffer);
 
