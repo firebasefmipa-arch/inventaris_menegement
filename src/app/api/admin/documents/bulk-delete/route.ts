@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { db } from "@/db";
+import { transactions, handovers } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { unlink } from "fs/promises";
 import path from "path";
 
@@ -35,6 +38,17 @@ export async function DELETE(req: NextRequest) {
       const filePath = path.join(process.cwd(), "public", "uploads", folder, filename);
       try {
         await unlink(filePath);
+        // Tandai di DB: set signedDocumentUrl = 'deleted'
+        const fileUrl = `/uploads/${folder}/${filename}`;
+        if (folder === "signed_forms") {
+          await db.update(transactions)
+            .set({ signedDocumentUrl: "deleted" })
+            .where(eq(transactions.signedDocumentUrl, fileUrl));
+        } else if (folder === "handovers") {
+          await db.update(handovers)
+            .set({ signedDocumentUrl: "deleted" })
+            .where(eq(handovers.signedDocumentUrl, fileUrl));
+        }
         results.push({ name: filename, success: true });
       } catch (err: any) {
         results.push({

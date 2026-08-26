@@ -10,6 +10,7 @@ import clsx from "clsx";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import Link from "next/link";
+import { DocActions } from "@/components/DocActions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -350,10 +351,12 @@ function PeminjamanTab() {
 
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className="text-xs text-gray-400"># PB-{String(tx.id).padStart(4, "0")}</span>
-                        {tx.signedDocumentUrl && (
-                          <a href={tx.signedDocumentUrl} target="_blank" rel="noreferrer"
-                            className="text-xs text-blue-600 hover:underline font-medium">Lihat Dokumen</a>
-                        )}
+                        <DocActions
+                          signedDocumentUrl={tx.signedDocumentUrl}
+                          type="transaction"
+                          id={tx.id}
+                          onRegenerated={fetchData}
+                        />
                         {needsUpload && (
                           <Link href={`/transactions/${tx.id}/upload`}
                             className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors">
@@ -567,10 +570,12 @@ function SerahTerimaTab() {
 
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className="text-xs text-gray-400"># ST-{String(hv.id).padStart(4, "0")}</span>
-                        {hv.signedDocumentUrl && (
-                          <a href={hv.signedDocumentUrl} target="_blank" rel="noreferrer"
-                            className="text-xs text-blue-600 hover:underline font-medium">Lihat Dokumen</a>
-                        )}
+                        <DocActions
+                          signedDocumentUrl={hv.signedDocumentUrl}
+                          type="handover"
+                          id={hv.id}
+                          onRegenerated={fetchData}
+                        />
                         {needsUpload && (
                           <Link href={`/handovers/${hv.id}/upload`}
                             className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors">

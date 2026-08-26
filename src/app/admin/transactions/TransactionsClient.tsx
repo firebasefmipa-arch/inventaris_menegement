@@ -15,6 +15,7 @@ import { ReturnButton } from "./ReturnButton";
 import { BorrowModal } from "./BorrowModal";
 import { RejectModal } from "./RejectModal";
 import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
+import { DocActions } from "@/components/DocActions";
 
 type Transaction = {
   id: number;
@@ -325,10 +326,12 @@ export function TransactionsClient({ transactions }: Props) {
                           </span>
 
                           {tx.signedDocumentUrl && (
-                            <a href={tx.signedDocumentUrl} target="_blank" rel="noreferrer"
-                              className="text-xs text-blue-600 hover:underline">
-                              Lihat Dokumen
-                            </a>
+                            <DocActions
+                              signedDocumentUrl={tx.signedDocumentUrl}
+                              type="transaction"
+                              id={tx.id}
+                              onRegenerated={() => router.refresh()}
+                            />
                           )}
 
                           {/* Approve / Reject buttons */}

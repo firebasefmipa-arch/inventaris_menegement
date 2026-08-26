@@ -13,6 +13,7 @@ import { useToast } from "@/components/Toaster";
 import { HandoverModal } from "./HandoverModal";
 import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
 import { useMemo } from "react";
+import { DocActions } from "@/components/DocActions";
 
 type HvItem = {
   itemId: number | null;
@@ -355,13 +356,15 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
                       {/* Footer */}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className="text-xs text-gray-400"># ST-{String(hv.id).padStart(4, "0")}</span>
-                        {hv.signedDocumentUrl && (
-                          <a href={hv.signedDocumentUrl} target="_blank" rel="noreferrer"
-                            className="text-xs text-blue-600 hover:underline font-medium">Lihat Dokumen</a>
-                        )}
+                        <DocActions
+                          signedDocumentUrl={hv.signedDocumentUrl}
+                          type="handover"
+                          id={hv.id}
+                          onRegenerated={() => fetchData()}
+                        />
                         <a href={`/api/handovers/${hv.id}/generate-pdf`} download
                           className="text-xs text-teal-600 hover:underline font-medium flex items-center gap-1">
-                          <FileText className="w-3 h-3" /> Unduh PDF
+                          <FileText className="w-3 h-3" /> Unduh PDF Kosong
                         </a>
                       </div>
                     </div>
