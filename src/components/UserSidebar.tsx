@@ -72,8 +72,8 @@ export function UserSidebar() {
         <div className="w-full">
           <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={180} height={60} className="object-contain mb-3" style={{maxHeight: 60}} />
         </div>
-        <h1 className="font-bold text-sm text-gray-900 leading-tight">Manajemen Inventaris</h1>
-        <p className="text-xs text-gray-500">Peminjaman & Serah Terima</p>
+        <h1 className="font-bold text-base text-gray-900 leading-tight">Manajemen Inventaris</h1>
+        <p className="text-sm text-gray-500">Peminjaman & Serah Terima</p>
       </div>
 
       {/* Mobile spacing */}
