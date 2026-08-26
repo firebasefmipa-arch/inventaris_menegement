@@ -68,14 +68,12 @@ export function UserSidebar() {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="hidden lg:flex flex-col items-center gap-2 px-4 py-4 border-b border-gray-100">
-        <div className="w-full flex items-center justify-center">
-          <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={180} height={60} className="object-contain" style={{maxHeight: 60}} />
+      <div className="hidden lg:flex flex-col items-start gap-1 px-4 py-4 border-b border-gray-100">
+        <div className="w-full">
+          <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={180} height={60} className="object-contain mb-3" style={{maxHeight: 60}} />
         </div>
-        <div className="text-center">
-          <h1 className="font-bold text-sm text-gray-900 leading-tight">Manajemen Inventaris</h1>
-          <p className="text-xs text-gray-500">Peminjaman & Serah Terima</p>
-        </div>
+        <h1 className="font-bold text-sm text-gray-900 leading-tight">Manajemen Inventaris</h1>
+        <p className="text-xs text-gray-500">Peminjaman & Serah Terima</p>
       </div>
 
       {/* Mobile spacing */}
