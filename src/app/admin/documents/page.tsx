@@ -20,6 +20,7 @@ interface DocumentFile {
   url: string;
   size: number;
   createdAt: number;
+  uploaderName: string;
 }
 
 interface DocumentsData {
@@ -108,9 +109,20 @@ export default function DocumentsPage() {
 
   const rawActiveFiles = activeTab === "signed_forms" ? data?.signedForms ?? [] : data?.handovers ?? [];
 
-  const activeFiles = useMemo(() =>
-    applyTimeFilter(rawActiveFiles, (f) => new Date(f.createdAt), docFilter.timePreset, docFilter.dateFrom, docFilter.dateTo),
-    [rawActiveFiles, docFilter]
+  const activeFiles = useMemo(() => {
+    // Filter user
+    let result = rawActiveFiles;
+    if (docFilter.user) {
+      result = result.filter((f) => f.uploaderName === docFilter.user);
+    }
+    // Filter waktu
+    return applyTimeFilter(result, (f) => new Date(f.createdAt), docFilter.timePreset, docFilter.dateFrom, docFilter.dateTo);
+  }, [rawActiveFiles, docFilter]);
+
+  // Daftar nama unik untuk dropdown filter user
+  const uniqueDocUsers = useMemo(() =>
+    [...new Set(rawActiveFiles.map((f) => f.uploaderName).filter((n) => n && n !== "Tidak diketahui") as string[])].sort(),
+    [rawActiveFiles]
   );
 
   const fileKey = (f: DocumentFile) => `${f.folder}/${f.name}`;
@@ -378,7 +390,9 @@ export default function DocumentsPage() {
             <FilterBar
               filter={docFilter}
               onChange={setDocFilter}
-              showUserFilter={false}
+              userList={uniqueDocUsers}
+              userLabel="Semua Pengunggah"
+              showUserFilter={true}
             />
           </div>
         )}

@@ -7,8 +7,24 @@ export interface DocumentFile {
   name: string;
   folder: "signed_forms" | "handovers";
   url: string;
-  size: number; // bytes
-  createdAt: number; // timestamp ms
+  size: number;
+  createdAt: number;
+  uploaderName: string; // diekstrak dari nama file: NamaPeminjam_DDMMYYYY.pdf
+}
+
+/**
+ * Ekstrak nama dari format: NamaPeminjam_DDMMYYYY.ext
+ * Contoh: Sabil_Hudek_14082026.pdf → "Sabil Hudek"
+ * File lama (signed_16_1234567.pdf) → "Tidak diketahui"
+ */
+function extractNameFromFilename(filename: string): string {
+  const noExt = filename.replace(/\.[^.]+$/, ""); // hapus ekstensi
+  // Format lama: signed_16_1234567 atau handover_16_1234567
+  if (/^(signed|handover)_\d+_\d+$/.test(noExt)) return "Tidak diketahui";
+  // Format baru: Nama_Lengkap_DDMMYYYY — hapus bagian tanggal di akhir (8 digit angka)
+  const withoutDate = noExt.replace(/_\d{8}$/, "");
+  // Ganti underscore dengan spasi
+  return withoutDate.replace(/_/g, " ").trim() || "Tidak diketahui";
 }
 
 async function getFilesFromFolder(
@@ -37,6 +53,7 @@ async function getFilesFromFolder(
         url: `/uploads/${folderName}/${file}`,
         size: fileStat.size,
         createdAt: fileStat.birthtimeMs || fileStat.ctimeMs,
+        uploaderName: extractNameFromFilename(file),
       });
     }
 
