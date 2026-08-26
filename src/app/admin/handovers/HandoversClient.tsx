@@ -11,6 +11,8 @@ import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { useToast } from "@/components/Toaster";
 import { HandoverModal } from "./HandoverModal";
+import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
+import { useMemo } from "react";
 
 type HvItem = {
   itemId: number | null;
@@ -67,6 +69,7 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
+  const [advFilter, setAdvFilter] = useState<FilterState>(defaultFilter);
 
   // Approve/reject state
   const [actionId, setActionId] = useState<number | null>(null);
@@ -126,13 +129,23 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
     }
   };
 
-  const filtered = handovers.filter((h) => {
-    const q = search.toLowerCase();
-    if (!q) return true;
-    return (h.receiverName || "").toLowerCase().includes(q) ||
-      (h.department || "").toLowerCase().includes(q) ||
-      h.items?.some((i) => (i.itemName || "").toLowerCase().includes(q));
-  });
+  const filtered = useMemo(() => {
+    let result = handovers.filter((h) => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || (h.receiverName || "").toLowerCase().includes(q) ||
+        (h.department || "").toLowerCase().includes(q) ||
+        h.items?.some((i) => (i.itemName || "").toLowerCase().includes(q));
+      const matchUser = !advFilter.user || h.receiverName === advFilter.user;
+      return matchSearch && matchUser;
+    });
+    result = applyTimeFilter(result, (h) => h.handoverDate, advFilter.timePreset, advFilter.dateFrom, advFilter.dateTo);
+    return result;
+  }, [handovers, search, advFilter]);
+
+  const uniqueUsers = useMemo(() =>
+    [...new Set(handovers.map((h) => h.receiverName).filter(Boolean) as string[])].sort(),
+    [handovers]
+  );
 
   return (
     <div className="space-y-5">
@@ -166,6 +179,14 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
           placeholder="Cari nama penerima, divisi, atau barang..."
           className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
       </div>
+
+      {/* FilterBar — user + waktu */}
+      <FilterBar
+        filter={advFilter}
+        onChange={setAdvFilter}
+        userList={uniqueUsers}
+        userLabel="Semua Penerima"
+      />
 
       {/* List */}
       {loading ? (

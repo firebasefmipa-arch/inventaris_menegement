@@ -14,6 +14,7 @@ import { useToast } from "@/components/Toaster";
 import { ReturnButton } from "./ReturnButton";
 import { BorrowModal } from "./BorrowModal";
 import { RejectModal } from "./RejectModal";
+import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
 
 type Transaction = {
   id: number;
@@ -43,6 +44,7 @@ export function TransactionsClient({ transactions }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [advFilter, setAdvFilter] = useState<FilterState>(defaultFilter);
   const filterRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { toast } = useToast();
@@ -67,8 +69,10 @@ export function TransactionsClient({ transactions }: Props) {
   }, []);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((tx) => {
+    // Daftar nama peminjam unik untuk dropdown
+    let result = transactions.filter((tx) => {
       if (statusFilter && tx.status !== statusFilter) return false;
+      if (advFilter.user && tx.borrowerName !== advFilter.user) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return (
@@ -80,7 +84,15 @@ export function TransactionsClient({ transactions }: Props) {
       }
       return true;
     });
-  }, [transactions, searchQuery, statusFilter]);
+
+    result = applyTimeFilter(result, (tx) => tx.borrowDate, advFilter.timePreset, advFilter.dateFrom, advFilter.dateTo);
+    return result;
+  }, [transactions, searchQuery, statusFilter, advFilter]);
+
+  const uniqueUsers = useMemo(() =>
+    [...new Set(transactions.map((tx) => tx.borrowerName).filter(Boolean) as string[])].sort(),
+    [transactions]
+  );
 
   const handleApprove = async (txId: number) => {
     if (!confirm("Yakin ingin menyetujui peminjaman ini?")) return;
@@ -146,7 +158,15 @@ export function TransactionsClient({ transactions }: Props) {
           </div>
         </div>
 
-        {/* Search Bar + Filter */}
+        {/* FilterBar — user + waktu */}
+        <FilterBar
+          filter={advFilter}
+          onChange={setAdvFilter}
+          userList={uniqueUsers}
+          userLabel="Semua Peminjam"
+        />
+
+        {/* Search Bar + Filter Status */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex items-center gap-2">
           <div className="flex-1 flex items-center gap-2 pl-3">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />

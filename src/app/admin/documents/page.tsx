@@ -9,6 +9,7 @@ import {
   File, Eye, Trash2, AlertTriangle, ShieldAlert,
   CheckSquare, Square, MinusSquare, X,
 } from "lucide-react";
+import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
 import clsx from "clsx";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
@@ -73,6 +74,9 @@ export default function DocumentsPage() {
   const [backupConfirmed, setBackupConfirmed] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Filter waktu untuk dokumen
+  const [docFilter, setDocFilter] = useState<FilterState>(defaultFilter);
+
   const fetchData = async () => {
     setLoading(true);
     setError("");
@@ -102,7 +106,12 @@ export default function DocumentsPage() {
     setSelectedFiles(new Set());
   }, [activeTab]);
 
-  const activeFiles = activeTab === "signed_forms" ? data?.signedForms ?? [] : data?.handovers ?? [];
+  const rawActiveFiles = activeTab === "signed_forms" ? data?.signedForms ?? [] : data?.handovers ?? [];
+
+  const activeFiles = useMemo(() =>
+    applyTimeFilter(rawActiveFiles, (f) => new Date(f.createdAt), docFilter.timePreset, docFilter.dateFrom, docFilter.dateTo),
+    [rawActiveFiles, docFilter]
+  );
 
   const fileKey = (f: DocumentFile) => `${f.folder}/${f.name}`;
 
@@ -362,6 +371,17 @@ export default function DocumentsPage() {
             </button>
           )}
         </div>
+
+        {/* Filter waktu */}
+        {!loading && (
+          <div className="px-5 py-3 border-b border-gray-50">
+            <FilterBar
+              filter={docFilter}
+              onChange={setDocFilter}
+              userLabel="Semua Waktu"
+            />
+          </div>
+        )}
 
         {/* File list content */}
         {loading ? (
