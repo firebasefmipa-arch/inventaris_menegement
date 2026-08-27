@@ -81,10 +81,9 @@ export async function POST(
 
     const newUrl = `/uploads/handovers/${filename}`;
 
-    // Update DB — set URL baru, status kembali ke pending_approval
+    // Update DB — set URL baru saja, status tidak berubah
     await db.update(handovers).set({
       signedDocumentUrl: newUrl,
-      status: "pending_approval",
     }).where(eq(handovers.id, hvId));
 
     return NextResponse.json({ success: true, url: newUrl, message: "Dokumen berhasil digenerate ulang" });

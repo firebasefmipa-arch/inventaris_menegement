@@ -96,10 +96,9 @@ export async function POST(
 
     const newUrl = `/uploads/signed_forms/${filename}`;
 
-    // Update DB — set URL baru, status kembali ke pending_approval
+    // Update DB — set URL baru saja, status tidak berubah
     await db.update(transactions).set({
       signedDocumentUrl: newUrl,
-      status: "pending_approval",
     }).where(eq(transactions.id, txId));
 
     return NextResponse.json({ success: true, url: newUrl, message: "Dokumen berhasil digenerate ulang" });
