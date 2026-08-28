@@ -381,26 +381,26 @@ export function ItemsClient({ items, categories }: Props) {
                       </div>
                     )}
                     {/* Card Header */}
-                    <div className={`p-4 pb-3 border-b border-gray-50 bg-gradient-to-br from-gray-50/50 to-white ${selectMode ? 'pl-9' : ''}`}>
+                    <div className={`p-4 pb-3 border-b border-gray-50 bg-gradient-to-br from-gray-50/50 to-white dark:from-[#0d1e3d] dark:to-[#0a1628] dark:border-[#1e3054] ${selectMode ? 'pl-9' : ''}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-gray-900 text-sm leading-tight mb-1 pr-6 truncate" title={item.name}>
+                          <h3 className="font-bold text-gray-900 dark:text-slate-100 text-sm leading-tight mb-1 pr-6 truncate" title={item.name}>
                             {item.name}
                           </h3>
                           <div className="flex flex-wrap items-center gap-1.5 mt-2">
                             {item.category && (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${CATEGORY_MAP[item.category] ? `${CATEGORY_MAP[item.category].bg}/10 ${CATEGORY_MAP[item.category].color}` : 'bg-gray-100 text-gray-600'}`}>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${CATEGORY_MAP[item.category] ? `${CATEGORY_MAP[item.category].bg}/10 ${CATEGORY_MAP[item.category].color}` : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'}`}>
                                 {(() => { const CatIcon = CATEGORY_MAP[item.category]?.icon; return CatIcon ? <CatIcon className="w-3 h-3" /> : null; })()}
                                 {item.category}
                               </span>
                             )}
                             {item.condition && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 dark:bg-slate-700/60 dark:text-slate-300">
                                 {item.condition}
                               </span>
                             )}
                             {item.lastCheckDate && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
                                 Cek: {item.lastCheckDate}
                               </span>
                             )}
