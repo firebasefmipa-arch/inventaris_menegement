@@ -1,8 +1,34 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 body {
   font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, sans-serif;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.2);
+  color: #312e81;
+}
+
+/* Dark mode base */
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+.dark ::selection {
+  background: rgba(99, 102, 241, 0.4);
+  color: #e0e7ff;
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
 
 ::selection {
