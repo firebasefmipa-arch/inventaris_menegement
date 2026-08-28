@@ -173,7 +173,7 @@ export function TransactionsClient({ transactions }: Props) {
             />
           </div>
           {/* Baris 2: Filter */}
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-gray-50/50 rounded-b-2xl">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-gray-50/50 dark:bg-[#0a1020] rounded-b-2xl border-t dark:border-[#1e3054]">
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Filter:</span>
             <FilterBar
               filter={advFilter}
