@@ -42,7 +42,7 @@ interface Props {
   onChange: (f: FilterState) => void;
   userList?: string[];
   userLabel?: string;
-  showUserFilter?: boolean; // eksplisit tampilkan/sembunyikan filter user
+  showUserFilter?: boolean;
 }
 
 export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua User", showUserFilter = true }: Props) {
@@ -70,22 +70,24 @@ export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua 
     : TIME_PRESETS.find((p) => p.key === filter.timePreset)?.label || "Semua Waktu";
 
   const hasActiveFilter = filter.user || filter.timePreset;
-
   const clearAll = () => onChange(defaultFilter);
+
+  const btnBase = "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all";
+  const btnInactive = "bg-white dark:bg-[#101e33] border-gray-200 dark:border-[#1c2e48] text-gray-600 dark:text-slate-400 hover:border-indigo-300 hover:text-indigo-600";
+  const btnActive = "bg-indigo-50 dark:bg-[#0d1230] border-indigo-300 dark:border-[#1a2050] text-indigo-700 dark:text-indigo-400";
+  const dropdownBase = "absolute left-0 top-full mt-1 bg-white dark:bg-[#101e33] border border-gray-200 dark:border-[#1c2e48] rounded-xl shadow-xl z-30 overflow-hidden";
+  const itemBase = "w-full text-left px-4 py-2 text-xs transition-colors";
+  const itemActive = "bg-indigo-50 dark:bg-[#0d1230] text-indigo-700 dark:text-indigo-400 font-semibold";
+  const itemInactive = "text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-[#162035]";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Filter User — tampil jika showUserFilter=true */}
+      {/* Filter User */}
       {showUserFilter && (
         <div className="relative" ref={userRef}>
           <button
             onClick={() => { setShowUserDropdown(!showUserDropdown); setShowTimeDropdown(false); }}
-            className={clsx(
-              "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all",
-              filter.user
-                ? "bg-indigo-50 border-indigo-300 text-indigo-700"
-                : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600"
-            )}
+            className={clsx(btnBase, filter.user ? btnActive : btnInactive)}
           >
             <User className="w-3.5 h-3.5" />
             <span className="max-w-[120px] truncate">{filter.user || userLabel}</span>
@@ -93,38 +95,32 @@ export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua 
           </button>
 
           {showUserDropdown && (
-            <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
-              <div className="p-2 border-b border-gray-100">
+            <div className={clsx(dropdownBase, "w-64")}>
+              <div className="p-2 border-b border-gray-100 dark:border-[#1c2e48]">
                 <input
                   type="text"
                   placeholder="Cari nama..."
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                   autoFocus
-                  className="w-full px-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                  className="w-full px-3 py-1.5 text-xs bg-gray-50 dark:bg-[#0c1525] border border-gray-200 dark:border-[#1c2e48] rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                 />
               </div>
               <div className="max-h-48 overflow-y-auto py-1">
                 <button
                   onClick={() => { onChange({ ...filter, user: "" }); setShowUserDropdown(false); setUserSearch(""); }}
-                  className={clsx(
-                    "w-full text-left px-4 py-2 text-xs transition-colors",
-                    !filter.user ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
-                  )}
+                  className={clsx(itemBase, !filter.user ? itemActive : itemInactive)}
                 >
                   {userLabel}
                 </button>
                 {filteredUsers.length === 0 ? (
-                  <div className="px-4 py-2 text-xs text-gray-400">Tidak ada hasil</div>
+                  <div className="px-4 py-2 text-xs text-gray-400 dark:text-slate-500">Tidak ada hasil</div>
                 ) : (
                   filteredUsers.map((u) => (
                     <button
                       key={u}
                       onClick={() => { onChange({ ...filter, user: u }); setShowUserDropdown(false); setUserSearch(""); }}
-                      className={clsx(
-                        "w-full text-left px-4 py-2 text-xs transition-colors",
-                        filter.user === u ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
-                      )}
+                      className={clsx(itemBase, filter.user === u ? itemActive : itemInactive)}
                     >
                       {u}
                     </button>
@@ -140,12 +136,7 @@ export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua 
       <div className="relative" ref={timeRef}>
         <button
           onClick={() => { setShowTimeDropdown(!showTimeDropdown); setShowUserDropdown(false); }}
-          className={clsx(
-            "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all",
-            filter.timePreset
-              ? "bg-indigo-50 border-indigo-300 text-indigo-700"
-              : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600"
-          )}
+          className={clsx(btnBase, filter.timePreset ? btnActive : btnInactive)}
         >
           <Calendar className="w-3.5 h-3.5" />
           <span className="max-w-[140px] truncate">{timeLabel}</span>
@@ -153,7 +144,7 @@ export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua 
         </button>
 
         {showTimeDropdown && (
-          <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
+          <div className={clsx(dropdownBase, "w-56")}>
             <div className="py-1">
               {TIME_PRESETS.map((preset) => (
                 <button
@@ -166,36 +157,32 @@ export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua 
                       onChange({ ...filter, timePreset: "custom" });
                     }
                   }}
-                  className={clsx(
-                    "w-full text-left px-4 py-2 text-xs transition-colors",
-                    filter.timePreset === preset.key ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
-                  )}
+                  className={clsx(itemBase, filter.timePreset === preset.key ? itemActive : itemInactive)}
                 >
                   {preset.label}
                 </button>
               ))}
             </div>
 
-            {/* Custom date range */}
             {filter.timePreset === "custom" && (
-              <div className="p-3 border-t border-gray-100 space-y-2">
+              <div className="p-3 border-t border-gray-100 dark:border-[#1c2e48] space-y-2">
                 <div>
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Dari</label>
+                  <label className="text-[10px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Dari</label>
                   <input
                     type="date"
                     value={filter.dateFrom}
                     onChange={(e) => onChange({ ...filter, dateFrom: e.target.value })}
-                    className="mt-0.5 w-full px-2 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    className="mt-0.5 w-full px-2 py-1.5 text-xs bg-gray-50 dark:bg-[#0c1525] border border-gray-200 dark:border-[#1c2e48] rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Sampai</label>
+                  <label className="text-[10px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Sampai</label>
                   <input
                     type="date"
                     value={filter.dateTo}
                     min={filter.dateFrom}
                     onChange={(e) => onChange({ ...filter, dateTo: e.target.value })}
-                    className="mt-0.5 w-full px-2 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    className="mt-0.5 w-full px-2 py-1.5 text-xs bg-gray-50 dark:bg-[#0c1525] border border-gray-200 dark:border-[#1c2e48] rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                   />
                 </div>
                 <button
@@ -211,11 +198,11 @@ export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua 
         )}
       </div>
 
-      {/* Reset filter */}
+      {/* Reset */}
       {hasActiveFilter && (
         <button
           onClick={clearAll}
-          className="flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors border border-gray-200"
+          className="flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-medium text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-[#101e33] hover:bg-gray-200 dark:hover:bg-[#162035] transition-colors border border-gray-200 dark:border-[#1c2e48]"
           title="Reset filter"
         >
           <X className="w-3.5 h-3.5" />
@@ -226,12 +213,6 @@ export function FilterBar({ filter, onChange, userList = [], userLabel = "Semua 
   );
 }
 
-/**
- * Helper: apply time preset ke array of items
- * dateField: fungsi untuk mengambil Date dari item
- * timePreset: preset yang dipilih
- * sort: asc atau desc (untuk "terbaru"/"terlama")
- */
 export function applyTimeFilter<T>(
   items: T[],
   getDate: (item: T) => Date | string,
@@ -240,34 +221,21 @@ export function applyTimeFilter<T>(
   dateTo: string
 ): T[] {
   if (!timePreset) return items;
-
   const now = new Date();
 
-  if (timePreset === "terbaru") {
-    return [...items].sort((a, b) => new Date(getDate(b)).getTime() - new Date(getDate(a)).getTime());
-  }
-
-  if (timePreset === "terlama") {
-    return [...items].sort((a, b) => new Date(getDate(a)).getTime() - new Date(getDate(b)).getTime());
-  }
+  if (timePreset === "terbaru") return [...items].sort((a, b) => new Date(getDate(b)).getTime() - new Date(getDate(a)).getTime());
+  if (timePreset === "terlama") return [...items].sort((a, b) => new Date(getDate(a)).getTime() - new Date(getDate(b)).getTime());
 
   let cutoff: Date | null = null;
-  if (timePreset === "seminggu") cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  if (timePreset === "sebulan") cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  if (timePreset === "setahun") cutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-
-  if (cutoff) {
-    return items.filter((item) => new Date(getDate(item)) >= cutoff!);
-  }
+  if (timePreset === "seminggu") cutoff = new Date(now.getTime() - 7 * 86400000);
+  if (timePreset === "sebulan")  cutoff = new Date(now.getTime() - 30 * 86400000);
+  if (timePreset === "setahun")  cutoff = new Date(now.getTime() - 365 * 86400000);
+  if (cutoff) return items.filter((item) => new Date(getDate(item)) >= cutoff!);
 
   if (timePreset === "custom" && dateFrom && dateTo) {
     const from = new Date(dateFrom);
-    const to = new Date(dateTo);
-    to.setHours(23, 59, 59, 999);
-    return items.filter((item) => {
-      const d = new Date(getDate(item));
-      return d >= from && d <= to;
-    });
+    const to = new Date(dateTo); to.setHours(23, 59, 59, 999);
+    return items.filter((item) => { const d = new Date(getDate(item)); return d >= from && d <= to; });
   }
 
   return items;
