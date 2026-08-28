@@ -100,7 +100,7 @@ export default async function UsersPage() {
                 <th className="px-5 py-4 text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-100/60">
               {sortedUsers.length === 0 ? (
                   <tr>
                   <td colSpan={isSuperAdmin ? 7 : 6} className="px-6 py-10 text-center text-gray-400">
@@ -124,7 +124,7 @@ export default async function UsersPage() {
                         <div className="text-gray-500 text-xs mt-0.5">{user.phone || "Belum diisi"}</div>
                       </td>
                       <td className="px-5 py-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        <span className="text-xs text-gray-600">
                           {user.department || "-"}
                         </span>
                       </td>
