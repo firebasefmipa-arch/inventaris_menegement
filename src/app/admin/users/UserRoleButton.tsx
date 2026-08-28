@@ -52,8 +52,8 @@ export function UserRoleButton({
       className={clsx(
         "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
         isAdmin
-          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200",
+          ? "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border dark:border-slate-700"
+          : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50 dark:border dark:border-indigo-800/50",
         (isLoading || isCurrentUser) && "opacity-50 cursor-not-allowed"
       )}
       title={

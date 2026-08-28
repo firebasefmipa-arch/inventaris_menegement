@@ -100,7 +100,7 @@ export default async function UsersPage() {
                 <th className="px-5 py-4 text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100/60">
+            <tbody className="divide-y divide-gray-100/60 dark:divide-slate-700/50">
               {sortedUsers.length === 0 ? (
                   <tr>
                   <td colSpan={isSuperAdmin ? 7 : 6} className="px-6 py-10 text-center text-gray-400">
