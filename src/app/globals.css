@@ -111,6 +111,12 @@ body {
   background-color: #1a2236 !important;
 }
 
+/* Logo container — tetap putih di dark mode */
+.dark aside .logo-container,
+.dark aside .bg-white.rounded-xl {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
 /* Badge backgrounds yang pakai bg-*-50 */
 .dark .bg-blue-50    { background-color: #1a2e4a !important; }
 .dark .bg-emerald-50 { background-color: #0f2d22 !important; }
