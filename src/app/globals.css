@@ -52,22 +52,7 @@ body {
 /* Cards & panels */
 .dark .bg-white    { background-color: #1a2236 !important; }
 
-/* Borders */
-.dark .border-gray-100 { border-color: #1e2a3a !important; }
-
-/* Badge/pill borders — kurangi kontras di dark mode */
-.dark .border-indigo-200  { border-color: #2d3a5c !important; }
-.dark .border-emerald-200 { border-color: #1a3d2d !important; }
-.dark .border-red-200     { border-color: #3d1e1e !important; }
-.dark .border-rose-200    { border-color: #3d1e2a !important; }
-.dark .border-amber-200   { border-color: #3d2e10 !important; }
-.dark .border-blue-200    { border-color: #1e2e4a !important; }
-.dark .border-purple-200  { border-color: #2d1f4a !important; }
-.dark .border-violet-200  { border-color: #251f4a !important; }
-.dark .border-cyan-200    { border-color: #0f2535 !important; }
-.dark .border-orange-200  { border-color: #3d2210 !important; }
-.dark .border-gray-200    { border-color: #243044 !important; }
-.dark .border-gray-300    { border-color: #2d3f5a !important; }
+/* Borders — handled di bagian bawah bersama badge */
 
 /* Text hierarchy */
 .dark .text-gray-900 { color: #e8edf5 !important; }
@@ -135,16 +120,45 @@ body {
 }
 
 /* Badge backgrounds yang pakai bg-*-50 */
-.dark .bg-blue-50    { background-color: #1a2e4a !important; }
-.dark .bg-emerald-50 { background-color: #0f2d22 !important; }
-.dark .bg-amber-50   { background-color: #2d2210 !important; }
-.dark .bg-red-50     { background-color: #2d1515 !important; }
-.dark .bg-rose-50    { background-color: #2d1520 !important; }
-.dark .bg-indigo-50  { background-color: #1a1f3d !important; }
-.dark .bg-purple-50  { background-color: #221a3d !important; }
-.dark .bg-violet-50  { background-color: #1e1a3d !important; }
-.dark .bg-cyan-50    { background-color: #0f2530 !important; }
-.dark .bg-orange-50  { background-color: #2d1e0f !important; }
+.dark .bg-blue-50    { background-color: #0f1e35 !important; }
+.dark .bg-emerald-50 { background-color: #0a2018 !important; }
+.dark .bg-amber-50   { background-color: #1e160a !important; }
+.dark .bg-red-50     { background-color: #1e0f0f !important; }
+.dark .bg-rose-50    { background-color: #1e0f18 !important; }
+.dark .bg-indigo-50  { background-color: #10142a !important; }
+.dark .bg-purple-50  { background-color: #150f2a !important; }
+.dark .bg-violet-50  { background-color: #120f2a !important; }
+.dark .bg-cyan-50    { background-color: #081820 !important; }
+.dark .bg-orange-50  { background-color: #1e140a !important; }
+.dark .bg-gray-100   { background-color: #0d1526 !important; }
+
+/* Tombol hover bg-*-50 */
+.dark .hover\:bg-red-50:hover    { background-color: #2a1212 !important; }
+.dark .hover\:bg-indigo-50:hover { background-color: #161a38 !important; }
+.dark .hover\:bg-blue-50:hover   { background-color: #132040 !important; }
+
+/* Garis — semua border tipis */
+.dark .border-gray-100 { border-color: #1a2640 !important; }
+.dark .border-gray-200 { border-color: #1e2e48 !important; }
+.dark .border-gray-300 { border-color: #253550 !important; }
+.dark .border-red-200     { border-color: #3a1818 !important; }
+.dark .border-rose-200    { border-color: #3a1828 !important; }
+.dark .border-indigo-200  { border-color: #1e2650 !important; }
+.dark .border-emerald-200 { border-color: #0f2e20 !important; }
+.dark .border-amber-200   { border-color: #2e2010 !important; }
+.dark .border-blue-200    { border-color: #102040 !important; }
+.dark .border-purple-200  { border-color: #1e1440 !important; }
+
+/* Teks di tombol bg-*-50 */
+.dark .text-red-700     { color: #f87171 !important; }
+.dark .text-red-600     { color: #ef4444 !important; }
+.dark .text-rose-700    { color: #fb7185 !important; }
+.dark .text-indigo-700  { color: #818cf8 !important; }
+.dark .text-indigo-600  { color: #6366f1 !important; }
+.dark .text-blue-700    { color: #60a5fa !important; }
+.dark .text-emerald-700 { color: #34d399 !important; }
+.dark .text-amber-700   { color: #fbbf24 !important; }
+.dark .text-purple-700  { color: #a78bfa !important; }
 
 ::selection {
   background: rgba(99, 102, 241, 0.2);
