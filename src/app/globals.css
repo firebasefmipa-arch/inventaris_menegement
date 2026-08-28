@@ -31,6 +31,106 @@ body {
   background: #475569;
 }
 
+/* ── Dark mode: auto-style common UI patterns ── */
+
+/* Cards & panels */
+.dark .bg-white {
+  background-color: #1e293b !important;
+}
+.dark .bg-gray-50 {
+  background-color: #0f172a !important;
+}
+.dark .bg-gray-100 {
+  background-color: #1e293b !important;
+}
+
+/* Borders */
+.dark .border-gray-100 {
+  border-color: #334155 !important;
+}
+.dark .border-gray-200 {
+  border-color: #334155 !important;
+}
+.dark .border-gray-300 {
+  border-color: #475569 !important;
+}
+
+/* Text */
+.dark .text-gray-900 {
+  color: #f1f5f9 !important;
+}
+.dark .text-gray-800 {
+  color: #e2e8f0 !important;
+}
+.dark .text-gray-700 {
+  color: #cbd5e1 !important;
+}
+.dark .text-gray-600 {
+  color: #94a3b8 !important;
+}
+.dark .text-gray-500 {
+  color: #64748b !important;
+}
+.dark .text-gray-400 {
+  color: #475569 !important;
+}
+
+/* Hover states */
+.dark .hover\:bg-gray-50:hover {
+  background-color: #1e293b !important;
+}
+.dark .hover\:bg-gray-100:hover {
+  background-color: #334155 !important;
+}
+.dark .hover\:border-gray-200:hover {
+  border-color: #475569 !important;
+}
+
+/* Input / form */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #475569;
+}
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: #6366f1;
+  outline: none;
+}
+
+/* Table */
+.dark table {
+  color: #e2e8f0;
+}
+.dark thead {
+  background-color: #1e293b;
+}
+.dark th {
+  color: #94a3b8;
+  border-color: #334155;
+}
+.dark td {
+  border-color: #1e293b;
+}
+.dark tbody tr:hover {
+  background-color: #1e293b;
+}
+
+/* Dividers */
+.dark .divide-gray-100 > * + * {
+  border-color: #334155;
+}
+.dark .divide-gray-200 > * + * {
+  border-color: #334155;
+}
+
 ::selection {
   background: rgba(99, 102, 241, 0.2);
   color: #312e81;
