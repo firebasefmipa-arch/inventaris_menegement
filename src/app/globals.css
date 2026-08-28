@@ -53,8 +53,20 @@ body {
 
 /* Borders */
 .dark .border-gray-100 { border-color: #1e2a3a !important; }
-.dark .border-gray-200 { border-color: #243044 !important; }
-.dark .border-gray-300 { border-color: #2d3f5a !important; }
+
+/* Badge/pill borders — kurangi kontras di dark mode */
+.dark .border-indigo-200  { border-color: #2d3a5c !important; }
+.dark .border-emerald-200 { border-color: #1a3d2d !important; }
+.dark .border-red-200     { border-color: #3d1e1e !important; }
+.dark .border-rose-200    { border-color: #3d1e2a !important; }
+.dark .border-amber-200   { border-color: #3d2e10 !important; }
+.dark .border-blue-200    { border-color: #1e2e4a !important; }
+.dark .border-purple-200  { border-color: #2d1f4a !important; }
+.dark .border-violet-200  { border-color: #251f4a !important; }
+.dark .border-cyan-200    { border-color: #0f2535 !important; }
+.dark .border-orange-200  { border-color: #3d2210 !important; }
+.dark .border-gray-200    { border-color: #243044 !important; }
+.dark .border-gray-300    { border-color: #2d3f5a !important; }
 
 /* Text hierarchy */
 .dark .text-gray-900 { color: #e8edf5 !important; }
