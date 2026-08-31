@@ -3,6 +3,9 @@ import { db } from "@/db";
 import { handovers, handoverItems, items, users } from "@/db/schema";
 import { eq, desc, inArray, and } from "drizzle-orm";
 import { auth } from "@/auth";
+import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
 
 // GET /api/admin/handovers — daftar semua serah terima (admin)
 export async function GET(req: NextRequest) {
@@ -173,7 +176,45 @@ export async function POST(req: NextRequest) {
       }).where(eq(items.id, dbItem.id));
     }
 
-    return NextResponse.json({ id: hvId, code: `ST-${String(hvId).padStart(4, "0")}` }, { status: 201 });
+    // Auto-generate PDF dan simpan ke disk
+    let pdfUrl: string | null = null;
+    try {
+      const pdfBuffer = await generateHandoverPDF({
+        receiverName: receiverName.trim(),
+        receiverNim: receiverNim?.trim() || "",
+        unitName: unitName?.trim() || "",
+        department: department.trim(),
+        phone: phone?.trim() || "",
+        location: location?.trim() || "",
+        purpose: purpose.trim(),
+        notes: notes?.trim() || "",
+        handoverDate: new Date(),
+        items: cartItems.map((c) => ({
+          name: itemMap.get(c.itemId)?.name || "Barang",
+          quantity: c.quantity,
+          assetNumber: itemMap.get(c.itemId)?.assetNumber ?? null,
+          inventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
+        })),
+      });
+
+      const receiverSafe = receiverName.trim()
+        .replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
+      const now = new Date();
+      const dateStr = `${String(now.getDate()).padStart(2, "0")}${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
+      const filename = `${receiverSafe}_${dateStr}.pdf`;
+
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "handovers");
+      await mkdir(uploadDir, { recursive: true });
+      await writeFile(path.join(uploadDir, filename), pdfBuffer);
+
+      pdfUrl = `/uploads/handovers/${filename}`;
+      await db.update(handovers).set({ signedDocumentUrl: pdfUrl }).where(eq(handovers.id, hvId));
+    } catch (pdfErr) {
+      console.error("Auto-generate handover PDF error:", pdfErr);
+      // Tidak gagalkan request jika PDF error
+    }
+
+    return NextResponse.json({ id: hvId, code: `ST-${String(hvId).padStart(4, "0")}`, pdfUrl }, { status: 201 });
   } catch (error) {
     console.error("POST /api/admin/handovers error:", error);
     return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });
