@@ -21,6 +21,7 @@ export function UserSidebar() {
   const { toast } = useToast();
   const { theme, toggleTheme } = useTheme();
   const [pendingDocs, setPendingDocs] = useState(0);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,7 +152,7 @@ export function UserSidebar() {
           }
         </button>
         <button
-          onClick={handleLogout}
+          onClick={() => setShowLogoutConfirm(true)}
           className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 shadow-sm transition-all"
         >
           <LogOut className="w-4 h-4" /> Keluar
@@ -162,6 +163,38 @@ export function UserSidebar() {
 
   return (
     <>
+      {/* Logout Confirm Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="relative bg-white dark:bg-[#162035] rounded-2xl shadow-2xl border border-gray-100 dark:border-[#1c2e48] p-6 w-full max-w-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                <LogOut className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 dark:text-slate-100">Konfirmasi Keluar</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Yakin ingin keluar dari akun ini?</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 dark:bg-[#101e33] text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-[#1c2e48] transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors"
+              >
+                Ya, Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-2">
