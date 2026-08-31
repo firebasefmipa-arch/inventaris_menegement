@@ -301,7 +301,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   const menerimaTw = font.widthOfTextAtSize('Yang menerima,', 10);
   currentPage.drawText('Yang menerima,', { x: col2X + (colW - menerimaTw) / 2, y, size: 10, font, color: rgb(0, 0, 0) });
 
-  y -= 65;
+  y -= 75;
 
   // Nama penerima dengan underline pendek (sesuai lebar nama)
   if (data.receiverName) {
@@ -314,7 +314,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
       font: boldFont,
       color: rgb(0, 0, 0),
     });
-    // Garis underline tepat di bawah teks
+    // Garis underline sejajar dengan garis kiri
     currentPage.drawLine({
       start: { x: nameX, y: y - 2 },
       end:   { x: nameX + nameTw, y: y - 2 },
@@ -323,10 +323,8 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
     });
   }
 
-  y -= 12;
-
-  // Hapus garis TTD panjang — diganti underline nama di atas
-  currentPage.drawLine({ start: { x: col1X, y }, end: { x: col1X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
+  // Garis kiri disejajarkan di posisi y - 2 (sama dengan underline nama)
+  currentPage.drawLine({ start: { x: col1X, y: y - 2 }, end: { x: col1X + colW, y: y - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
