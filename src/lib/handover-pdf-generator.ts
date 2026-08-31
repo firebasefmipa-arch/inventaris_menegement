@@ -303,23 +303,30 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
 
   y -= 45;
 
-  // Nama penerima di ATAS garis TTD kanan (format dokumen resmi)
+  // Nama penerima dengan underline pendek (sesuai lebar nama)
   if (data.receiverName) {
     const nameTw = boldFont.widthOfTextAtSize(data.receiverName, 10);
+    const nameX = col2X + (colW - nameTw) / 2;
     currentPage.drawText(data.receiverName, {
-      x: col2X + (colW - nameTw) / 2,
+      x: nameX,
       y,
       size: 10,
       font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+    // Garis underline tepat di bawah teks
+    currentPage.drawLine({
+      start: { x: nameX, y: y - 2 },
+      end:   { x: nameX + nameTw, y: y - 2 },
+      thickness: 0.8,
       color: rgb(0, 0, 0),
     });
   }
 
   y -= 12;
 
-  // Garis TTD
+  // Hapus garis TTD panjang — diganti underline nama di atas
   currentPage.drawLine({ start: { x: col1X, y }, end: { x: col1X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
-  currentPage.drawLine({ start: { x: col2X, y }, end: { x: col2X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
