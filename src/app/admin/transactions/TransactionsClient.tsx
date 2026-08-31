@@ -197,15 +197,15 @@ export function TransactionsClient({ transactions }: Props) {
                 <ChevronDown className="w-3 h-3" />
               </button>
               {showFilterDropdown && (
-                <div className="absolute left-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-30 py-1">
+                <div className="absolute left-0 top-full mt-2 w-52 bg-white dark:bg-[#101e33] border border-gray-200 dark:border-[#1c2e48] rounded-xl shadow-lg z-30 py-1">
                   {filterOptions.map((opt) => (
                     <button
                       key={opt.key}
                       onClick={() => { setStatusFilter(opt.key); setShowFilterDropdown(false); }}
                       className={`w-full text-left px-4 py-2.5 text-xs transition-colors ${
                         statusFilter === opt.key
-                          ? "bg-indigo-50 text-indigo-700 font-medium"
-                          : "text-gray-700 hover:bg-gray-50"
+                          ? "bg-indigo-50 dark:bg-[#0d1230] text-indigo-700 dark:text-indigo-400 font-medium"
+                          : "text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-[#162035]"
                       }`}
                     >
                       {opt.label}
@@ -222,7 +222,7 @@ export function TransactionsClient({ transactions }: Props) {
           </div>
         </div>
         {filteredTransactions.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+          <div className="bg-white dark:bg-[#162035] rounded-2xl shadow-sm border border-gray-100 dark:border-[#1c2e48] p-12 text-center">
             <ArrowLeftRight className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-700 mb-1">
               {transactions.length === 0 ? "Tidak ada transaksi" : "Tidak ditemukan"}
@@ -241,8 +241,8 @@ export function TransactionsClient({ transactions }: Props) {
                   key={tx.id}
                   className={`rounded-2xl shadow-sm border p-4 sm:p-5 hover:shadow-md transition-all ${
                     isOverdue
-                      ? "border-red-200 bg-red-50/30"
-                      : "bg-white border-gray-100"
+                      ? "border-red-200 bg-red-50/30 dark:bg-red-900/10 dark:border-red-900/50"
+                      : "bg-white dark:bg-[#162035] border-gray-100 dark:border-[#1c2e48]"
                   }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -291,7 +291,7 @@ export function TransactionsClient({ transactions }: Props) {
                             </span>
                           </div>
                           {tx.notes && (
-                            <p className="text-xs text-gray-400 mt-1.5 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100">
+                            <p className="text-xs text-gray-400 mt-1.5 bg-gray-50 dark:bg-[#0e1c30] px-2.5 py-1.5 rounded-lg border border-gray-100 dark:border-[#1c2e48]">
                               {tx.notes}
                             </p>
                           )}
