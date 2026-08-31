@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Clock, CheckCircle2, XCircle, FileText, Package,
-  Plus, ChevronDown, ChevronUp, RefreshCcw, Search, ClipboardCheck,
+  Plus, ChevronDown, ChevronUp, RefreshCcw, Search, ClipboardCheck, PenLine,
 } from "lucide-react";
 import clsx from "clsx";
 import { format } from "date-fns";
@@ -12,8 +12,8 @@ import { id as idLocale } from "date-fns/locale";
 import { useToast } from "@/components/Toaster";
 import { HandoverModal } from "./HandoverModal";
 import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
-import { useMemo } from "react";
 import { DocActions } from "@/components/DocActions";
+import { CorrectItemsModal, type CorrectItem } from "@/components/CorrectItemsModal";
 
 type HvItem = {
   itemId: number | null;
@@ -72,6 +72,14 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
   const [modalOpen, setModalOpen] = useState(false);
   const [advFilter, setAdvFilter] = useState<FilterState>(defaultFilter);
 
+  // Koreksi modal state
+  const [correctModal, setCorrectModal] = useState<{
+    open: boolean;
+    hvId: number;
+    receiverName: string;
+    initialItems: CorrectItem[];
+  }>({ open: false, hvId: 0, receiverName: "", initialItems: [] });
+
   // Approve/reject state
   const [actionId, setActionId] = useState<number | null>(null);
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
@@ -98,6 +106,23 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
+
+  const openCorrectModal = async (hv: Handover) => {
+    try {
+      const res = await fetch(`/api/admin/handovers/${hv.id}/items`);
+      const data = await res.json();
+      const initItems: CorrectItem[] = (data.items || []).map((i: any) => ({
+        itemId: i.itemId,
+        itemName: i.itemName || "Barang",
+        quantity: i.quantity,
+        notes: i.notes || "",
+        maxQty: (i.availableQuantity ?? 0) + i.quantity,
+      }));
+      setCorrectModal({ open: true, hvId: hv.id, receiverName: hv.receiverName, initialItems: initItems });
+    } catch {
+      toast("Gagal memuat data barang", "error");
+    }
   };
 
   const handleAction = async () => {
@@ -238,10 +263,16 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
                 {/* Pending approval banner */}
                 {needsAction && (
                   <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 rounded-t-2xl space-y-2">
-                    <span className="block text-xs font-semibold text-blue-700">
+                    <span className="block text-xs font-semibold text-blue-700 dark:text-blue-400">
                       ⏳ Menunggu persetujuan admin
                     </span>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => openCorrectModal(hv)}
+                        className="w-full text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800/50 px-2 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1"
+                      >
+                        <PenLine className="w-3.5 h-3.5" /> Koreksi
+                      </button>
                       <button
                         onClick={() => { setActionId(hv.id); setActionType("approve"); }}
                         className="w-full text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-3 py-2.5 rounded-xl transition-colors"
@@ -417,6 +448,17 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
 
       {/* Modal Catat Serah Terima */}
       <HandoverModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+
+      {/* Modal Koreksi Barang */}
+      <CorrectItemsModal
+        isOpen={correctModal.open}
+        onClose={() => setCorrectModal({ ...correctModal, open: false })}
+        onSaved={() => fetchData()}
+        type="handover"
+        id={correctModal.hvId}
+        initialItems={correctModal.initialItems}
+        borrowerName={correctModal.receiverName}
+      />
     </div>
   );
 }

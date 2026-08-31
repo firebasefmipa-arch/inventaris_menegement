@@ -6,7 +6,7 @@ import {
   Search, Check, Monitor, Speaker, Camera, Tent, Dumbbell, Car, Package,
   ArrowLeft, ArrowRight, MapPin, Minus, Plus, StickyNote, ShieldCheck,
   Receipt, PartyPopper, History, Send, RefreshCcw, ShoppingCart, Trash2,
-  FileText, ArrowUpRight, type LucideIcon,
+  FileText, type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toaster";
@@ -37,6 +37,7 @@ type SubmitResult = {
   itemNames: string;
   totalItems: number;
   totalQuantity: number;
+  pdfUrl: string | null;
 };
 
 function getCategoryMeta(category: string): { Icon: LucideIcon; gradient: string } {
@@ -70,8 +71,17 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [form, setForm] = useState({ purpose: "", notes: "", location: "" });
+  const [hasSignature, setHasSignature] = useState<boolean | null>(null);
 
   const user = session?.user as any;
+
+  // Cek TTD saat mount
+  useEffect(() => {
+    fetch("/api/user/signature")
+      .then((r) => r.json())
+      .then((d) => setHasSignature(!!d.signatureUrl))
+      .catch(() => setHasSignature(false));
+  }, []);
 
   const categories = useMemo(
     () => ["Semua", ...Array.from(new Set(items.map((i) => i.category)))],
@@ -151,6 +161,11 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
         router.push("/dashboard/profil");
         return;
       }
+      if (res.status === 422 && data.error === "SIGNATURE_REQUIRED") {
+        toast("Upload tanda tangan elektronik di profil sebelum mengajukan serah terima", "error");
+        router.push("/dashboard/profil");
+        return;
+      }
       if (!res.ok) throw new Error(data.error || "Gagal mengirim permintaan");
       setResult(data);
       setStep("success");
@@ -216,6 +231,19 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
       {/* ─── STEP 1: PILIH BARANG ─── */}
       {step === "item" && (
         <div className="space-y-4">
+          {/* Gate: TTD belum diupload */}
+          {hasSignature === false && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+              <ShieldCheck className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-red-700">Tanda Tangan Elektronik Belum Ada</p>
+                <p className="text-xs text-red-600 mt-0.5">Upload tanda tangan elektronik di halaman Profil sebelum bisa mengajukan serah terima.</p>
+                <Link href="/dashboard/profil" className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors">
+                  Upload TTD di Profil →
+                </Link>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -293,7 +321,14 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
                   <p className="text-sm font-bold text-gray-900">{cart.length} barang dipilih</p>
                   <p className="text-xs text-gray-500">{cartTotal} unit total</p>
                 </div>
-                <button onClick={() => setStep("form")}
+                <button onClick={() => {
+                    if (!hasSignature) {
+                      toast("Upload tanda tangan elektronik di profil terlebih dahulu", "error");
+                      router.push("/dashboard/profil");
+                      return;
+                    }
+                    setStep("form");
+                  }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-teal-500/25">
                   Lanjut <ArrowRight className="w-4 h-4" />
                 </button>
@@ -410,10 +445,10 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 resize-none" />
               </div>
             </div>
-            <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl p-3.5">
-              <ShieldCheck className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-amber-800">
-                Setelah submit, kamu perlu <strong>mengupload formulir serah terima</strong> yang sudah ditandatangani. Admin akan memprosesnya.
+            <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-100 rounded-xl p-3.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-emerald-800">
+                Tanda tangan elektronikmu akan otomatis disertakan dalam formulir PDF. Admin akan memeriksa dan memproses permintaan ini.
               </p>
             </div>
           </div>
@@ -445,51 +480,54 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-100 text-teal-700 text-xs font-semibold mb-2">
               <PartyPopper className="w-3.5 h-3.5" /> Permintaan berhasil dibuat
             </div>
-            <h2 className="text-2xl font-extrabold text-gray-900">Permintaan Diajukan!</h2>
-            <p className="text-sm text-gray-500 mt-2">
-              Kode: <span className="font-bold text-gray-800">{result.code}</span>
+            <h2 className="text-2xl font-extrabold text-gray-900 dark:text-slate-100">Permintaan Diajukan!</h2>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-2">
+              Kode: <span className="font-bold text-gray-800 dark:text-slate-200">{result.code}</span>
             </p>
           </div>
 
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden text-left">
+          <div className="bg-white dark:bg-[#162035] border border-gray-100 dark:border-[#1c2e48] rounded-2xl shadow-sm overflow-hidden text-left">
             <div className="bg-gradient-to-r from-teal-600 to-emerald-600 px-5 py-3 flex items-center gap-2 text-white">
               <Receipt className="w-4 h-4" />
               <span className="text-sm font-semibold">Detail Permintaan</span>
             </div>
             <div className="px-5 py-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Pemohon</span>
-                <span className="font-semibold text-gray-900">{result.receiverName}</span>
+                <span className="text-gray-500 dark:text-slate-400">Pemohon</span>
+                <span className="font-semibold text-gray-900 dark:text-slate-200">{result.receiverName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Total Barang</span>
-                <span className="font-semibold text-gray-900">{result.totalItems} jenis ({result.totalQuantity} unit)</span>
+                <span className="text-gray-500 dark:text-slate-400">Total Barang</span>
+                <span className="font-semibold text-gray-900 dark:text-slate-200">{result.totalItems} jenis ({result.totalQuantity} unit)</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-3 text-left">
-            <div className="flex items-center gap-2 text-amber-800">
-              <FileText className="w-5 h-5 text-amber-600 shrink-0" />
-              <p className="text-sm font-bold">Langkah Selanjutnya: Upload Dokumen</p>
+          {/* Info PDF */}
+          <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/50 rounded-2xl p-5 space-y-3 text-left">
+            <div className="flex items-center gap-2 text-teal-800 dark:text-teal-300">
+              <FileText className="w-5 h-5 text-teal-600 dark:text-teal-400 shrink-0" />
+              <p className="text-sm font-bold">Formulir PDF Sudah Dibuat</p>
             </div>
-            <p className="text-xs text-amber-700 leading-relaxed">
-              Download formulir serah terima, tanda tangani, lalu upload kembali. Permintaan baru diproses admin setelah dokumen diterima.
+            <p className="text-xs text-teal-700 dark:text-teal-400 leading-relaxed">
+              Formulir serah terima dengan tanda tangan elektronikmu sudah dibuat otomatis.
+              Admin akan memeriksa dan memproses permintaanmu.
             </p>
-            <Link href={`/handovers/${result.handoverId}/upload`}
-              className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl transition-colors">
-              <FileText className="w-4 h-4" /> Upload Dokumen Sekarang
-              <ArrowUpRight className="w-4 h-4" />
-            </Link>
+            {result.pdfUrl && (
+              <a href={result.pdfUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                <FileText className="w-4 h-4" /> Lihat / Download PDF
+              </a>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/dashboard/riwayat"
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200 transition-colors">
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors">
               <History className="w-4 h-4" /> Lihat Riwayat
             </Link>
             <button onClick={resetAll}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors">
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-[#162035] border border-gray-200 dark:border-[#1c2e48] text-gray-600 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-[#1c2e48] transition-colors">
               <RefreshCcw className="w-4 h-4" /> Ajukan Lagi
             </button>
           </div>

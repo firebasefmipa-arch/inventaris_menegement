@@ -3,6 +3,9 @@ import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { copyFile, mkdir, unlink } from "fs/promises";
+import { existsSync } from "fs";
+import path from "path";
 
 export async function POST(
   request: NextRequest,
@@ -11,10 +14,8 @@ export async function POST(
   try {
     const session = await auth();
     const role = (session?.user as any)?.role;
-
-    if (!session?.user || (role !== "admin" && role !== "super_admin")) {
+    if (!session?.user || (role !== "admin" && role !== "super_admin"))
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const { id } = await params;
     const txId = parseInt(id, 10);
@@ -23,46 +24,58 @@ export async function POST(
     const body = await request.json();
     const { action, rejectionReason } = body;
 
-    if (action !== "approve" && action !== "reject") {
+    if (action !== "approve" && action !== "reject")
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-    }
-
-    // Alasan wajib diisi saat menolak
-    if (action === "reject" && (!rejectionReason || !rejectionReason.trim())) {
+    if (action === "reject" && (!rejectionReason || !rejectionReason.trim()))
       return NextResponse.json({ error: "Alasan penolakan wajib diisi" }, { status: 400 });
-    }
 
-    const [tx] = await db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.id, txId));
-
-    if (!tx) {
-      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
-    }
-
-    if (tx.status !== "pending_approval") {
+    const [tx] = await db.select().from(transactions).where(eq(transactions.id, txId));
+    if (!tx) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    if (tx.status !== "pending_approval")
       return NextResponse.json({ error: "Transaction is not pending approval" }, { status: 400 });
-    }
 
     const newStatus = action === "approve" ? "active" : "rejected";
 
-    await db
-      .update(transactions)
-      .set({
-        status: newStatus,
-        ...(action === "reject" && { rejectionReason: rejectionReason.trim() }),
-      })
-      .where(eq(transactions.id, txId));
+    if (action === "approve") {
+      // Pindahkan PDF dari pending/ ke signed_forms/
+      let finalPdfUrl = tx.signedDocumentUrl;
+      if (tx.signedDocumentUrl?.startsWith("/uploads/pending/")) {
+        try {
+          const filename = path.basename(tx.signedDocumentUrl);
+          const srcPath  = path.join(process.cwd(), "public", tx.signedDocumentUrl);
+          const destDir  = path.join(process.cwd(), "public", "uploads", "signed_forms");
+          const destPath = path.join(destDir, filename);
 
-    // Jika ditolak, kembalikan stok semua item
-    if (action === "reject") {
-      // Coba dari transaction_items dulu (multi-item)
-      const txItems = await db
-        .select()
-        .from(transactionItems)
-        .where(eq(transactionItems.transactionId, txId));
+          await mkdir(destDir, { recursive: true });
+          if (existsSync(srcPath)) {
+            await copyFile(srcPath, destPath);
+            await unlink(srcPath).catch(() => {});
+          }
+          finalPdfUrl = `/uploads/signed_forms/${filename}`;
+        } catch (e) {
+          console.error("Pindah PDF error:", e);
+        }
+      }
 
+      await db.update(transactions).set({
+        status: "active",
+        signedDocumentUrl: finalPdfUrl,
+      }).where(eq(transactions.id, txId));
+
+    } else {
+      // Reject — hapus PDF pending dan kembalikan stok
+      if (tx.signedDocumentUrl?.startsWith("/uploads/pending/")) {
+        const filePath = path.join(process.cwd(), "public", tx.signedDocumentUrl);
+        if (existsSync(filePath)) await unlink(filePath).catch(() => {});
+      }
+
+      await db.update(transactions).set({
+        status: "rejected",
+        rejectionReason: rejectionReason.trim(),
+      }).where(eq(transactions.id, txId));
+
+      // Kembalikan stok
+      const txItems = await db.select().from(transactionItems).where(eq(transactionItems.transactionId, txId));
       if (txItems.length > 0) {
         for (const txItem of txItems) {
           const [item] = await db.select().from(items).where(eq(items.id, txItem.itemId)).limit(1);
@@ -76,7 +89,6 @@ export async function POST(
           }
         }
       } else if (tx.itemId) {
-        // Legacy single-item fallback
         const [item] = await db.select().from(items).where(eq(items.id, tx.itemId)).limit(1);
         if (item) {
           const newAvailable = item.availableQuantity + tx.quantity;

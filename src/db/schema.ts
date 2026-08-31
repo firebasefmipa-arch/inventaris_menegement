@@ -47,6 +47,7 @@ export const users = mysqlTable("user", {
   phone: varchar("phone", { length: 50 }),
   nim: varchar("nim", { length: 50 }),
   department: varchar("department", { length: 100 }),
+  signatureUrl: varchar("signature_url", { length: 500 }),
   status: mysqlEnum("status", ["pending", "active", "suspended"])
     .default("active"),
   role: mysqlEnum("role", ["user", "admin", "super_admin"])

@@ -6,7 +6,7 @@ import { id } from "date-fns/locale";
 import {
   Clock, CheckCircle2, ArrowLeftRight, User, Plus,
   Search, SlidersHorizontal, ChevronDown,
-  XCircle, AlertTriangle,
+  XCircle, AlertTriangle, PenLine,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -16,6 +16,7 @@ import { BorrowModal } from "./BorrowModal";
 import { RejectModal } from "./RejectModal";
 import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
 import { DocActions } from "@/components/DocActions";
+import { CorrectItemsModal, type CorrectItem } from "@/components/CorrectItemsModal";
 
 type Transaction = {
   id: number;
@@ -50,6 +51,14 @@ export function TransactionsClient({ transactions }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const { data: session } = useSession();
+
+  // Koreksi modal state
+  const [correctModal, setCorrectModal] = useState<{
+    open: boolean;
+    txId: number;
+    borrowerName: string;
+    initialItems: CorrectItem[];
+  }>({ open: false, txId: 0, borrowerName: "", initialItems: [] });
 
   // Reject modal state
   const [rejectModal, setRejectModal] = useState<{
@@ -94,6 +103,24 @@ export function TransactionsClient({ transactions }: Props) {
     [...new Set(transactions.map((tx) => tx.borrowerName).filter(Boolean) as string[])].sort(),
     [transactions]
   );
+
+  const openCorrectModal = async (tx: Transaction) => {
+    // Ambil items dari API
+    try {
+      const res = await fetch(`/api/transactions/${tx.id}/items`);
+      const data = await res.json();
+      const initItems: CorrectItem[] = (data.items || []).map((i: any) => ({
+        itemId: i.itemId,
+        itemName: i.itemName || "Barang",
+        quantity: i.quantity,
+        notes: i.notes || "",
+        maxQty: (i.availableQuantity ?? 0) + i.quantity, // stok tersedia + qty yang sudah dikurangi
+      }));
+      setCorrectModal({ open: true, txId: tx.id, borrowerName: tx.borrowerName || "", initialItems: initItems });
+    } catch {
+      toast("Gagal memuat data barang", "error");
+    }
+  };
 
   const handleApprove = async (txId: number) => {
     if (!confirm("Yakin ingin menyetujui peminjaman ini?")) return;
@@ -336,7 +363,13 @@ export function TransactionsClient({ transactions }: Props) {
 
                           {/* Approve / Reject buttons */}
                           {tx.status === "pending_approval" && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                              <button
+                                onClick={() => openCorrectModal(tx)}
+                                className="px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50 rounded-lg text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors flex items-center gap-1.5"
+                              >
+                                <PenLine className="w-3.5 h-3.5" /> Koreksi Barang
+                              </button>
                               <button
                                 onClick={() => handleApprove(tx.id)}
                                 className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors"
@@ -380,6 +413,16 @@ export function TransactionsClient({ transactions }: Props) {
         borrowerName={rejectModal.borrowerName}
         onClose={() => setRejectModal({ open: false, txId: null, itemName: "", borrowerName: "" })}
         onConfirm={handleRejectConfirm}
+      />
+
+      <CorrectItemsModal
+        isOpen={correctModal.open}
+        onClose={() => setCorrectModal({ ...correctModal, open: false })}
+        onSaved={() => router.refresh()}
+        type="transaction"
+        id={correctModal.txId}
+        initialItems={correctModal.initialItems}
+        borrowerName={correctModal.borrowerName}
       />
     </>
   );

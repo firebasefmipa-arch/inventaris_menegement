@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search, Check, Monitor, Speaker, Camera, Tent, Dumbbell, Car, Package,
-  ArrowLeft, ArrowRight, MapPin, Phone, Mail, Building2, Minus, Plus,  CalendarDays, StickyNote, ShieldCheck, Receipt, PartyPopper, History,
+  ArrowLeft, ArrowRight, MapPin, Phone, Mail, Building2, Minus, Plus,
+  CalendarDays, StickyNote, ShieldCheck, Receipt, PartyPopper, History,
   Send, RefreshCcw, ShoppingCart, Trash2, FileText, type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
@@ -39,6 +40,7 @@ type SubmitResult = {
   totalItems: number;
   totalQuantity: number;
   expectedReturnDate: string;
+  pdfUrl: string | null;
   items: { name: string; inventoryNumber: string | null; quantity: number; notes: string }[];
 };
 
@@ -75,10 +77,18 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [form, setForm] = useState({ returnDate: defaultReturnDate(), purpose: "", notes: "", location: "" });
-  const [redirectCountdown, setRedirectCountdown] = useState(5);
+  const [hasSignature, setHasSignature] = useState<boolean | null>(null);
 
   const user = session?.user as any;
   const todayStr = format(new Date(), "yyyy-MM-dd");
+
+  // Cek TTD saat mount
+  useEffect(() => {
+    fetch("/api/user/signature")
+      .then((r) => r.json())
+      .then((d) => setHasSignature(!!d.signatureUrl))
+      .catch(() => setHasSignature(false));
+  }, []);
 
   const categories = useMemo(
     () => ["Semua", ...Array.from(new Set(items.map((i) => i.category)))],
@@ -98,17 +108,6 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
 
   const currentIndex = STEPS.findIndex((s) => s.key === step);
   const cartTotal = cart.reduce((sum, c) => sum + c.quantity, 0);
-
-  // Countdown redirect ke upload setelah sukses
-  useEffect(() => {
-    if (step !== "success" || !result) return;
-    if (redirectCountdown <= 0) {
-      router.push(`/transactions/${result.transactionId}/upload`);
-      return;
-    }
-    const t = setTimeout(() => setRedirectCountdown((v) => v - 1), 1000);
-    return () => clearTimeout(t);
-  }, [step, result, redirectCountdown, router]);
 
   // Cart helpers
   const addToCart = (item: PublicItem) => {
@@ -170,16 +169,19 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        // Jika NIM belum diisi, arahkan ke halaman profil
         if (res.status === 422 && data.error === "NIM_REQUIRED") {
           toast("Lengkapi NIM/NIK di profil kamu sebelum meminjam", "error");
+          router.push("/dashboard/profil");
+          return;
+        }
+        if (res.status === 422 && data.error === "SIGNATURE_REQUIRED") {
+          toast("Upload tanda tangan elektronik di profil sebelum meminjam", "error");
           router.push("/dashboard/profil");
           return;
         }
         throw new Error(data.error || "Gagal mengirim permintaan");
       }
       setResult(data);
-      setRedirectCountdown(5);
       setStep("success");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Gagal mengirim permintaan", "error");
@@ -233,6 +235,19 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
       {/* ─── STEP 1: PILIH BARANG ─── */}
       {step === "item" && (
         <div className="animate-slide-in space-y-4">
+          {/* Gate: TTD belum diupload */}
+          {hasSignature === false && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+              <ShieldCheck className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-red-700">Tanda Tangan Elektronik Belum Ada</p>
+                <p className="text-xs text-red-600 mt-0.5">Kamu harus mengupload tanda tangan elektronik sebelum bisa mengajukan peminjaman.</p>
+                <Link href="/dashboard/profil" className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors">
+                  Upload TTD di Profil →
+                </Link>
+              </div>
+            </div>
+          )}
           {/* Search & Filter */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -313,7 +328,14 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
                   <p className="text-sm font-bold text-gray-900">{cart.length} barang dipilih</p>
                   <p className="text-xs text-gray-500">{cartTotal} unit total</p>
                 </div>
-                <button onClick={() => setStep("form")}
+                <button onClick={() => {
+                    if (!hasSignature) {
+                      toast("Upload tanda tangan elektronik di profil terlebih dahulu", "error");
+                      router.push("/dashboard/profil");
+                      return;
+                    }
+                    setStep("form");
+                  }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25">
                   Lanjut <ArrowRight className="w-4 h-4" />
                 </button>
@@ -428,9 +450,9 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
                     className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none" />
                 </div>
               </div>
-              <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl p-3.5">
-                <ShieldCheck className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-amber-800">Setelah submit, kamu akan diminta untuk <strong>mengupload dokumen</strong> formulir peminjaman yang sudah ditandatangani.</p>
+              <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-100 rounded-xl p-3.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-emerald-800">Tanda tangan elektronikmu akan otomatis disertakan dalam formulir PDF. Admin akan memproses setelah menerima permintaan.</p>
               </div>
             </div>
 
@@ -449,7 +471,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
         </div>
       )}
 
-      {/* ─── STEP 3: SUKSES + REDIRECT ─── */}
+      {/* ─── STEP 3: SUKSES ─── */}
       {step === "success" && result && (
         <div className="animate-slide-in max-w-lg mx-auto text-center space-y-6">
           <div className="relative inline-grid place-items-center">
@@ -463,64 +485,57 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-semibold mb-2">
               <PartyPopper className="w-3.5 h-3.5" /> Permintaan berhasil dibuat
             </div>
-            <h2 className="text-2xl font-extrabold text-gray-900">Peminjaman Diajukan!</h2>
-            <p className="text-sm text-gray-500 mt-2">
-              Kode: <span className="font-bold text-gray-800">{result.code}</span>
+            <h2 className="text-2xl font-extrabold text-gray-900 dark:text-slate-100">Peminjaman Diajukan!</h2>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-2">
+              Kode: <span className="font-bold text-gray-800 dark:text-slate-200">{result.code}</span>
             </p>
           </div>
 
           {/* Receipt */}
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden text-left">
+          <div className="bg-white dark:bg-[#162035] border border-gray-100 dark:border-[#1c2e48] rounded-2xl shadow-sm overflow-hidden text-left">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 flex items-center gap-2 text-white">
               <Receipt className="w-4 h-4" />
               <span className="text-sm font-semibold">Detail Peminjaman</span>
             </div>
             <div className="px-5 py-4 space-y-3">
               {result.items.map((item, i) => (
-                <div key={i} className="flex justify-between gap-4 py-2 border-b border-dashed border-gray-100 last:border-0">
-                  <span className="text-xs text-gray-600">{item.name}</span>
-                  <span className="text-xs font-semibold text-gray-900 shrink-0">×{item.quantity}</span>
+                <div key={i} className="flex justify-between gap-4 py-2 border-b border-dashed border-gray-100 dark:border-[#1c2e48] last:border-0">
+                  <span className="text-xs text-gray-600 dark:text-slate-400">{item.name}</span>
+                  <span className="text-xs font-semibold text-gray-900 dark:text-slate-200 shrink-0">×{item.quantity}</span>
                 </div>
               ))}
               <div className="flex justify-between pt-1">
-                <span className="text-xs text-gray-400">Peminjam</span>
-                <span className="text-sm font-semibold text-gray-900">{result.borrowerName}</span>
+                <span className="text-xs text-gray-400 dark:text-slate-500">Peminjam</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-slate-200">{result.borrowerName}</span>
               </div>
             </div>
           </div>
 
-          {/* Redirect notice */}
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-3">
-            <div className="flex items-center gap-2 text-amber-800">
-              <FileText className="w-5 h-5 text-amber-600 shrink-0" />
-              <p className="text-sm font-bold">Langkah Selanjutnya: Upload Dokumen</p>
+          {/* Info status & link PDF */}
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl p-5 space-y-3 text-left">
+            <div className="flex items-center gap-2 text-indigo-800 dark:text-indigo-300">
+              <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <p className="text-sm font-bold">Formulir PDF Sudah Dibuat</p>
             </div>
-            <p className="text-xs text-amber-700 leading-relaxed">
-              Download formulir, tanda tangani, lalu upload kembali. Peminjaman baru diproses setelah dokumen diterima.
+            <p className="text-xs text-indigo-700 dark:text-indigo-400 leading-relaxed">
+              Formulir peminjaman dengan tanda tangan elektronikmu sudah dibuat otomatis.
+              Admin akan memeriksa dan memproses permintaanmu.
             </p>
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-amber-600 font-medium">
-                Otomatis diarahkan dalam <span className="font-bold text-amber-800">{redirectCountdown}s</span>...
-              </p>
-              <button onClick={() => router.push(`/transactions/${result.transactionId}/upload`)}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl transition-colors">
-                <FileText className="w-3.5 h-3.5" /> Upload Sekarang
-              </button>
-            </div>
-            {/* Progress bar countdown */}
-            <div className="h-1.5 bg-amber-200 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500 rounded-full transition-all duration-1000"
-                style={{ width: `${(redirectCountdown / 5) * 100}%` }} />
-            </div>
+            {result.pdfUrl && (
+              <a href={result.pdfUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                <FileText className="w-4 h-4" /> Lihat / Download PDF
+              </a>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/dashboard/riwayat"
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200 transition-colors">
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors">
               <History className="w-4 h-4" /> Lihat Riwayat
             </Link>
             <button onClick={resetAll}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors">
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-[#162035] border border-gray-200 dark:border-[#1c2e48] text-gray-600 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-[#1c2e48] transition-colors">
               <RefreshCcw className="w-4 h-4" /> Pinjam Lagi
             </button>
           </div>

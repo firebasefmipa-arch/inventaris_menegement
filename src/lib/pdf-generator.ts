@@ -11,6 +11,7 @@ interface TransactionData {
   notes?: string;
   borrowDate: Date;
   returnDate: Date;
+  signatureUrl?: string | null;
   items: Array<{
     name: string;
     quantity: number;
@@ -119,7 +120,8 @@ function drawTableBottomLine(
 }
 
 // ── Gambar blok footer (tanda tangan + ketentuan) ──
-function drawFooter(
+async function drawFooter(
+  pdfDoc: PDFDocument,
   page: PDFPage,
   startY: number,
   borrowerName: string,
@@ -127,7 +129,8 @@ function drawFooter(
   font: PDFFont,
   boldFont: PDFFont,
   italicFont: PDFFont,
-  boldItalicFont: PDFFont
+  boldItalicFont: PDFFont,
+  signatureUrl?: string | null
 ) {
   const col1X = MARGIN_LEFT;
   const col2X = MARGIN_LEFT + 190;
@@ -140,7 +143,6 @@ function drawFooter(
     page.drawText(text, { x: colStart + (width - tw) / 2, y: yPos, size, font: f, color: rgb(0, 0, 0) });
   };
 
-  // Tanggal kembali & Yogyakarta
   page.drawText('Tanggal kembali:', { x: col1X, y, size: 10, font: boldFont, color: rgb(0, 0, 0) });
   page.drawText(`Yogyakarta, ${formatDate(borrowDate)}`, { x: col3X, y, size: 10, font, color: rgb(0, 0, 0) });
 
@@ -151,13 +153,40 @@ function drawFooter(
   centerText('Yang menyerahkan,', col2X, colW, font, 10, y);
   centerText('Peminjam,', col3X, colW, font, 10, y);
 
+  // Embed TTD gambar jika ada
+  if (signatureUrl) {
+    try {
+      const sigPath = path.join(process.cwd(), 'public', signatureUrl);
+      const sigBytes = await fs.readFile(sigPath);
+      const ext = path.extname(signatureUrl).toLowerCase();
+      let sigImg;
+      if (ext === '.png') {
+        sigImg = await pdfDoc.embedPng(sigBytes);
+      } else {
+        sigImg = await pdfDoc.embedJpg(sigBytes);
+      }
+      const sigDims = sigImg.scaleToFit(colW - 10, 55);
+      page.drawImage(sigImg, {
+        x: col3X + (colW - sigDims.width) / 2,
+        y: y - 60,
+        width: sigDims.width,
+        height: sigDims.height,
+      });
+    } catch { /* Jika gagal load TTD, biarkan kosong */ }
+  }
+
   y -= 70;
   page.drawLine({ start: { x: col1X, y: y + 12 }, end: { x: col1X + colW, y: y + 12 }, thickness: 0.5, color: rgb(0, 0, 0) });
   page.drawLine({ start: { x: col2X, y: y + 12 }, end: { x: col2X + colW, y: y + 12 }, thickness: 0.5, color: rgb(0, 0, 0) });
 
+  // Underline nama peminjam sesuai lebar teks
+  const nameTw = boldFont.widthOfTextAtSize(borrowerName, 10);
+  const nameX = col3X + (colW - nameTw) / 2;
+  page.drawLine({ start: { x: nameX, y: y + 12 }, end: { x: nameX + nameTw, y: y + 12 }, thickness: 0.5, color: rgb(0, 0, 0) });
+
   centerText('Penerima Barang Kembali', col1X, colW, boldFont, 9, y);
   centerText('Divisi Informasi Teknologi', col2X, colW, boldFont, 9, y);
-  centerText(borrowerName, col3X, colW, boldFont, 10, y);
+  page.drawText(borrowerName, { x: nameX, y, size: 10, font: boldFont, color: rgb(0, 0, 0) });
 
   y -= 30;
   page.drawText('Ketentuan Peminjaman:', { x: MARGIN_LEFT, y, size: 9, font: boldItalicFont, color: rgb(0, 0, 0) });
@@ -309,7 +338,7 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
   }
 
   // ── Footer (tanda tangan + ketentuan) ──
-  drawFooter(currentPage, y, data.borrowerName, data.borrowDate, font, boldFont, italicFont, boldItalicFont);
+  await drawFooter(pdfDoc, currentPage, y, data.borrowerName, data.borrowDate, font, boldFont, italicFont, boldItalicFont, data.signatureUrl);
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

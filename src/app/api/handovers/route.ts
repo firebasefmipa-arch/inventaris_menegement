@@ -80,9 +80,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
     const { cart, purpose, notes } = body;
@@ -95,31 +93,24 @@ export async function POST(req: NextRequest) {
     const phone        = (body.phone        || user.phone || "").trim();
     const location     = (body.location     || "").trim();
 
-    if (!receiverName || !department || !phone) {
-      return NextResponse.json(
-        { error: "Nama, divisi/prodi, dan nomor HP wajib diisi" },
-        { status: 400 }
-      );
-    }
-
-    if (!purpose?.trim()) {
-      return NextResponse.json(
-        { error: "Keperluan (kegiatan) wajib diisi" },
-        { status: 400 }
-      );
-    }
-
-    if (!cart || !Array.isArray(cart) || cart.length === 0) {
-      return NextResponse.json(
-        { error: "Pilih minimal satu barang" },
-        { status: 400 }
-      );
-    }
-
-    // Cek NIM
-    if (!receiverNim) {
+    if (!receiverName || !department || !phone)
+      return NextResponse.json({ error: "Nama, divisi/prodi, dan nomor HP wajib diisi" }, { status: 400 });
+    if (!purpose?.trim())
+      return NextResponse.json({ error: "Keperluan (kegiatan) wajib diisi" }, { status: 400 });
+    if (!cart || !Array.isArray(cart) || cart.length === 0)
+      return NextResponse.json({ error: "Pilih minimal satu barang" }, { status: 400 });
+    if (!receiverNim)
       return NextResponse.json({ error: "NIM_REQUIRED" }, { status: 422 });
-    }
+
+    // ── Cek TTD elektronik ──
+    const [userRow] = await db
+      .select({ signatureUrl: users.signatureUrl })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1);
+
+    if (!userRow?.signatureUrl)
+      return NextResponse.json({ error: "SIGNATURE_REQUIRED" }, { status: 422 });
 
     const cartItems = cart.map((c: any) => ({
       itemId: Number(c.itemId),
@@ -127,24 +118,18 @@ export async function POST(req: NextRequest) {
       notes: c.notes?.trim() || "",
     }));
 
-    const itemIds = cartItems.map((c) => c.itemId);
+    const itemIds = cartItems.map((c: any) => c.itemId);
     const dbItems = await db.select().from(items).where(inArray(items.id, itemIds));
     const itemMap = new Map(dbItems.map((i) => [i.id, i]));
 
     for (const c of cartItems) {
       const dbItem = itemMap.get(c.itemId);
-      if (!dbItem) {
-        return NextResponse.json({ error: `Barang ID ${c.itemId} tidak ditemukan` }, { status: 404 });
-      }
-      if (dbItem.availableQuantity < c.quantity) {
-        return NextResponse.json(
-          { error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` },
-          { status: 400 }
-        );
-      }
+      if (!dbItem) return NextResponse.json({ error: `Barang ID ${c.itemId} tidak ditemukan` }, { status: 404 });
+      if (dbItem.availableQuantity < c.quantity)
+        return NextResponse.json({ error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` }, { status: 400 });
     }
 
-    // Buat handover
+    // ── Buat handover dengan status pending_approval langsung ──
     const [{ id: hvId }] = await db
       .insert(handovers)
       .values({
@@ -157,21 +142,15 @@ export async function POST(req: NextRequest) {
         location: location || null,
         purpose: purpose.trim(),
         notes: notes?.trim() || null,
-        status: "pending_signature",
+        status: "pending_approval",
       })
       .$returningId();
 
-    // Insert handover_items
     await db.insert(handoverItems).values(
-      cartItems.map((c) => ({
-        handoverId: hvId,
-        itemId: c.itemId,
-        quantity: c.quantity,
-        notes: c.notes || null,
-      }))
+      cartItems.map((c: any) => ({ handoverId: hvId, itemId: c.itemId, quantity: c.quantity, notes: c.notes || null }))
     );
 
-    // Kurangi stok sementara (dikurangi permanen saat completed)
+    // ── Kurangi stok sementara ──
     for (const c of cartItems) {
       const dbItem = itemMap.get(c.itemId)!;
       const newAvailable = dbItem.availableQuantity - c.quantity;
@@ -182,10 +161,49 @@ export async function POST(req: NextRequest) {
       }).where(eq(items.id, dbItem.id));
     }
 
-    const itemNames = cartItems
-      .map((c) => `${itemMap.get(c.itemId)?.name} (×${c.quantity})`)
-      .filter(Boolean)
-      .join(", ");
+    // ── Generate PDF dengan TTD ──
+    const [hv] = await db.select().from(handovers).where(eq(handovers.id, hvId));
+    let pdfUrl: string | null = null;
+    try {
+      const { generateHandoverPDF } = await import("@/lib/handover-pdf-generator");
+      const { writeFile, mkdir } = await import("fs/promises");
+      const nodePath = await import("path");
+
+      const pdfBuffer = await generateHandoverPDF({
+        receiverName,
+        receiverNim,
+        unitName,
+        department,
+        phone,
+        location,
+        purpose: purpose.trim(),
+        notes: notes?.trim() || "",
+        handoverDate: hv.handoverDate,
+        signatureUrl: userRow.signatureUrl,
+        items: cartItems.map((c: any) => ({
+          name: itemMap.get(c.itemId)?.name || "Barang",
+          quantity: c.quantity,
+          assetNumber: itemMap.get(c.itemId)?.assetNumber ?? null,
+          inventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
+        })),
+      });
+
+      const receiverSafe = receiverName.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
+      const d = hv.handoverDate;
+      const dateStr = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
+      const filename = `${receiverSafe}_${dateStr}_${hvId}.pdf`;
+
+      const uploadDir = nodePath.default.join(process.cwd(), "public", "uploads", "pending");
+      await mkdir(uploadDir, { recursive: true });
+      await writeFile(nodePath.default.join(uploadDir, filename), pdfBuffer);
+
+      pdfUrl = `/uploads/pending/${filename}`;
+      await db.update(handovers).set({ signedDocumentUrl: pdfUrl }).where(eq(handovers.id, hvId));
+    } catch (pdfErr) {
+      console.error("PDF handover generate error:", pdfErr);
+    }
+
+    const itemNames = cartItems.map((c: any) => `${itemMap.get(c.itemId)?.name} (×${c.quantity})`).filter(Boolean).join(", ");
 
     return NextResponse.json({
       handoverId: hvId,
@@ -193,7 +211,8 @@ export async function POST(req: NextRequest) {
       receiverName,
       itemNames,
       totalItems: cartItems.length,
-      totalQuantity: cartItems.reduce((s, c) => s + c.quantity, 0),
+      totalQuantity: cartItems.reduce((s: number, c: any) => s + c.quantity, 0),
+      pdfUrl,
     }, { status: 201 });
 
   } catch (error) {

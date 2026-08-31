@@ -23,6 +23,7 @@ export async function GET() {
         department: users.department,
         image: users.image,
         status: users.status,
+        signatureUrl: users.signatureUrl,
       })
       .from(users)
       .where(eq(users.id, session.user.id))
