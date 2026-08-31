@@ -307,13 +307,13 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   currentPage.drawLine({ start: { x: col1X, y }, end: { x: col1X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
   currentPage.drawLine({ start: { x: col2X, y }, end: { x: col2X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
 
-  // Nama di bawah garis TTD
-  y -= 14;
+  // Nama penerima di BAWAH garis TTD kanan
   if (data.receiverName) {
+    const nameY = y - 14;
     const nameTw = boldFont.widthOfTextAtSize(data.receiverName, 10);
     currentPage.drawText(data.receiverName, {
       x: col2X + (colW - nameTw) / 2,
-      y,
+      y: nameY,
       size: 10,
       font: boldFont,
       color: rgb(0, 0, 0),
