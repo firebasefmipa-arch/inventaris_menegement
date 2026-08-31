@@ -301,7 +301,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   const menerimaTw = font.widthOfTextAtSize('Yang menerima,', 10);
   currentPage.drawText('Yang menerima,', { x: col2X + (colW - menerimaTw) / 2, y, size: 10, font, color: rgb(0, 0, 0) });
 
-  y -= 55;
+  y -= 45;
 
   // Nama penerima di ATAS garis TTD kanan (format dokumen resmi)
   if (data.receiverName) {
@@ -315,7 +315,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
     });
   }
 
-  y -= 18;
+  y -= 12;
 
   // Garis TTD
   currentPage.drawLine({ start: { x: col1X, y }, end: { x: col1X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
