@@ -301,24 +301,25 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   const menerimaTw = font.widthOfTextAtSize('Yang menerima,', 10);
   currentPage.drawText('Yang menerima,', { x: col2X + (colW - menerimaTw) / 2, y, size: 10, font, color: rgb(0, 0, 0) });
 
-  y -= 70;
+  y -= 55;
 
-  // Garis TTD
-  currentPage.drawLine({ start: { x: col1X, y }, end: { x: col1X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
-  currentPage.drawLine({ start: { x: col2X, y }, end: { x: col2X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
-
-  // Nama penerima di BAWAH garis TTD kanan
+  // Nama penerima di ATAS garis TTD kanan (format dokumen resmi)
   if (data.receiverName) {
-    const nameY = y - 14;
     const nameTw = boldFont.widthOfTextAtSize(data.receiverName, 10);
     currentPage.drawText(data.receiverName, {
       x: col2X + (colW - nameTw) / 2,
-      y: nameY,
+      y,
       size: 10,
       font: boldFont,
       color: rgb(0, 0, 0),
     });
   }
+
+  y -= 18;
+
+  // Garis TTD
+  currentPage.drawLine({ start: { x: col1X, y }, end: { x: col1X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
+  currentPage.drawLine({ start: { x: col2X, y }, end: { x: col2X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
