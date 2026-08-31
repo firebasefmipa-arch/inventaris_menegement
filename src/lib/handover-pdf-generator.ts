@@ -82,8 +82,8 @@ function drawTableRow(
   cells.forEach((cell, cIdx) => {
     const padding = 6;
     const textY = rowY - rowHeight / 2 - fontSize / 3;
-    // Center untuk kolom No (0) dan Jumlah (3)
-    if (cIdx === 0 || cIdx === 3) {
+    // Center untuk kolom No (0), No. Asset/No. Inventaris (2), dan Jumlah (3)
+    if (cIdx === 0 || cIdx === 2 || cIdx === 3) {
       const tw = font.widthOfTextAtSize(cell, fontSize);
       page.drawText(cell, { x: cellX + (colWidths[cIdx] - tw) / 2, y: textY, size: fontSize, font, color: rgb(0, 0, 0) });
     } else {
@@ -306,6 +306,19 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   // Garis TTD
   currentPage.drawLine({ start: { x: col1X, y }, end: { x: col1X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
   currentPage.drawLine({ start: { x: col2X, y }, end: { x: col2X + colW, y }, thickness: 0.8, color: rgb(0, 0, 0) });
+
+  // Nama di bawah garis TTD
+  y -= 14;
+  if (data.receiverName) {
+    const nameTw = boldFont.widthOfTextAtSize(data.receiverName, 10);
+    currentPage.drawText(data.receiverName, {
+      x: col2X + (colW - nameTw) / 2,
+      y,
+      size: 10,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+  }
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

@@ -95,19 +95,7 @@ export function ItemModal({ isOpen, onClose, existingCategories }: ItemModalProp
           setLoading(false);
           return;
         }
-
-        const isDuplicate = allCategories.some(
-          (c) => c.toLowerCase() === customCat.toLowerCase()
-        );
-
-        if (isDuplicate) {
-          toast(
-            "Kategori ini sudah ada. Silakan pilih dari daftar kategori di atas.",
-            "error"
-          );
-          setLoading(false);
-          return;
-        }
+        // Tidak perlu cek duplikat — biarkan user memakai nama apapun
       }
 
       if (!form.name) {

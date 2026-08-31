@@ -156,16 +156,39 @@ export default function EditItemPage() {
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             Kategori
           </label>
-          <select
+          <div className="flex flex-wrap gap-2 mb-2">
+            {CATEGORY_SUGGESTIONS.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setForm({ ...form, category: cat })}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                  form.category === cat
+                    ? "bg-indigo-50 border-indigo-300 text-indigo-700"
+                    : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+            {/* Tampilkan tombol untuk kategori existing yang tidak ada di CATEGORY_SUGGESTIONS */}
+            {form.category && !CATEGORY_SUGGESTIONS.includes(form.category) && (
+              <button
+                type="button"
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border bg-indigo-50 border-indigo-300 text-indigo-700"
+              >
+                {form.category}
+              </button>
+            )}
+          </div>
+          <input
+            type="text"
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
-            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 appearance-none"
-          >
-            <option value="" disabled>Pilih Kategori</option>
-            {CATEGORY_SUGGESTIONS.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+            placeholder="Pilih dari atas atau ketik kategori custom..."
+            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            required
+          />
         </div>
 
         {/* Spesifikasi */}
