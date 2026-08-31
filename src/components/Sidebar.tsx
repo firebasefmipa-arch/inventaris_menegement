@@ -172,7 +172,7 @@ export function Sidebar() {
         </nav>
 
         {/* Footer — fixed height, tidak overflow */}
-        <div className="shrink-0 p-3 space-y-2 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-900">
+        <div className="shrink-0 p-3 pb-6 space-y-2 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-900">
           {/* Role badge ringkas */}
           {role === "super_admin" && (
             <div className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl px-3 py-2 flex items-center gap-2">
