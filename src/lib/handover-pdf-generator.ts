@@ -301,7 +301,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   const menerimaTw = font.widthOfTextAtSize('Yang menerima,', 10);
   currentPage.drawText('Yang menerima,', { x: col2X + (colW - menerimaTw) / 2, y, size: 10, font, color: rgb(0, 0, 0) });
 
-  y -= 45;
+  y -= 65;
 
   // Nama penerima dengan underline pendek (sesuai lebar nama)
   if (data.receiverName) {
