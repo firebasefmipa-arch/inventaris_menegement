@@ -1,29 +1,30 @@
-# Panduan Deploy — Sistem Peminjaman Barang FMIPA UII
+# Panduan Deploy — Manajemen Inventaris FMIPA UII
 
-> Panduan ini berdasarkan pengalaman deploy nyata. Ikuti urutan dengan benar.
+> Panduan ini berdasarkan pengalaman deploy nyata di server produksi.
+> Ikuti urutannya — jangan loncat langkah.
 
 ---
 
-## Prasyarat
+## Yang Kamu Butuhkan Sebelum Mulai
 
-- Ubuntu Server (20.04 / 22.04)
-- Akses root atau sudo
+- Server Ubuntu 20.04 / 22.04 dengan akses root
 - Domain yang sudah diarahkan ke Cloudflare
-- Google Cloud Console project dengan OAuth 2.0 credentials
+- Akun Google Cloud dengan project yang sudah dibuat
+- Sekitar 30–60 menit waktu
 
 ---
 
-## 1. Install Dependencies di Server
+## Langkah 1 — Install Software di Server
 
 ```bash
-# Update sistem
+# Update sistem dulu
 sudo apt update && sudo apt upgrade -y
 
-# Install Node.js 20
+# Install Node.js versi 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Install PM2 secara global
+# Install PM2 (untuk menjalankan aplikasi di background)
 sudo npm install -g pm2
 
 # Install MySQL
@@ -33,7 +34,7 @@ sudo mysql_secure_installation
 
 ---
 
-## 2. Setup Database
+## Langkah 2 — Buat Database MySQL
 
 ```bash
 sudo mysql -u root -p
@@ -43,42 +44,30 @@ sudo mysql -u root -p
 -- Buat database
 CREATE DATABASE modern_lending CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- Buat user khusus aplikasi (lebih aman dari root)
+-- Buat user khusus aplikasi (lebih aman dari pakai root)
 CREATE USER 'appuser'@'localhost' IDENTIFIED BY 'password-kuat-disini';
 GRANT ALL PRIVILEGES ON modern_lending.* TO 'appuser'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
-### Fix Foreign Key CASCADE (wajib dijalankan sekali)
+### Import Struktur Tabel
 
-Ini mencegah orphan data di tabel `account` dan `session` saat user dihapus:
+Setelah clone repo (langkah 3), jalankan:
 
 ```bash
-sudo mysql -u root -p modern_lending
+mysql -u appuser -p modern_lending < database/schema_only.sql
 ```
 
-```sql
--- Cek nama FK yang ada dulu
-SHOW CREATE TABLE account;
-SHOW CREATE TABLE session;
+Atau pakai Drizzle (lebih mudah, otomatis sinkron dengan schema terbaru):
 
--- Drop FK lama lalu buat ulang dengan CASCADE
-ALTER TABLE account DROP FOREIGN KEY account_userId_user_id_fk;
-ALTER TABLE session DROP FOREIGN KEY session_userId_user_id_fk;
-
-ALTER TABLE account ADD CONSTRAINT account_userId_user_id_fk
-  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE;
-
-ALTER TABLE session ADD CONSTRAINT session_userId_user_id_fk
-  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE;
-
-EXIT;
+```bash
+npx drizzle-kit push
 ```
 
 ---
 
-## 3. Clone Repo dan Install
+## Langkah 3 — Clone dan Install Aplikasi
 
 ```bash
 cd /var/www
@@ -90,130 +79,119 @@ npm install
 
 ---
 
-## 4. Buat File .env.local
+## Langkah 4 — Buat File Konfigurasi (.env.local)
 
 ```bash
 nano /var/www/inventaris_menegement/.env.local
 ```
 
-Isi:
+Isi dengan nilai yang sesuai:
 
 ```env
 DATABASE_URL=mysql://appuser:password-kuat-disini@127.0.0.1:3306/modern_lending
 NEXTAUTH_URL=https://domain-kamu.com
-NEXTAUTH_SECRET=isi-hasil-perintah-openssl-dibawah
-ENCRYPTION_KEY=isi-hasil-perintah-openssl-hex-dibawah
-GOOGLE_CLIENT_ID=dari-google-cloud-console
-GOOGLE_CLIENT_SECRET=dari-google-cloud-console
+NEXTAUTH_SECRET=
+ENCRYPTION_KEY=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 ```
 
-Generate `NEXTAUTH_SECRET`:
+**Cara generate nilai yang dibutuhkan:**
 
 ```bash
+# NEXTAUTH_SECRET
 openssl rand -base64 32
-```
 
-Generate `ENCRYPTION_KEY` (wajib — untuk enkripsi password akun native):
-
-```bash
+# ENCRYPTION_KEY (untuk enkripsi password akun native)
 openssl rand -hex 32
 ```
 
+`GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET` diambil dari Google Cloud Console
+(lihat Langkah 9).
+
 ---
 
-## 5. Import Schema Database
+## Langkah 5 — Sinkronisasi Schema Database
+
+Cara paling mudah — biarkan Drizzle yang handle:
 
 ```bash
-# Import schema utama
-mysql -u appuser -p modern_lending < database/schema_only.sql
-
-# Migrasi kolom tambahan (jalankan semuanya sekaligus)
-mysql -u appuser -p modern_lending -e "
-  ALTER TABLE user ADD COLUMN IF NOT EXISTS nim varchar(50) DEFAULT NULL AFTER phone;
-  ALTER TABLE transactions ADD COLUMN IF NOT EXISTS borrower_nim varchar(50) DEFAULT NULL AFTER borrower_department;
-  ALTER TABLE transactions ADD COLUMN IF NOT EXISTS borrower_location varchar(255) DEFAULT NULL AFTER borrower_nim;
-  ALTER TABLE transactions ADD COLUMN IF NOT EXISTS purpose TEXT DEFAULT NULL AFTER notes;
-  ALTER TABLE account MODIFY COLUMN access_token TEXT;
-  ALTER TABLE account MODIFY COLUMN id_token TEXT;
-  ALTER TABLE account MODIFY COLUMN refresh_token TEXT;
-"
-
-# Migrasi kolom plain_password untuk akun native
-mysql -u appuser -p modern_lending -e "
-  ALTER TABLE user ADD COLUMN IF NOT EXISTS plain_password varchar(255) DEFAULT NULL AFTER password;
-"
-
-# Migrasi tabel serah terima (handovers)
-mysql -u appuser -p modern_lending -e "
-  CREATE TABLE IF NOT EXISTS handovers (
-    id int(11) NOT NULL AUTO_INCREMENT,
-    user_id varchar(255) DEFAULT NULL,
-    receiver_name varchar(255) NOT NULL,
-    receiver_nim varchar(50) DEFAULT NULL,
-    unit_name varchar(255) DEFAULT NULL,
-    department varchar(100) DEFAULT NULL,
-    phone varchar(50) DEFAULT NULL,
-    purpose text DEFAULT NULL,
-    notes text DEFAULT NULL,
-    signed_document_url varchar(500) DEFAULT NULL,
-    status enum('pending_signature','pending_approval','completed','rejected') NOT NULL DEFAULT 'pending_signature',
-    rejection_reason text DEFAULT NULL,
-    handover_date timestamp NOT NULL DEFAULT current_timestamp(),
-    created_at timestamp NOT NULL DEFAULT current_timestamp(),
-    PRIMARY KEY (id),
-    CONSTRAINT handovers_user_id_fk FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE SET NULL
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-  CREATE TABLE IF NOT EXISTS handover_items (
-    id int(11) NOT NULL AUTO_INCREMENT,
-    handover_id int(11) NOT NULL,
-    item_id int(11) NOT NULL,
-    quantity int(11) NOT NULL DEFAULT 1,
-    notes text DEFAULT NULL,
-    PRIMARY KEY (id),
-    CONSTRAINT hi_handover_id_fk FOREIGN KEY (handover_id) REFERENCES handovers(id) ON DELETE CASCADE,
-    CONSTRAINT hi_item_id_fk FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-"
+npx drizzle-kit push
 ```
+
+Drizzle akan membaca `src/db/schema.ts` dan membuat semua tabel yang dibutuhkan
+secara otomatis. Tidak perlu jalankan SQL manual.
+
+> Kalau MySQL tidak jalan di lokal dan kamu ingin import manual:
+> ```bash
+> mysql -u appuser -p modern_lending < database/schema_only.sql
+> ```
 
 ---
 
-## 6. Buat Akun Superadmin
+## Langkah 6 — Buat Akun Superadmin
 
 ```bash
 npm run setup:superadmin
 ```
 
-Ikuti prompt — isi nama, email, dan password superadmin.
+Ikuti instruksi yang muncul — isi nama, email, dan password.
 
 ---
 
-## 7. Buat Folder Upload
+## Langkah 7 — Buat Folder untuk File Upload
 
 ```bash
 mkdir -p /var/www/inventaris_menegement/public/uploads/signed_forms
 mkdir -p /var/www/inventaris_menegement/public/uploads/handovers
+mkdir -p /var/www/inventaris_menegement/public/uploads/pending
+mkdir -p /var/www/inventaris_menegement/public/uploads/signatures
 chmod -R 755 /var/www/inventaris_menegement/public/uploads/
 ```
 
 ---
 
-## 8. Build dan Jalankan dengan PM2
+## Langkah 8 — Build dan Jalankan Aplikasi
 
 ```bash
 npm run build
 
+# Jalankan dengan PM2
 pm2 start npm --name "pinjam-app" -- start
 pm2 save
 
-# Auto-start setelah reboot — copy-paste perintah yang muncul
+# Agar aplikasi otomatis jalan setelah server reboot
 pm2 startup
+# Jalankan perintah yang muncul dari output pm2 startup
 ```
 
 ---
 
-## 9. Konfigurasi Nginx
+## Langkah 9 — Setup Google OAuth
+
+Buka [console.cloud.google.com](https://console.cloud.google.com):
+
+1. Pilih project kamu (atau buat baru)
+2. Pergi ke **APIs & Services → Credentials**
+3. Klik **Create Credentials → OAuth 2.0 Client ID**
+4. Pilih **Web application**
+5. Tambahkan:
+
+**Authorized JavaScript origins:**
+```
+https://domain-kamu.com
+```
+
+**Authorized redirect URIs:**
+```
+https://domain-kamu.com/api/auth/callback/google
+```
+
+6. Salin `Client ID` dan `Client Secret` ke `.env.local`
+
+---
+
+## Langkah 10 — Setup Nginx (Reverse Proxy)
 
 ```bash
 sudo nano /etc/nginx/sites-available/pinjam-app
@@ -224,36 +202,18 @@ server {
     listen 80;
     server_name domain-kamu.com;
 
+    # Batas ukuran file upload (sesuai dengan limit di aplikasi)
     client_max_body_size 10M;
 
-    # ── Rate limiting untuk endpoint login (cegah brute force) ──
-    # Definisikan zone di http block nginx.conf, bukan di sini
-    # Lihat catatan di bawah untuk konfigurasi http block
-
-    # Serve file upload langsung via Nginx (tidak lewat Next.js)
-    # Ini penting agar file yang diupload tidak hilang setelah npm run build
+    # File upload dilayani langsung oleh Nginx — lebih cepat dan
+    # tidak hilang setelah npm run build
     location /uploads/ {
         alias /var/www/inventaris_menegement/public/uploads/;
         expires 7d;
         add_header Cache-Control "public";
     }
 
-    # Rate limit endpoint auth (login)
-    location /api/auth/ {
-        limit_req zone=login burst=10 nodelay;
-        limit_req_status 429;
-
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-
+    # Semua request lain diteruskan ke aplikasi Next.js
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -268,15 +228,6 @@ server {
 }
 ```
 
-> **Tambahkan rate limit zone di `/etc/nginx/nginx.conf`** dalam block `http { ... }`:
-> ```nginx
-> http {
->     # Rate limiting — max 5 request/menit per IP untuk login
->     limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
->     ...
-> }
-> ```
-
 ```bash
 sudo ln -s /etc/nginx/sites-available/pinjam-app /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
@@ -284,19 +235,18 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-## 10. Setup Cloudflare Tunnel
+## Langkah 11 — Setup Cloudflare Tunnel (agar bisa diakses via domain)
 
 ```bash
-# Install cloudflared
+# Download dan install cloudflared
 curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
 sudo dpkg -i cloudflared.deb
 
-# Login ke Cloudflare (akan muncul URL, buka di browser)
+# Login (akan muncul link, buka di browser)
 cloudflared tunnel login
 
-# Buat tunnel
+# Buat tunnel — catat Tunnel ID yang muncul
 cloudflared tunnel create pinjam-app
-# Catat Tunnel ID yang muncul
 ```
 
 ```bash
@@ -314,54 +264,34 @@ ingress:
 ```
 
 ```bash
-# Arahkan DNS domain ke tunnel
+# Hubungkan domain ke tunnel
 cloudflared tunnel route dns pinjam-app domain-kamu.com
 
-# Jalankan tunnel via PM2
+# Jalankan tunnel via PM2 supaya auto-restart
 pm2 start "cloudflared tunnel run pinjam-app" --name "cf-tunnel"
 pm2 save
 ```
 
 ---
 
-## 11. Update Google Cloud Console
-
-Buka [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → OAuth 2.0 Client ID.
-
-Tambahkan:
-
-**Authorized JavaScript origins:**
-```
-https://domain-kamu.com
-```
-
-**Authorized redirect URIs:**
-```
-https://domain-kamu.com/api/auth/callback/google
-```
-
----
-
-## 12. Verifikasi Deployment
-
-Cek semua proses berjalan:
+## Langkah 12 — Cek Semua Berjalan Normal
 
 ```bash
 pm2 status
 ```
 
-Output yang diharapkan:
+Kalau berhasil, tampilannya seperti ini:
 
 ```
-┌─────┬───────────────┬─────────┬──────┬──────────┐
-│ id  │ name          │ status  │ ↺    │ cpu/mem  │
-├─────┼───────────────┼─────────┼──────┼──────────┤
-│ 0   │ cf-tunnel     │ online  │ 0    │ ...      │
-│ 1   │ pinjam-app    │ online  │ 0    │ ...      │
-└─────┴───────────────┴─────────┴──────┴──────────┘
+┌────┬───────────────┬─────────┬──────┐
+│ id │ name          │ status  │ ↺    │
+├────┼───────────────┼─────────┼──────┤
+│ 0  │ cf-tunnel     │ online  │ 0    │
+│ 1  │ pinjam-app    │ online  │ 0    │
+└────┴───────────────┴─────────┴──────┘
 ```
 
-Cek log jika ada masalah:
+Kalau ada error, cek log:
 
 ```bash
 pm2 logs pinjam-app --lines 50
@@ -369,38 +299,36 @@ pm2 logs pinjam-app --lines 50
 
 ---
 
-## Update Aplikasi (Deploy Berikutnya)
+## Update Aplikasi (Setelah Ada Perubahan Baru)
 
 ```bash
 cd /var/www/inventaris_menegement
 
 git pull
-npm install        # hanya jika ada perubahan di package.json
 npm run build
 pm2 restart pinjam-app
 ```
 
-Jika ada perubahan schema database, jalankan ALTER TABLE yang sesuai **sebelum** `npm run build`.
+Jalankan `npm install` hanya jika ada perubahan di `package.json`.
+
+Jika ada perubahan schema database, jalankan `npx drizzle-kit push` sebelum build.
 
 ---
 
 ## Troubleshooting
 
-### Login Google tidak bisa / OAuthAccountNotLinked
+### Login Google tidak bisa
+
+Pastikan URL di Google Cloud Console sudah sesuai dengan domain yang dipakai.
+
+### File yang diupload tidak muncul (404)
 
 ```bash
-mysql -u appuser -p modern_lending -e "
-  DELETE FROM account WHERE userId NOT IN (SELECT id FROM user);
-  DELETE FROM session WHERE userId NOT IN (SELECT id FROM user);
-"
-```
+# Pastikan folder ada
+ls /var/www/inventaris_menegement/public/uploads/
 
-### File upload 404
-
-Pastikan folder ada dan Nginx sudah dikonfigurasi dengan `location /uploads/`:
-
-```bash
-ls /var/www/inventaris_menegement/public/uploads/signed_forms/
+# Pastikan Nginx dikonfigurasi dengan location /uploads/
+sudo nginx -t
 ```
 
 ### Aplikasi error 500
@@ -409,16 +337,18 @@ ls /var/www/inventaris_menegement/public/uploads/signed_forms/
 pm2 logs pinjam-app --lines 100
 ```
 
-### Superadmin terhapus tidak sengaja
+### Akun superadmin terhapus
 
 ```bash
 npm run setup:superadmin
 ```
 
-### Database connection refused
-
-Pastikan `DATABASE_URL` di `.env.local` sudah benar dan MySQL berjalan:
+### Database tidak bisa diakses
 
 ```bash
+# Cek MySQL berjalan
 sudo systemctl status mysql
+
+# Cek koneksi dengan DATABASE_URL di .env.local
+cat /var/www/inventaris_menegement/.env.local
 ```
