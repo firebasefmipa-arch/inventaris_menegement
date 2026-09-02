@@ -125,8 +125,16 @@ export function Sidebar() {
       >
         {/* Logo header desktop */}
         <div className="hidden lg:flex flex-col items-start gap-1 px-4 py-3 border-b border-gray-100 dark:border-slate-700/50 shrink-0">
-          <div className="w-full bg-white dark:bg-white/90 rounded-xl px-3 py-1.5 shadow-sm">
-            <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={180} height={50} className="object-contain w-full" style={{ maxHeight: 48 }} />
+          <div className="w-full rounded-xl px-3 py-1.5 bg-white dark:bg-transparent">
+            <Image
+              src={theme === "dark" ? "/fmipa-logo-kuning.png" : "/fmipa-logo.png"}
+              alt="Logo FMIPA"
+              width={180}
+              height={50}
+              className="object-contain w-full"
+              style={{ maxHeight: 48 }}
+            />
+          </div>
           </div>
           <h1 className="font-bold text-sm text-gray-900 dark:text-slate-100 leading-tight mt-1.5">Manajemen Inventaris</h1>
           <p className="text-xs text-gray-500 dark:text-slate-400">Peminjaman & Serah Terima</p>

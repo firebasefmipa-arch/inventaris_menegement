@@ -72,8 +72,16 @@ export function UserSidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="hidden lg:flex flex-col items-start gap-1 px-4 py-4 border-b border-gray-100 dark:border-slate-700/50">
-        <div className="w-full bg-white dark:bg-white/90 rounded-xl px-3 py-2 shadow-sm">
-          <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={180} height={60} className="object-contain w-full" style={{ maxHeight: 56 }} />
+        <div className="w-full rounded-xl px-3 py-2 bg-white dark:bg-transparent">
+          <Image
+            src={theme === "dark" ? "/fmipa-logo-kuning.png" : "/fmipa-logo.png"}
+            alt="Logo FMIPA"
+            width={180}
+            height={60}
+            className="object-contain w-full"
+            style={{ maxHeight: 56 }}
+          />
+        </div>
         </div>
         <h1 className="font-bold text-base text-gray-900 dark:text-slate-100 leading-tight mt-2">Manajemen Inventaris</h1>
         <p className="text-sm text-gray-500 dark:text-slate-400">Peminjaman & Serah Terima</p>
