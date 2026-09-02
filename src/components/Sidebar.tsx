@@ -135,7 +135,6 @@ export function Sidebar() {
               style={{ maxHeight: 48 }}
             />
           </div>
-          </div>
           <h1 className="font-bold text-sm text-gray-900 dark:text-slate-100 leading-tight mt-1.5">Manajemen Inventaris</h1>
           <p className="text-xs text-gray-500 dark:text-slate-400">Peminjaman & Serah Terima</p>
         </div>

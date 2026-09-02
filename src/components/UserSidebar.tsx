@@ -82,7 +82,6 @@ export function UserSidebar() {
             style={{ maxHeight: 56 }}
           />
         </div>
-        </div>
         <h1 className="font-bold text-base text-gray-900 dark:text-slate-100 leading-tight mt-2">Manajemen Inventaris</h1>
         <p className="text-sm text-gray-500 dark:text-slate-400">Peminjaman & Serah Terima</p>
       </div>
