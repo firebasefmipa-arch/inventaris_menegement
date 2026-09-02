@@ -30,7 +30,6 @@ const navItems = [
   { href: "/admin/items", label: "Daftar Barang", icon: Package },
   { href: "/admin/transactions", label: "Peminjaman", icon: ArrowLeftRight },
   { href: "/admin/handovers", label: "Serah Terima", icon: ClipboardCheck },
-  { href: "/admin/documents", label: "Dokumen", icon: FileArchive },
   { href: "/admin/users", label: "Daftar Pengguna", icon: Users },
 ];
 
@@ -138,7 +137,7 @@ export function Sidebar() {
 
         {/* Navigation — scrollable */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
-          {navItems.map((item) => {
+          {[...navItems, ...(role === "super_admin" ? [{ href: "/admin/documents", label: "Dokumen", icon: FileArchive }] : [])].map((item) => {
             const bestMatch = navItems.reduce((best, nav) => {
               if (pathname === nav.href || pathname.startsWith(nav.href + "/")) {
                 if (!best || nav.href.length > best.href.length) return nav;
