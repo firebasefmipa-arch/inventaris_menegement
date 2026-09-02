@@ -73,18 +73,12 @@ export async function proxy(req: NextRequest) {
   return NextResponse.next();
 }
 
-// Matcher harus menyertakan basePath jika ada
-const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
+// Matcher static — Next.js otomatis strip basePath sebelum matching
+// jadi tidak perlu prefix /inventaris di sini
 export const config = {
-  matcher: BASE
-    ? [
-        `${BASE}/admin/:path*`,
-        `${BASE}/dashboard/:path*`,
-        `${BASE}/register/complete/:path*`,
-      ]
-    : [
-        "/admin/:path*",
-        "/dashboard/:path*",
-        "/register/complete/:path*",
-      ],
+  matcher: [
+    "/admin/:path*",
+    "/dashboard/:path*",
+    "/register/complete/:path*",
+  ],
 };
