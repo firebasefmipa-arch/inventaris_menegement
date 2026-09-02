@@ -14,6 +14,7 @@ import { id as idLocale } from "date-fns/locale";
 import { useToast } from "@/components/Toaster";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { withBase } from "@/lib/basepath";
 
 type PublicItem = {
   id: number;
@@ -522,7 +523,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
               Admin akan memeriksa dan memproses permintaanmu.
             </p>
             {result.pdfUrl && (
-              <a href={result.pdfUrl} target="_blank" rel="noopener noreferrer"
+              <a href={withBase(result.pdfUrl)} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors">
                 <FileText className="w-4 h-4" /> Lihat / Download PDF
               </a>

@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ShieldCheck, User, Lock, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import clsx from "clsx";
 
 function AdminLoginForm() {
@@ -154,9 +155,9 @@ function AdminLoginForm() {
         {/* Footer note */}
         <p className="text-center text-xs text-gray-600 mt-6">
           Halaman ini khusus untuk Admin.{" "}
-          <a href="/login" className="text-gray-500 hover:text-gray-400 underline transition-colors">
+          <Link href="/login" className="text-gray-500 hover:text-gray-400 underline transition-colors">
             Login sebagai user biasa
-          </a>
+          </Link>
         </p>
       </div>
     </div>

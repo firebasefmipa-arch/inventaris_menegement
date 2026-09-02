@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { withBase } from "@/lib/basepath";
 import {
   FileText, Download, RefreshCcw, FolderOpen,
   FileArchive, AlertCircle, HardDrive,
@@ -495,11 +496,11 @@ export default function DocumentsPage() {
 
                   {/* Aksi */}
                   <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <a href={file.url} target="_blank" rel="noreferrer"
+                    <a href={withBase(file.url)} target="_blank" rel="noreferrer"
                       className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Lihat">
                       <Eye className="w-3.5 h-3.5" />
                     </a>
-                    <a href={file.url} download
+                    <a href={withBase(file.url)} download
                       className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Download">
                       <Download className="w-3.5 h-3.5" />
                     </a>

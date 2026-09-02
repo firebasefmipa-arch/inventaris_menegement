@@ -9,7 +9,9 @@ export const transporter = nodemailer.createTransport({
 });
 
 export async function sendVerificationEmail(email: string, token: string) {
-  const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify?token=${token}&email=${encodeURIComponent(email)}`;
+  const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  const verificationUrl = `${base}${basePath}/verify?token=${token}&email=${encodeURIComponent(email)}`;
   
   const mailOptions = {
     from: `"Lending Platform" <${process.env.SMTP_EMAIL}>`,

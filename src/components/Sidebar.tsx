@@ -22,6 +22,7 @@ import {
 import { signOut, useSession } from "next-auth/react";
 import { useToast } from "./Toaster";
 import { useTheme } from "./ThemeProvider";
+import { bp } from "@/lib/basepath";
 import clsx from "clsx";
 
 const navItems = [
@@ -44,7 +45,7 @@ export function Sidebar() {
 
   const handleLogout = async () => {
     try {
-      await signOut({ redirectTo: "/admin/login" });
+      await signOut({ redirectTo: bp("/admin/login") });
     } catch {
       toast("Gagal logout", "error");
     }

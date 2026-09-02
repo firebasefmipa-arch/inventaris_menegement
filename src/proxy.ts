@@ -1,22 +1,29 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { bp } from "@/lib/basepath";
 
 export async function proxy(req: NextRequest) {
   const { nextUrl } = req;
   const pathname = nextUrl.pathname;
 
-  const isAdminLogin = pathname === "/admin/login";
-  const isAdminRoute = pathname.startsWith("/admin") && !isAdminLogin;
-  const isUserDashboard = pathname.startsWith("/dashboard");
-  const isCompleteProfile = pathname.startsWith("/register/complete");
+  // Strip basePath dari pathname agar logic di bawah tetap berjalan
+  // dengan path relatif (tanpa prefix /inventaris)
+  const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
+  const strippedPath = BASE && pathname.startsWith(BASE)
+    ? pathname.slice(BASE.length) || "/"
+    : pathname;
+
+  const isAdminLogin     = strippedPath === "/admin/login";
+  const isAdminRoute     = strippedPath.startsWith("/admin") && !isAdminLogin;
+  const isUserDashboard  = strippedPath.startsWith("/dashboard");
+  const isCompleteProfile = strippedPath.startsWith("/register/complete");
 
   const isHttps = process.env.NEXTAUTH_URL?.startsWith("https://");
 
   const token = await getToken({
     req,
     secret: process.env.NEXTAUTH_SECRET,
-    // Di production dengan HTTPS, NextAuth pakai cookie __Secure- prefix
     secureCookie: isHttps,
     cookieName: isHttps
       ? "__Secure-authjs.session-token"
@@ -29,7 +36,7 @@ export async function proxy(req: NextRequest) {
   // ── /admin/login: sudah login sbg admin → ke /admin ──
   if (isAdminLogin) {
     if (isLoggedIn && (role === "super_admin" || role === "admin")) {
-      return NextResponse.redirect(new URL("/admin", nextUrl.origin));
+      return NextResponse.redirect(new URL(bp("/admin"), nextUrl.origin));
     }
     return NextResponse.next();
   }
@@ -37,14 +44,13 @@ export async function proxy(req: NextRequest) {
   // ── /admin/*: wajib admin/super_admin ──
   if (isAdminRoute) {
     if (!isLoggedIn) {
-      const url = new URL("/admin/login", nextUrl.origin);
+      const url = new URL(bp("/admin/login"), nextUrl.origin);
       url.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(url);
     }
     if (role !== "admin" && role !== "super_admin") {
-      return NextResponse.redirect(new URL("/dashboard", nextUrl.origin));
+      return NextResponse.redirect(new URL(bp("/dashboard"), nextUrl.origin));
     }
-    // Tambahkan header agar browser tidak cache halaman admin
     const response = NextResponse.next();
     response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
     response.headers.set("Pragma", "no-cache");
@@ -54,23 +60,31 @@ export async function proxy(req: NextRequest) {
   // ── /dashboard/*: wajib login ──
   if (isUserDashboard) {
     if (!isLoggedIn) {
-      const url = new URL("/login", nextUrl.origin);
+      const url = new URL(bp("/login"), nextUrl.origin);
       url.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(url);
     }
     const profileComplete = token?.phone && token?.department;
     if (!profileComplete && !isCompleteProfile) {
-      return NextResponse.redirect(new URL("/register/complete", nextUrl.origin));
+      return NextResponse.redirect(new URL(bp("/register/complete"), nextUrl.origin));
     }
   }
 
   return NextResponse.next();
 }
 
+// Matcher harus menyertakan basePath jika ada
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/dashboard/:path*",
-    "/register/complete/:path*",
-  ],
+  matcher: BASE
+    ? [
+        `${BASE}/admin/:path*`,
+        `${BASE}/dashboard/:path*`,
+        `${BASE}/register/complete/:path*`,
+      ]
+    : [
+        "/admin/:path*",
+        "/dashboard/:path*",
+        "/register/complete/:path*",
+      ],
 };

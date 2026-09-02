@@ -6,6 +6,7 @@ import { Package, ArrowLeft, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/components/Toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { bp } from "@/lib/basepath";
 import clsx from "clsx";
 
 function LoginForm() {
@@ -21,7 +22,7 @@ function LoginForm() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard/pinjam";
+  const callbackUrl = searchParams.get("callbackUrl") || bp("/dashboard/pinjam");
 
   // Jika sudah login, redirect sesuai role
   useEffect(() => {
@@ -49,7 +50,7 @@ function LoginForm() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/auth/callback" });
+      await signIn("google", { callbackUrl: bp("/auth/callback") });
     } catch {
       toast("Gagal login dengan Google", "error");
       setLoading(false);

@@ -6,6 +6,7 @@ import { db } from "@/db"
 import { users, accounts, sessions, verificationTokens } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import bcrypt from "bcryptjs"
+import { bp } from "@/lib/basepath"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -154,19 +155,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async redirect({ url, baseUrl }) {
       // Setelah Google OAuth, selalu arahkan ke /auth/callback untuk routing berdasarkan role
       if (url.startsWith(baseUrl)) {
-        // Jika sudah ke halaman spesifik (bukan default), biarkan
         if (url.includes("/auth/callback") || url.includes("/dashboard") || url.includes("/admin") || url.includes("/register")) {
           return url
         }
-        // Default redirect ke /auth/callback
-        return `${baseUrl}/auth/callback`
+        return `${baseUrl}${bp("/auth/callback")}`
       }
-      // URL eksternal — arahkan ke callback
-      return `${baseUrl}/auth/callback`
+      return `${baseUrl}${bp("/auth/callback")}`
     },
   },
   pages: {
-    signIn: "/login",
-    error: "/login",
+    signIn: bp("/login"),
+    error: bp("/login"),
   },
 })

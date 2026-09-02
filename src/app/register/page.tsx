@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { Package, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { bp } from "@/lib/basepath";
 import clsx from "clsx";
 
 export default function RegisterPage() {
@@ -12,7 +13,7 @@ export default function RegisterPage() {
   const handleGoogleRegister = async () => {
     setLoading(true);
     // callbackUrl will redirect them to complete their registration
-    await signIn("google", { callbackUrl: "/register/complete" });
+    await signIn("google", { callbackUrl: bp("/register/complete") });
   };
 
   return (

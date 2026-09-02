@@ -6,6 +6,7 @@ import { User, Mail, Phone, Building2, CheckCircle, PenLine, X, Hash, ImageIcon,
 import { useToast } from "@/components/Toaster";
 import { completeRegistration } from "./actions";
 import { useSession, signOut } from "next-auth/react";
+import { bp } from "@/lib/basepath";
 import clsx from "clsx";
 
 const DIVISI_OPTIONS = [
@@ -58,7 +59,7 @@ export default function CompleteRegistrationForm({ initialName, email }: { initi
   const handleCancel = async () => {
     if (!confirm("Yakin ingin membatalkan pendaftaran? Kamu akan keluar dari akun.")) return;
     setCancelling(true);
-    await signOut({ callbackUrl: "/" });
+    await signOut({ callbackUrl: bp("/") });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

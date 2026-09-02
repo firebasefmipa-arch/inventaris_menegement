@@ -12,6 +12,7 @@ import {
 import { signOut, useSession } from "next-auth/react";
 import { useToast } from "./Toaster";
 import { useTheme } from "./ThemeProvider";
+import { bp } from "@/lib/basepath";
 import clsx from "clsx";
 
 export function UserSidebar() {
@@ -40,7 +41,7 @@ export function UserSidebar() {
 
   const handleLogout = async () => {
     try {
-      await signOut({ callbackUrl: "/" });
+      await signOut({ callbackUrl: bp("/") });
     } catch {
       toast("Gagal logout", "error");
     }

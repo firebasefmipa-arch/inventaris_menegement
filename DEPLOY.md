@@ -94,6 +94,13 @@ NEXTAUTH_SECRET=
 ENCRYPTION_KEY=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+
+# Opsional: isi jika app dihosting di sub-path, contoh /inventaris
+# Kosongkan jika pakai subdomain langsung
+# NEXT_PUBLIC_BASE_PATH=/inventaris
+
+# URL dasar untuk link email verifikasi (tanpa trailing slash)
+# NEXT_PUBLIC_APP_URL=https://domain-kamu.com
 ```
 
 **Cara generate nilai yang dibutuhkan:**
@@ -148,6 +155,41 @@ mkdir -p /var/www/inventaris_menegement/public/uploads/pending
 mkdir -p /var/www/inventaris_menegement/public/uploads/signatures
 chmod -R 755 /var/www/inventaris_menegement/public/uploads/
 ```
+
+---
+
+## Setup BasePath (Opsional — jika pakai sub-path)
+
+Jika app dihosting di sub-path seperti `domain.com/inventaris`, tambahkan ke `.env.local`:
+
+```env
+NEXT_PUBLIC_BASE_PATH=/inventaris
+NEXTAUTH_URL=https://domain.com/inventaris
+NEXT_PUBLIC_APP_URL=https://domain.com
+```
+
+Lalu tambahkan `location /inventaris/` di Nginx:
+
+```nginx
+location /inventaris/ {
+    proxy_pass http://localhost:3001/inventaris/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
+}
+
+location /inventaris/uploads/ {
+    alias /var/www/inventaris_menegement/public/uploads/;
+    expires 7d;
+}
+```
+
+> Jika ingin kembali ke subdomain langsung, hapus `NEXT_PUBLIC_BASE_PATH` dari `.env.local` dan build ulang.
 
 ---
 

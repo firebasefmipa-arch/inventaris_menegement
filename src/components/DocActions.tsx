@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FileText, Download, RefreshCcw, AlertTriangle } from "lucide-react";
+import { withBase } from "@/lib/basepath";
 
 interface Props {
   signedDocumentUrl: string | null;
@@ -41,7 +42,7 @@ export function DocActions({ signedDocumentUrl, type, id, onRegenerated }: Props
     return (
       <div className="flex items-center gap-1.5 flex-wrap">
         <a
-          href={signedDocumentUrl}
+          href={withBase(signedDocumentUrl!)}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors"
@@ -49,7 +50,7 @@ export function DocActions({ signedDocumentUrl, type, id, onRegenerated }: Props
           <FileText className="w-3 h-3" /> Lihat Dokumen
         </a>
         <a
-          href={signedDocumentUrl}
+          href={withBase(signedDocumentUrl!)}
           download
           className="flex items-center gap-1 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full hover:bg-indigo-100 transition-colors"
         >

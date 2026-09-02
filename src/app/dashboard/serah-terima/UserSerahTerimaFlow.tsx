@@ -12,6 +12,7 @@ import clsx from "clsx";
 import { useToast } from "@/components/Toaster";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { withBase } from "@/lib/basepath";
 
 type PublicItem = {
   id: number;
@@ -514,7 +515,7 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
               Admin akan memeriksa dan memproses permintaanmu.
             </p>
             {result.pdfUrl && (
-              <a href={result.pdfUrl} target="_blank" rel="noopener noreferrer"
+              <a href={withBase(result.pdfUrl)} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-xl transition-colors">
                 <FileText className="w-4 h-4" /> Lihat / Download PDF
               </a>
