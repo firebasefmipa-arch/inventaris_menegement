@@ -10,7 +10,6 @@ import { bp } from "@/lib/basepath"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
-  basePath: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/api/auth`,
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
