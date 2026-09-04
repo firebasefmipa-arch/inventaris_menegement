@@ -72,7 +72,7 @@ export function UserSidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="hidden lg:flex flex-col items-start gap-1 px-4 py-4 border-b border-gray-100 dark:border-slate-700/50">
-        <div className="w-full rounded-xl px-3 py-2 bg-white dark:bg-slate-900">
+        <div className="w-full rounded-xl px-3 py-2">
           <Image
             src={theme === "dark" ? bp("/fmipa-logo-kuning.png") : bp("/fmipa-logo.png")}
             alt="Logo FMIPA"
