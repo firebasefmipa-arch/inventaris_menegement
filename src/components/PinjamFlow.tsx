@@ -42,6 +42,7 @@ import { format, addDays } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { useToast } from "@/components/Toaster";
 import { useSession } from "next-auth/react";
+import { bp } from "@/lib/basepath";
 
 type PublicItem = {
   id: number;
@@ -255,7 +256,7 @@ export function PinjamFlow({ items }: { items: PublicItem[] }) {
       <header className="sticky top-0 z-50 border-b border-indigo-100/60 bg-white/75 backdrop-blur-xl">
         <div className="relative max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={36} height={36} className="rounded-xl object-contain" />
+            <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={36} height={36} className="rounded-xl object-contain" />
             <div>
               <p className="font-bold text-gray-900 leading-none">
                 Manajemen Inventaris

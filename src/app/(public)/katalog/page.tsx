@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Package } from "lucide-react";
 import { KatalogClient } from "./KatalogClient";
+import { bp } from "@/lib/basepath";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,7 @@ export default async function KatalogPage({
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain" />
+            <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain" />
             <span className="font-bold text-gray-900 text-lg">Manajemen Inventaris</span>
           </div>
           <Link
