@@ -125,7 +125,7 @@ export function Sidebar() {
       >
         {/* Logo header desktop */}
         <div className="hidden lg:flex flex-col items-start gap-1 px-4 py-3 border-b border-gray-100 dark:border-slate-700/50 shrink-0">
-          <div className="w-full rounded-xl px-3 py-1.5 bg-white dark:bg-slate-900">
+          <div className="w-full rounded-xl px-3 py-1.5">
             <Image
               src={theme === "dark" ? bp("/fmipa-logo-kuning.png") : bp("/fmipa-logo.png")}
               alt="Logo FMIPA"
