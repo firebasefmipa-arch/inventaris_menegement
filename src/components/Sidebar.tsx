@@ -87,7 +87,7 @@ export function Sidebar() {
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
         <Link href="/admin" className="flex items-center gap-2">
-          <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain" />
+          <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain" />
           <span className="font-bold text-gray-900 dark:text-slate-100">Manajemen Inventaris</span>
         </Link>
         <div className="flex items-center gap-1">
@@ -125,9 +125,9 @@ export function Sidebar() {
       >
         {/* Logo header desktop */}
         <div className="hidden lg:flex flex-col items-start gap-1 px-4 py-3 border-b border-gray-100 dark:border-slate-700/50 shrink-0">
-          <div className="w-full rounded-xl px-3 py-1.5 bg-white dark:bg-transparent">
+          <div className="w-full rounded-xl px-3 py-1.5 bg-white dark:bg-slate-900">
             <Image
-              src={theme === "dark" ? "/fmipa-logo-kuning.png" : "/fmipa-logo.png"}
+              src={theme === "dark" ? bp("/fmipa-logo-kuning.png") : bp("/fmipa-logo.png")}
               alt="Logo FMIPA"
               width={180}
               height={50}

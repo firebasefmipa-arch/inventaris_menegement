@@ -7,6 +7,7 @@ import { ShieldCheck, User, Lock, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
+import { bp } from "@/lib/basepath";
 
 function AdminLoginForm() {
   const [username, setUsername] = useState("");
@@ -60,7 +61,7 @@ function AdminLoginForm() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl shadow-xl shadow-indigo-500/30 mb-4 bg-white overflow-hidden">
-            <Image src="/fmipa-logo.png" alt="Logo FMIPA" width={56} height={56} className="object-contain" />
+            <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={56} height={56} className="object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-white">Manajemen Inventaris</h1>
           <p className="text-gray-400 text-sm mt-1">Panel Admin</p>
