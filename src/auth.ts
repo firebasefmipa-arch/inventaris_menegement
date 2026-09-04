@@ -10,6 +10,12 @@ import { bp } from "@/lib/basepath"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
+  // basePath Auth.js mengikuti env NEXT_PUBLIC_BASE_PATH.
+  // - Sub-path (/empati)  → /empati/api/auth → callback URL menyertakan /empati
+  // - Subdomain/root (kosong) → /api/auth
+  // Route handler di src/app/api/auth/[...nextauth]/route.ts menambahkan
+  // prefix yang sama (addBase) karena gateway UII men-strip /empati dari URL.
+  basePath: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/api/auth`,
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,

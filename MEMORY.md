@@ -1,7 +1,13 @@
 # MEMORY.md — Panduan Pengembangan Web Peminjaman Barang
 
 > File ini adalah catatan hidup proyek. Perbarui setiap kali ada perubahan signifikan.
-> Terakhir diperbarui: Agustus 2026
+> Terakhir diperbarui: September 2026
+>
+> **CATATAN PENTING — ruang lingkup file ini:**
+> Isinya HANYA sebatas **sourcecode proyek** (struktur folder, schema, konvensi,
+> alur, env). **Urusan server (nginx, PM2, MySQL, gateway/domain, deploy)
+> BUKAN di sini** — semua ada di `DEPLOY.md` (baca itu untuk hal server).
+> Jika mengubah kode, file ini memberi konteks apa yang sedang dikerjakan.
 
 ---
 
@@ -43,18 +49,21 @@ src/
 │   ├── login/                    # Login user (Google)
 │   └── register/complete/        # Lengkapi profil setelah OAuth pertama kali
 ├── components/
-│   ├── UserSidebar.tsx           # Sidebar dashboard user (badge notifikasi)
-│   ├── Sidebar.tsx               # Sidebar dashboard admin
-│   ├── PinjamFlow.tsx            # Form pinjam untuk halaman publik /katalog
-│   └── Toaster.tsx               # Komponen notifikasi toast
+│   ├── AuthProvider.tsx         # SessionProvider basePath (dari env NEXT_PUBLIC_BASE_PATH)
+│   ├── BasePathProvider.tsx     # Patch window.fetch: tambah prefix base path ke /api & /uploads
+│   ├── UserSidebar.tsx          # Sidebar dashboard user (badge notifikasi)
+│   ├── Sidebar.tsx              # Sidebar dashboard admin
+│   ├── PinjamFlow.tsx           # Form pinjam untuk halaman publik /katalog
+│   └── Toaster.tsx              # Komponen notifikasi toast
 ├── lib/
-│   └── pdf-generator.ts          # Generate PDF formulir peminjaman multi-halaman
+│   ├── basepath.ts              # Util bp()/withBase — prefix URL asset/link (cek pemakaian)
+│   └── pdf-generator.ts         # Generate PDF formulir peminjaman multi-halaman
 ├── db/
-│   ├── index.ts                  # Koneksi Drizzle + MySQL pool
-│   └── schema.ts                 # Schema semua tabel
-├── auth.ts                       # Konfigurasi NextAuth (Google + Credentials)
-├── middleware.ts                 # Proteksi route berbasis role (pakai getToken JWT)
-└── types/next-auth.d.ts          # Type augmentation NextAuth (role, phone, department)
+│   ├── index.ts                 # Koneksi Drizzle + MySQL pool
+│   └── schema.ts                # Schema semua tabel (sumber kebenaran schema)
+├── auth.ts                      # NextAuth (Google + Credentials); basePath Auth.js dari env
+├── middleware.ts                # Proteksi route berbasis role (pakai getToken JWT)
+└── types/next-auth.d.ts         # Type augmentation NextAuth (role, phone, department)
 
 scripts/
 └── create-super-admin.ts         # Script interaktif buat akun super_admin
@@ -170,15 +179,41 @@ transaction_items.transaction_id → transactions.id ON DELETE CASCADE
 ## 6. Environment Variables
 
 ```env
-# .env.local (jangan di-commit)
+# .env.local (jangan di-commit) — nilai contoh dev lokal
 DATABASE_URL=mysql://root:@127.0.0.1:3306/modern_lending
-NEXTAUTH_URL=http://localhost:3000           # Ganti dengan domain saat deploy
+NEXTAUTH_URL=http://localhost:3000           # Ganti dengan URL publik saat deploy
 NEXTAUTH_SECRET=<random string panjang>
 GOOGLE_CLIENT_ID=<dari Google Cloud Console>
 GOOGLE_CLIENT_SECRET=<dari Google Cloud Console>
 SMTP_EMAIL=                                  # Opsional, untuk notifikasi email
 SMTP_PASSWORD=
 ```
+
+### `NEXT_PUBLIC_BASE_PATH` — variabel KUNCI (path-agnostic app)
+
+App ini **path-agnostic**: dijalankan di sub-path (mis. `/empati`) ATAU di root
+(subdomain), cukup ganti env — kode TIDAK perlu diubah.
+
+- **Sub-path publik** (deploy di belakang gateway): `NEXT_PUBLIC_BASE_PATH=/empati`
+  (nilai apa pun; wajib konsisten dengan path di `NEXTAUTH_URL`).
+- **Root/subdomain tanpa gateway**: variabel ini KOSONG/tidak ada → app di root.
+- Env ini dibaca di 5 titik yang HARUS sinkron (semua memakai
+  `process.env.NEXT_PUBLIC_BASE_PATH` — jangan hardcode nilai):
+  1. `next.config.ts` → `basePath` (asset/link/redirect server-render)
+  2. `src/auth.ts` → basePath Auth.js = `"${BASE}/api/auth"` (callback URL Google)
+  3. `src/app/api/auth/[...nextauth]/route.ts` → addBase: tambah prefix kembali
+     ke pathname `/api/auth/*` sebelum diteruskan Auth.js (Next sudah strip
+     prefix saat route matching). No-op bila BASE kosong.
+  4. `src/components/AuthProvider.tsx` → `SessionProvider basePath`
+     (`"${BASE}/api/auth"`) agar signIn/signOut client benar.
+  5. `src/components/BasePathProvider.tsx` (BARU, `"use client"`) → patch
+     `window.fetch`: tambah BASE ke fetch(`/api/...`) & fetch(`/uploads/...`)
+     (basePath Next TIDAK otomatis menambah ke fetch manual). No-op bila kosong.
+     Terpasang di `src/app/layout.tsx` (paling luar, bungkus AuthProvider).
+
+> **Penting:** 5 lapis ini harus konsisten. Kalau app dipindah ke path/domain
+> lain, cukup ubah env + (urusan server) — JANGAN hardcode "/empati" di kode.
+> Detail & urusan server ada di DEPLOY.md.
 
 ---
 
@@ -199,18 +234,17 @@ npm run db:push                # Push schema langsung ke DB (development)
 # Setup
 npm run setup:superadmin       # Buat akun super_admin (interaktif via terminal)
 
-# Deploy
+# Build & jalankan (urusan server: PM2/nginx ada di DEPLOY.md)
 npm run build                  # Build production
 npm start                      # Jalankan production server
-pm2 start npm --name "app" -- start   # Jalankan via PM2
-pm2 restart app                # Restart setelah update
 ```
 
 ---
 
 ## 8. Migrasi Database
 
-Setiap kali deploy ke server baru atau setelah reset DB, jalankan SQL berikut secara berurutan:
+Setiap kali deploy ke server baru atau setelah reset DB, jalankan SQL berikut secara berurutan.
+> (Cara menjalankan di server & akun superadmin: DEPLOY.md.)
 
 ```sql
 -- 1. Import schema utama
@@ -291,6 +325,10 @@ pending_signature → pending_approval → active → returned
 
 6. **Badge sidebar** — `UserSidebar` fetch `/api/user/transactions/summary` setiap 30 detik untuk update badge `pending_signature`.
 
+7. **Alur request auth di belakang gateway** — Next.js basePath otomatis strip prefix saat route matching. Request publik `/empati/api/auth/providers` sampai route handler sebagai `/api/auth/providers`; handler (route.ts) menambah prefix kembali (addBase) karena Auth.js dikonfigurasi `basePath = ${BASE}/api/auth` (agar callback URL Google menyertakan prefix). Jangan pindahkan route handler ke folder `src/app/empati/api/auth/` — itu pernah dicoba dan GAGAL (pathname Auth.js tidak cocok). Route handler WAJIB di `src/app/api/auth/[...nextauth]/route.ts`.
+
+8. **`images.unoptimized` jangan dihapus** — workaround bug image optimizer Next 16 yang 400 "received null" untuk semua gambar lokal di `public/`. Tanpa ini logo & gambar lain tidak muncul.
+
 ---
 
 ## 11. Fitur yang Belum Diimplementasi (Backlog)
@@ -307,12 +345,16 @@ pending_signature → pending_approval → active → returned
 
 ## 12. Deployment Checklist
 
+> Checklist di bawah = kewajiban sebelum commit/perubahan sourcecode. Yang
+> berhubungan server/domain (nginx, PM2 startup, SSL, gateway) ada di DEPLOY.md.
+
 - [ ] `npm run typecheck` → 0 errors
-- [ ] `.env.local` sudah diisi dengan nilai production (NEXTAUTH_URL = domain asli)
-- [ ] Semua migrasi DB sudah dijalankan (lihat bagian 8)
-- [ ] `npm run setup:superadmin` sudah dijalankan di server
 - [ ] `npm run build` berhasil tanpa error
-- [ ] PM2 sudah dikonfigurasi dengan `pm2 startup` untuk auto-restart
-- [ ] Nginx sudah dikonfigurasi sebagai reverse proxy ke port 3000
-- [ ] SSL/HTTPS sudah aktif (certbot) jika menggunakan domain publik
-- [ ] Folder `public/uploads/signed_forms/` sudah ada dan writable
+- [ ] `.env.local` TIDAK ikut ter-commit (ada di .gitignore)
+- [ ] Tidak ada hardcode path (`/empati`, dst) — semua baca env `NEXT_PUBLIC_BASE_PATH` (5 titik di bagian 6)
+- [ ] Jika menambah endpoint API yang dipanggil client: pastikan lewat fetch normal (BasePathProvider otomatis menambah prefix) — jangan hardcode `/empati` di URL fetch
+- [ ] Jika menambah gambar lokal di `public/`: `next/image` aman karena `images.unoptimized` (jangan hapus opsi ini)
+- [ ] Jika mengubah schema DB: tambahkan migrasi SQL manual di `database/` — JANGAN `drizzle-kit push` di produksi (bisa gagal pada index FK)
+- [ ] Jika mengubah alur auth: cek 5 lapis basePath tetap sinkron (bagian 6)
+- [ ] Semua migrasi DB sudah dijalankan (lihat bagian 8)
+- [ ] Folder `public/uploads/signed_forms/` dkk ada (urusan server, DEPLOY.md)

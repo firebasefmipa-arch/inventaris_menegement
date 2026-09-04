@@ -5,6 +5,7 @@ import "./globals.css";
 import { ToastProvider } from "@/components/Toaster";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { BasePathProvider } from "@/components/BasePathProvider";
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"] });
 
@@ -19,9 +20,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="id" suppressHydrationWarning>
       <body className={`bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-slate-100 antialiased ${plusJakartaSans.className}`}>
         <ThemeProvider>
-          <AuthProvider>
-            <ToastProvider>{children}</ToastProvider>
-          </AuthProvider>
+          <BasePathProvider>
+            <AuthProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </AuthProvider>
+          </BasePathProvider>
         </ThemeProvider>
       </body>
     </html>
