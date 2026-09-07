@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { items } from "@/db/schema";
-import { eq, like, or, and } from "drizzle-orm";
+import { eq, like, or, and, gt } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +11,10 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") || "";
 
     const conditions = [];
+
+    // Sembunyikan item yang sudah habis total (quantity=0, hasil serah terima
+    // permanen — tidak akan kembali). Item dipinjam tetap muncul (avail 0, qty>0).
+    conditions.push(gt(items.quantity, 0));
 
     if (search) {
       conditions.push(
