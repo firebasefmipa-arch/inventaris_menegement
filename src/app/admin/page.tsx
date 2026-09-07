@@ -131,9 +131,6 @@ export default async function HomePage() {
       {/* Page header */}
       <div className="pt-12 lg:pt-0">
         <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-        <p className="text-gray-500 mt-1">
-          Ringkasan peminjaman barang hari ini
-        </p>
       </div>
 
       {/* Stats Grid */}

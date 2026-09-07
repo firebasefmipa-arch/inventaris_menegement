@@ -34,9 +34,6 @@ export default async function DashboardPinjamPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Pinjam Barang</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Pilih barang, isi data, dan submit permintaan peminjaman kamu.
-        </p>
       </div>
       <UserPinjamFlow items={availableItems} />
     </div>

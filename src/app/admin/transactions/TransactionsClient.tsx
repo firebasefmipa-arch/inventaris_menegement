@@ -171,9 +171,6 @@ export function TransactionsClient({ transactions }: Props) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Peminjaman</h2>
-            <p className="text-gray-500 text-sm mt-1">
-              Riwayat peminjaman dan pengembalian barang
-            </p>
           </div>
           <div className="flex flex-wrap gap-2 justify-end items-center">
             <button

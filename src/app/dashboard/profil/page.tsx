@@ -207,7 +207,6 @@ export default function ProfilPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Profil Saya</h1>
-        <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Kelola informasi diri dan tanda tangan elektronik</p>
       </div>
 
       {/* Avatar & Status */}

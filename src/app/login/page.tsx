@@ -108,9 +108,7 @@ function LoginForm() {
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           Masuk ke Akun
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Silakan masuk untuk mengakses dashboard peminjaman
-        </p>
+
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
