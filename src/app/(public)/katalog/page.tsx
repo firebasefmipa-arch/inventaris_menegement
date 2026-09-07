@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { items } from "@/db/schema";
-import { eq, ilike, or, and } from "drizzle-orm";
+import { eq, ilike, or, and, gt } from "drizzle-orm";
 import Link from "next/link";
 import Image from "next/image";
 import { Package } from "lucide-react";
@@ -19,6 +19,8 @@ export default async function KatalogPage({
   const category = params.category || "";
 
   const conditions = [eq(items.status, "available")]; // Only show available items for public
+  // Sembunyikan item qty=0 (habis diserahterimakan permanen)
+  conditions.push(gt(items.quantity, 0));
   
   if (search) {
     conditions.push(
