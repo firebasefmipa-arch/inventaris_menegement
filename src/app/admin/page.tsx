@@ -1,14 +1,14 @@
 import { db } from "@/db";
-import { items, transactions } from "@/db/schema";
-import { eq, sql, count } from "drizzle-orm";
+import { items, transactions, users, transactionItems } from "@/db/schema";
+import { eq, sql, count, and, lte, gte } from "drizzle-orm";
 import {
   Package,
   ArrowLeftRight,
   Clock,
-  TrendingUp,
   AlertTriangle,
   CheckCircle2,
   Boxes,
+  Bell,
 } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -17,8 +17,12 @@ import { id } from "date-fns/locale";
 export const dynamic = "force-dynamic";
 
 async function getStats() {
-  // ── 3 query paralel menggantikan 7 query serial ──
-  const [itemStats, transactionStats, recentTransactions] = await Promise.all([
+  const now = new Date();
+  // Batas: 24 jam dari sekarang
+  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  // ── 4 query paralel ──
+  const [itemStats, transactionStats, recentTransactions, dueSoonRaw] = await Promise.all([
     // Query 1: semua stats items sekaligus dengan conditional count
     db.select({
       total:     count(),
@@ -49,17 +53,34 @@ async function getStats() {
     .leftJoin(items, eq(transactions.itemId, items.id))
     .orderBy(sql`${transactions.createdAt} DESC`)
     .limit(5),
+
+    // Query 4: transaksi aktif yang tenggat <= 24 jam ke depan (belum overdue)
+    db.select({
+      id:                 transactions.id,
+      borrowerName:       transactions.borrowerName,
+      borrowerPhone:      transactions.borrowerPhone,
+      borrowerDepartment: transactions.borrowerDepartment,
+      expectedReturnDate: transactions.expectedReturnDate,
+      itemName:           items.name,
+      quantity:           transactions.quantity,
+    })
+    .from(transactions)
+    .leftJoin(items, eq(transactions.itemId, items.id))
+    .where(
+      and(
+        eq(transactions.status, "active"),
+        gte(transactions.expectedReturnDate, now),
+        lte(transactions.expectedReturnDate, in24h),
+      )
+    )
+    .orderBy(transactions.expectedReturnDate)
+    .limit(10),
   ]);
 
   // Agregasi hasil query 1
   const totalItems     = itemStats.reduce((s, r) => s + Number(r.total),     0);
   const availableItems = itemStats.reduce((s, r) => s + Number(r.available), 0);
   const borrowedItems  = itemStats.reduce((s, r) => s + Number(r.borrowed),  0);
-
-  const categories = itemStats.reduce((acc, r) => {
-    acc[r.category] = (acc[r.category] ?? 0) + Number(r.total);
-    return acc;
-  }, {} as Record<string, number>);
 
   const activeTransactions  = Number(transactionStats[0]?.active  ?? 0);
   const overdueTransactions = Number(transactionStats[0]?.overdue ?? 0);
@@ -70,8 +91,8 @@ async function getStats() {
     borrowedItems,
     activeTransactions,
     overdueTransactions,
-    categories,
     recentTransactions,
+    dueSoon: dueSoonRaw,
   };
 }
 
@@ -234,50 +255,56 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* Categories */}
+        {/* Due Soon — tenggat ≤ 1 hari */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-5">
-            Kategori Barang
-          </h3>
-          {Object.keys(stats.categories).length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-8">
-              Belum ada kategori
-            </p>
+          <div className="flex items-center gap-2 mb-5">
+            <Bell className="w-5 h-5 text-amber-500" />
+            <h3 className="text-lg font-semibold text-gray-900">Segera Dikembalikan</h3>
+            {stats.dueSoon.length > 0 && (
+              <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                {stats.dueSoon.length}
+              </span>
+            )}
+          </div>
+          {stats.dueSoon.length === 0 ? (
+            <div className="text-center py-8">
+              <CheckCircle2 className="w-10 h-10 text-emerald-200 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">Tidak ada tenggat dalam 24 jam</p>
+            </div>
           ) : (
-            <div className="space-y-4">
-              {Object.entries(stats.categories).map(
-                ([category, count], index) => {
-                  const colors = [
-                    "bg-indigo-100 text-indigo-700",
-                    "bg-emerald-100 text-emerald-700",
-                    "bg-amber-100 text-amber-700",
-                    "bg-rose-100 text-rose-700",
-                    "bg-violet-100 text-violet-700",
-                    "bg-cyan-100 text-cyan-700",
-                  ];
-                  const color = colors[index % colors.length];
-                  return (
-                    <div
-                      key={category}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-2 h-2 rounded-full ${
-                            color.split(" ")[0].replace("bg-", "bg-")
-                          }`}
-                        />
-                        <span className="text-sm text-gray-700">{category}</span>
+            <div className="space-y-3">
+              {stats.dueSoon.map((tx) => {
+                const deadline = new Date(tx.expectedReturnDate);
+                const hoursLeft = Math.max(0, Math.round((deadline.getTime() - Date.now()) / (1000 * 60 * 60)));
+                const urgent = hoursLeft <= 3;
+                return (
+                  <div key={tx.id} className={`rounded-xl p-3 border ${urgent ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{tx.borrowerName}</p>
+                        <p className="text-xs text-gray-500 truncate mt-0.5">{tx.itemName} · {tx.quantity} unit</p>
+                        {tx.borrowerPhone && (
+                          <p className="text-xs text-gray-400 mt-0.5">{tx.borrowerPhone}</p>
+                        )}
                       </div>
-                      <span
-                        className={`text-xs font-medium px-2.5 py-1 rounded-full ${color}`}
-                      >
-                        {count}
-                      </span>
+                      <div className="text-right shrink-0">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${urgent ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                          {hoursLeft === 0 ? "< 1 jam" : `${hoursLeft} jam`}
+                        </span>
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          {format(deadline, "HH:mm, dd MMM", { locale: id })}
+                        </p>
+                      </div>
                     </div>
-                  );
-                }
-              )}
+                  </div>
+                );
+              })}
+              <Link
+                href="/admin/transactions?status=active"
+                className="block text-center text-xs text-indigo-600 hover:text-indigo-700 font-medium pt-1"
+              >
+                Lihat semua aktif →
+              </Link>
             </div>
           )}
         </div>
