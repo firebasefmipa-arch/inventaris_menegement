@@ -349,11 +349,12 @@ export function TransactionsClient({ transactions }: Props) {
                              : tx.status}
                           </span>
 
-                          {tx.signedDocumentUrl && (
+                          {(tx.signedDocumentUrl || tx.status === "rejected") && (
                             <DocActions
                               signedDocumentUrl={tx.signedDocumentUrl}
                               type="transaction"
                               id={tx.id}
+                              rejected={tx.status === "rejected"}
                               onRegenerated={() => router.refresh()}
                             />
                           )}

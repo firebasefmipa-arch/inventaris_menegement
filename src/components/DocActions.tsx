@@ -11,9 +11,11 @@ interface Props {
   onRegenerated?: () => void; // callback setelah regenerate berhasil
   /** File di DB tidak ditemukan di disk — dokumen perlu digenerate ulang */
   documentMissing?: boolean;
+  /** Status pengajuan ditolak/dibatalkan — file tak disimpan; "Lihat" = generate on-the-fly */
+  rejected?: boolean;
 }
 
-export function DocActions({ signedDocumentUrl, type, id, onRegenerated, documentMissing }: Props) {
+export function DocActions({ signedDocumentUrl, type, id, onRegenerated, documentMissing, rejected }: Props) {
   const [regenerating, setRegenerating] = useState(false);
 
   const isDeleted = signedDocumentUrl === "deleted";
@@ -22,6 +24,10 @@ export function DocActions({ signedDocumentUrl, type, id, onRegenerated, documen
   const apiUrl = type === "transaction"
     ? `/api/transactions/${id}/regenerate-doc`
     : `/api/handovers/${id}/regenerate-doc`;
+
+  const generateUrl = type === "transaction"
+    ? `/api/transactions/${id}/generate-pdf`
+    : `/api/handovers/${id}/generate-pdf`;
 
   const handleRegenerate = async () => {
     if (!confirm("Generate ulang dokumen ini? File baru akan dibuat dan status akan kembali ke 'Menunggu Persetujuan'.")) return;
@@ -79,6 +85,23 @@ export function DocActions({ signedDocumentUrl, type, id, onRegenerated, documen
           <RefreshCcw className={`w-3 h-3 ${regenerating ? "animate-spin" : ""}`} />
           {regenerating ? "Memproses..." : "Generate Ulang"}
         </button>
+      </div>
+    );
+  }
+
+  // Pengajuan ditolak/dibatalkan — file asli dihapus dari storage. "Lihat Dokumen"
+  // meng-generate ulang on-the-fly dari data history (tanpa menyimpan file).
+  if (rejected) {
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <a
+          href={withBase(generateUrl)}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors"
+        >
+          <FileText className="w-3 h-3" /> Lihat Dokumen
+        </a>
       </div>
     );
   }

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { deleteUploadByUrl } from "@/lib/delete-upload";
 
 export async function POST(
   request: NextRequest,
@@ -101,12 +102,15 @@ export async function POST(
       return NextResponse.json({ success: true, message: "Peminjaman berhasil dibatalkan dan dihapus" });
     }
 
-    // Sudah upload dokumen → simpan sebagai rejected agar history tetap ada
+    // Sudah upload dokumen → simpan sebagai rejected agar history tetap ada;
+    // file dihapus (dokumen batal tak disimpan).
+    await deleteUploadByUrl(tx.signedDocumentUrl);
     await db
       .update(transactions)
       .set({
         status: "rejected",
         rejectionReason: "Dibatalkan oleh peminjam",
+        signedDocumentUrl: null,
       })
       .where(eq(transactions.id, txId));
 

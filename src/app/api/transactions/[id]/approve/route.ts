@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { deleteUploadByUrl } from "@/lib/delete-upload";
 
 export async function POST(
   request: NextRequest,
@@ -63,15 +64,14 @@ export async function POST(
       }).where(eq(transactions.id, txId));
 
     } else {
-      // Reject — hapus PDF pending dan kembalikan stok
-      if (tx.signedDocumentUrl?.startsWith("/uploads/pending/")) {
-        const filePath = path.join(process.cwd(), "public", tx.signedDocumentUrl);
-        if (existsSync(filePath)) await unlink(filePath).catch(() => {});
-      }
+      // Reject — hapus PDF (folder mana pun) dan kembalikan stok.
+      // Dokumen pengajuan ditolak tidak disimpan; riwayat tetap ada.
+      await deleteUploadByUrl(tx.signedDocumentUrl);
 
       await db.update(transactions).set({
         status: "rejected",
         rejectionReason: rejectionReason.trim(),
+        signedDocumentUrl: null,
       }).where(eq(transactions.id, txId));
 
       // Kembalikan stok
