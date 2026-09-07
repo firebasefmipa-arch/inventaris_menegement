@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, MapPin, Package, Plus, SlidersHorizontal, ChevronDown, Monitor, Speaker, Camera, Tent, Activity, Car, PenTool, Upload, LayoutGrid, List, Trash2, CheckSquare, MoreVertical, Edit2 } from "lucide-react";
+import { Search, MapPin, Package, Plus, SlidersHorizontal, ChevronDown, Monitor, Speaker, Camera, Tent, Activity, Car, PenTool, Upload, LayoutGrid, List, Trash2, CheckSquare, MoreVertical, Edit2, Tag, X, CalendarDays } from "lucide-react";
 import clsx from "clsx";
 import { DeleteItemButton } from "./DeleteItemButton"; // kept for potential single-item use
 import { ItemModal } from "./ItemModal";
@@ -60,6 +60,11 @@ export function ItemsClient({ items, categories }: Props) {
   const [selectMode, setSelectMode] = useState(false);
   const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
 
+  // Filter tambahan: kategori, lokasi, tanggal cek
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [lastCheckFilter, setLastCheckFilter] = useState("");
+
   // Close filter and dropdowns on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -114,10 +119,10 @@ export function ItemsClient({ items, categories }: Props) {
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      // Status filter (which we might use for category or status)
-      // Since it's a dropdown, let's use it for Status for now, or Category. 
-      // User asked to match transactions, so let's stick to status filter for the dropdown.
       if (statusFilter && item.status !== statusFilter) return false;
+      if (categoryFilter && item.category !== categoryFilter) return false;
+      if (locationFilter && (item.location || "") !== locationFilter) return false;
+      if (lastCheckFilter && (item.lastCheckDate || "") !== lastCheckFilter) return false;
 
       // Search filter
       if (searchQuery) {
@@ -136,7 +141,7 @@ export function ItemsClient({ items, categories }: Props) {
 
       return true;
     });
-  }, [items, searchQuery, statusFilter]);
+  }, [items, searchQuery, statusFilter, categoryFilter, locationFilter, lastCheckFilter]);
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
@@ -181,6 +186,17 @@ export function ItemsClient({ items, categories }: Props) {
     { key: "available", label: "Tersedia" },
     { key: "borrowed", label: "Dipinjam" },
   ];
+
+  // Unique values untuk dropdown filter
+  const uniqueLocations = useMemo(() =>
+    [...new Set(items.map((i) => i.location).filter(Boolean) as string[])].sort(),
+    [items]
+  );
+  const uniqueLastCheckDates = useMemo(() =>
+    [...new Set(items.map((i) => i.lastCheckDate).filter(Boolean) as string[])].sort().reverse(),
+    [items]
+  );
+  const hasExtraFilter = categoryFilter || locationFilter || lastCheckFilter;
 
   const statusBadge = (status: string) => {
     const config = {
@@ -318,8 +334,77 @@ export function ItemsClient({ items, categories }: Props) {
           </button>
         </div>
 
-        {/* Select All bar */}
-        {selectMode && (
+        {/* Filter Bar — kategori, lokasi, tanggal cek */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-2.5 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Filter:</span>
+
+          {/* Kategori */}
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className={clsx(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all appearance-none cursor-pointer",
+              categoryFilter
+                ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300"
+            )}
+          >
+            <option value="">Semua Kategori</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          {/* Lokasi */}
+          {uniqueLocations.length > 0 && (
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className={clsx(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all appearance-none cursor-pointer",
+                locationFilter
+                  ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                  : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300"
+              )}
+            >
+              <option value="">Semua Lokasi</option>
+              {uniqueLocations.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          )}
+
+          {/* Tanggal Cek */}
+          {uniqueLastCheckDates.length > 0 && (
+            <select
+              value={lastCheckFilter}
+              onChange={(e) => setLastCheckFilter(e.target.value)}
+              className={clsx(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all appearance-none cursor-pointer",
+                lastCheckFilter
+                  ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                  : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300"
+              )}
+            >
+              <option value="">Semua Tgl Cek</option>
+              {uniqueLastCheckDates.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+
+          {/* Reset filter */}
+          {hasExtraFilter && (
+            <button
+              onClick={() => { setCategoryFilter(""); setLocationFilter(""); setLastCheckFilter(""); }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" /> Reset
+            </button>
+          )}
+
+          {filteredItems.length !== items.length && (
+            <span className="ml-auto text-xs text-gray-400 shrink-0">
+              {filteredItems.length} dari {items.length} barang
+            </span>
+          )}
+        </div>
+
+        {/* Select All bar */}        {selectMode && (
           <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
             <button
               type="button"
