@@ -59,9 +59,6 @@ export default async function AdminHandoversPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Serah Terima Barang</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Kelola permintaan serah terima barang secara permanen
-          </p>
         </div>
       </div>
       <HandoversClient
