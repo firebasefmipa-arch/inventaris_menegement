@@ -285,7 +285,9 @@ export function ItemsClient({ items, categories }: Props) {
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Filter</span>
+              <span className="hidden sm:inline">
+                {filterOptions.find((f) => f.key === statusFilter)?.label || "Semua Status"}
+              </span>
               <ChevronDown className="w-3 h-3" />
             </button>
             {showFilterDropdown && (
