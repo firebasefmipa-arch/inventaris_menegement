@@ -155,18 +155,26 @@ export default async function HomePage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {statCards.map((card) => (
           <Link
             key={card.label}
             href={card.href}
-            className="group relative bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200"
+            className="group relative bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden flex flex-col"
           >
-            <div className={`w-10 h-10 ${card.bg} rounded-xl flex items-center justify-center mb-3`}>
-              <card.icon className={`w-5 h-5 ${card.iconColor}`} />
+            {/* Accent bar top */}
+            <div className={`h-1 w-full bg-linear-to-r ${card.color}`} />
+            <div className="p-5 flex flex-col gap-3 flex-1">
+              <div className="flex items-center justify-between">
+                <div className={`w-10 h-10 ${card.bg} rounded-xl flex items-center justify-center`}>
+                  <card.icon className={`w-5 h-5 ${card.iconColor}`} />
+                </div>
+                <span className={`text-[10px] font-semibold uppercase tracking-widest ${card.iconColor} opacity-60`}>
+                  {card.label}
+                </span>
+              </div>
+              <p className="text-3xl font-extrabold text-gray-900 tabular-nums leading-none">{card.value}</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-            <p className="text-xs text-gray-500 mt-1">{card.label}</p>
           </Link>
         ))}
       </div>
