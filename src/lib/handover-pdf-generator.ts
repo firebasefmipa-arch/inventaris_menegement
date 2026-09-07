@@ -304,46 +304,52 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
 
   y -= 75;
 
-  // Nama penerima dengan underline pendek (sesuai lebar nama)
+  // Tanda tangan (TTD) DIGAMBAR DI ATAS NAMA.
+  // Tata letak dari bawah ke atas: nama (dengan garis bawah) → TTD di atasnya.
+  const signNameY = y;                    // posisi baseline nama penerima
+
+  // Gambar nama + underline dulu (paling bawah)
   if (data.receiverName) {
     const nameTw = boldFont.widthOfTextAtSize(data.receiverName, 10);
     const nameX = col2X + (colW - nameTw) / 2;
-
-    // Embed TTD jika ada
-    if (data.signatureUrl) {
-      try {
-        const sigPath = path.join(process.cwd(), 'public', data.signatureUrl);
-        const sigBytes = await fs.readFile(sigPath);
-        const ext = path.extname(data.signatureUrl).toLowerCase();
-        let sigImg;
-        if (ext === '.png') {
-          sigImg = await pdfDoc.embedPng(sigBytes);
-        } else {
-          sigImg = await pdfDoc.embedJpg(sigBytes);
-        }
-        const sigDims = sigImg.scaleToFit(colW - 10, 55);
-        currentPage.drawImage(sigImg, {
-          x: col2X + (colW - sigDims.width) / 2,
-          y: y - sigDims.height + 10,
-          width: sigDims.width,
-          height: sigDims.height,
-        });
-      } catch { /* Gagal load TTD — biarkan kosong */ }
-    }
-
     currentPage.drawText(data.receiverName, {
-      x: nameX, y, size: 10, font: boldFont, color: rgb(0, 0, 0),
+      x: nameX, y: signNameY, size: 10, font: boldFont, color: rgb(0, 0, 0),
     });
     currentPage.drawLine({
-      start: { x: nameX, y: y - 2 },
-      end:   { x: nameX + nameTw, y: y - 2 },
+      start: { x: nameX, y: signNameY - 2 },
+      end:   { x: nameX + nameTw, y: signNameY - 2 },
       thickness: 0.8,
       color: rgb(0, 0, 0),
     });
   }
 
-  // Garis kiri disejajarkan di posisi y - 2
-  currentPage.drawLine({ start: { x: col1X, y: y - 2 }, end: { x: col1X + colW, y: y - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
+  // Garis kiri disejajarkan di posisi nama (garis kosong utk penandatangan kiri)
+  currentPage.drawLine({ start: { x: col1X, y: signNameY - 2 }, end: { x: col1X + colW, y: signNameY - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
+
+  // TTD penerima digambar di ATAS nama (bottom TTD = nama + 12)
+  if (data.receiverName && data.signatureUrl) {
+    try {
+      const sigPath = path.join(process.cwd(), 'public', data.signatureUrl);
+      const sigBytes = await fs.readFile(sigPath);
+      const ext = path.extname(data.signatureUrl).toLowerCase();
+      let sigImg;
+      if (ext === '.png') {
+        sigImg = await pdfDoc.embedPng(sigBytes);
+      } else {
+        sigImg = await pdfDoc.embedJpg(sigBytes);
+      }
+      const sigDims = sigImg.scaleToFit(colW - 10, 55);
+      // Bottom TTD tepat di atas nama (nama + 12) — TTD tidak menutupi nama.
+      // pdf-lib drawImage: y = posisi BOTTOM image (image naik setinggi height dari y).
+      const sigBottomY = signNameY + 12;
+      currentPage.drawImage(sigImg, {
+        x: col2X + (colW - sigDims.width) / 2,
+        y: sigBottomY,
+        width: sigDims.width,
+        height: sigDims.height,
+      });
+    } catch { /* Gagal load TTD — biarkan kosong */ }
+  }
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

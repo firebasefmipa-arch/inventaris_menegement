@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, UploadCloud, CheckCircle, FileText, Loader2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { bp } from "@/lib/basepath";
 
 export default function HandoverUploadForm({
   handoverId,
@@ -78,7 +79,7 @@ export default function HandoverUploadForm({
             Unduh formulir yang sudah terisi otomatis dengan data permintaan Anda.
           </p>
           <a
-            href={`/api/handovers/${handoverId}/generate-pdf`}
+            href={bp(`/api/handovers/${handoverId}/generate-pdf`)}
             download
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-teal-700 border border-teal-200 rounded-xl hover:bg-teal-50 font-semibold text-sm transition-colors shadow-sm"
           >

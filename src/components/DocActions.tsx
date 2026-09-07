@@ -9,13 +9,15 @@ interface Props {
   type: "transaction" | "handover";
   id: number;
   onRegenerated?: () => void; // callback setelah regenerate berhasil
+  /** File di DB tidak ditemukan di disk — dokumen perlu digenerate ulang */
+  documentMissing?: boolean;
 }
 
-export function DocActions({ signedDocumentUrl, type, id, onRegenerated }: Props) {
+export function DocActions({ signedDocumentUrl, type, id, onRegenerated, documentMissing }: Props) {
   const [regenerating, setRegenerating] = useState(false);
 
   const isDeleted = signedDocumentUrl === "deleted";
-  const hasDoc = signedDocumentUrl && !isDeleted;
+  const hasDoc = signedDocumentUrl && !isDeleted && !documentMissing;
 
   const apiUrl = type === "transaction"
     ? `/api/transactions/${id}/regenerate-doc`
@@ -60,13 +62,13 @@ export function DocActions({ signedDocumentUrl, type, id, onRegenerated }: Props
     );
   }
 
-  // Dokumen telah dihapus
-  if (isDeleted) {
+  // Dokumen telah dihapus ATAU file hilang dari disk
+  if (isDeleted || documentMissing) {
     return (
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-full">
           <AlertTriangle className="w-3 h-3 shrink-0" />
-          <span>Dokumen dihapus admin</span>
+          <span>{isDeleted ? "Dokumen dihapus admin" : "File dokumen hilang"}</span>
         </div>
         <button
           type="button"

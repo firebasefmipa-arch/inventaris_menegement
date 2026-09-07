@@ -176,19 +176,25 @@ async function drawFooter(
   }
 
   y -= 70;
-  page.drawLine({ start: { x: col1X, y: y + 12 }, end: { x: col1X + colW, y: y + 12 }, thickness: 0.5, color: rgb(0, 0, 0) });
-  page.drawLine({ start: { x: col2X, y: y + 12 }, end: { x: col2X + colW, y: y + 12 }, thickness: 0.5, color: rgb(0, 0, 0) });
 
-  // Underline nama peminjam sesuai lebar teks
+  // Kolom kiri & tengah: garis DI ATAS tulisan (seperti sebelumnya) — blok digeser ke
+  // bawah sehingga garisnya (y-2) sejajar dgn underline nama peminjam di kolom kanan.
+  const roleTextY = y - 14; // baseline tulisan 14pt di bawah garis
+  centerText('Penerima Barang Kembali', col1X, colW, boldFont, 9, roleTextY);
+  centerText('Divisi Informasi Teknologi', col2X, colW, boldFont, 9, roleTextY);
+
+  // Garis utk TTD manual — di atas tulisan peran, sejajar underline nama (y-2)
+  page.drawLine({ start: { x: col1X, y: y - 2 }, end: { x: col1X + colW, y: y - 2 }, thickness: 0.5, color: rgb(0, 0, 0) });
+  page.drawLine({ start: { x: col2X, y: y - 2 }, end: { x: col2X + colW, y: y - 2 }, thickness: 0.5, color: rgb(0, 0, 0) });
+
+  // Nama peminjam: bold + underline DI BAWAH nama (pola serah terima).
+  // Sebelumnya underline digambar di y+12 (atas nama) dan menimpa bagian bawah TTD.
   const nameTw = boldFont.widthOfTextAtSize(borrowerName, 10);
   const nameX = col3X + (colW - nameTw) / 2;
-  page.drawLine({ start: { x: nameX, y: y + 12 }, end: { x: nameX + nameTw, y: y + 12 }, thickness: 0.5, color: rgb(0, 0, 0) });
-
-  centerText('Penerima Barang Kembali', col1X, colW, boldFont, 9, y);
-  centerText('Divisi Informasi Teknologi', col2X, colW, boldFont, 9, y);
   page.drawText(borrowerName, { x: nameX, y, size: 10, font: boldFont, color: rgb(0, 0, 0) });
+  page.drawLine({ start: { x: nameX, y: y - 2 }, end: { x: nameX + nameTw, y: y - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
 
-  y -= 30;
+  y -= 38;
   page.drawText('Ketentuan Peminjaman:', { x: MARGIN_LEFT, y, size: 9, font: boldItalicFont, color: rgb(0, 0, 0) });
 
   const disclaimerLines = [

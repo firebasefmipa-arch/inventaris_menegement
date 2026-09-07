@@ -127,7 +127,7 @@ export async function PATCH(
       const borrowerSafe = txData.borrowerName.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
       const d = txData.borrowDate;
       const dateStr = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
-      const filename = `${borrowerSafe}_${dateStr}_${txId}_corrected.pdf`;
+      const filename = `PB_${borrowerSafe}_${dateStr}_${txId}_corrected.pdf`;
       const uploadDir = path.join(process.cwd(), "public", "uploads", "pending");
       await mkdir(uploadDir, { recursive: true });
 

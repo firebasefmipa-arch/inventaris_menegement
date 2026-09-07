@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { generateBorrowingPDF } from "@/lib/pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
 import path from "path";
 
 export async function POST(
@@ -28,8 +29,13 @@ export async function POST(
       return NextResponse.json({ error: "Tidak memiliki akses" }, { status: 403 });
     }
 
-    // Hanya bisa regenerate jika status 'deleted'
-    if (tx.signedDocumentUrl !== "deleted") {
+    // Hanya bisa regenerate jika status 'deleted' ATAU file fisik tidak ada (rusak/hilang)
+    const fileMissing =
+      tx.signedDocumentUrl &&
+      tx.signedDocumentUrl !== "deleted" &&
+      tx.signedDocumentUrl.startsWith("/uploads/") &&
+      !existsSync(path.join(process.cwd(), "public", tx.signedDocumentUrl));
+    if (tx.signedDocumentUrl !== "deleted" && !fileMissing) {
       return NextResponse.json({ error: "Dokumen belum dihapus atau sudah ada" }, { status: 400 });
     }
 
@@ -63,11 +69,13 @@ export async function POST(
       return NextResponse.json({ error: "Tidak ada barang ditemukan" }, { status: 404 });
     }
 
-    // Ambil nim dari user
+    // Ambil nim & TTD dari user
     let nimValue = "";
+    let signatureUrl: string | null = null;
     if (tx.userId) {
-      const [txUser] = await db.select({ nim: users.nim }).from(users).where(eq(users.id, tx.userId)).limit(1);
+      const [txUser] = await db.select({ nim: users.nim, signatureUrl: users.signatureUrl }).from(users).where(eq(users.id, tx.userId as any)).limit(1);
       nimValue = txUser?.nim || "";
+      signatureUrl = txUser?.signatureUrl || null;
     }
 
     // Generate PDF
@@ -81,6 +89,7 @@ export async function POST(
       borrowDate: tx.borrowDate,
       returnDate: tx.expectedReturnDate,
       items: pdfItems,
+      signatureUrl,
     });
 
     // Simpan ke disk
@@ -88,7 +97,7 @@ export async function POST(
       .replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
     const d = tx.borrowDate;
     const dateStr = `${String(new Date(d).getDate()).padStart(2, "0")}${String(new Date(d).getMonth() + 1).padStart(2, "0")}${new Date(d).getFullYear()}`;
-    const filename = `${borrowerSafe}_${dateStr}_regen.pdf`;
+    const filename = `PB_${borrowerSafe}_${dateStr}_${txId}_regen.pdf`;
 
     const uploadDir = path.join(process.cwd(), "public", "uploads", "signed_forms");
     await mkdir(uploadDir, { recursive: true });

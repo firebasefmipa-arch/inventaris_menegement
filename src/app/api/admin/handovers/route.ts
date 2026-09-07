@@ -5,6 +5,7 @@ import { eq, desc, inArray, and } from "drizzle-orm";
 import { auth } from "@/auth";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
 import path from "path";
 
 // GET /api/admin/handovers — daftar semua serah terima (admin)
@@ -70,10 +71,21 @@ export async function GET(req: NextRequest) {
 
     const result = hvList.map((hv) => {
       const hvItems = itemsByHv.get(hv.id) ?? [];
+      // File dokumen hilang dari disk? (URL ada di DB tapi file tidak ditemukan)
+      let documentMissing = false;
+      if (hv.signedDocumentUrl && hv.signedDocumentUrl !== "deleted") {
+        const filePath = path.join(
+          process.cwd(),
+          "public",
+          hv.signedDocumentUrl.replace(/^\/uploads\//, "uploads/")
+        );
+        documentMissing = !existsSync(filePath);
+      }
       return {
         ...hv,
         itemName: hvItems[0]?.itemName ?? null,
         items: hvItems,
+        documentMissing,
       };
     });
 
@@ -201,7 +213,7 @@ export async function POST(req: NextRequest) {
         .replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
       const now = new Date();
       const dateStr = `${String(now.getDate()).padStart(2, "0")}${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
-      const filename = `${receiverSafe}_${dateStr}.pdf`;
+      const filename = `ST_${receiverSafe}_${dateStr}_${hvId}.pdf`;
 
       const uploadDir = path.join(process.cwd(), "public", "uploads", "handovers");
       await mkdir(uploadDir, { recursive: true });

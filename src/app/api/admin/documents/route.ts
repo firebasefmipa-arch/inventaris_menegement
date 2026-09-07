@@ -71,17 +71,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [signedForms, handovers] = await Promise.all([
+    const [signedForms, handoverFiles] = await Promise.all([
       getFilesFromFolder("signed_forms"),
       getFilesFromFolder("handovers"),
     ]);
 
-    const allFiles = [...signedForms, ...handovers];
+    const allFiles = [...signedForms, ...handoverFiles];
     const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
 
     return NextResponse.json({
       signedForms,
-      handovers,
+      handovers: handoverFiles,
       totalFiles: allFiles.length,
       totalSize,
     });

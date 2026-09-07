@@ -13,6 +13,7 @@ import { useToast } from "@/components/Toaster";
 import { HandoverModal } from "./HandoverModal";
 import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
 import { DocActions } from "@/components/DocActions";
+import { bp } from "@/lib/basepath";
 import { CorrectItemsModal, type CorrectItem } from "@/components/CorrectItemsModal";
 
 type HvItem = {
@@ -40,6 +41,7 @@ type Handover = {
   createdAt: string;
   itemName: string | null;
   items: HvItem[];
+  documentMissing?: boolean;
 };
 
 const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string; border: string }> = {
@@ -391,12 +393,15 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
                           signedDocumentUrl={hv.signedDocumentUrl}
                           type="handover"
                           id={hv.id}
+                          documentMissing={hv.documentMissing}
                           onRegenerated={() => fetchData()}
                         />
-                        <a href={`/api/handovers/${hv.id}/generate-pdf`} download
-                          className="text-xs text-teal-600 hover:underline font-medium flex items-center gap-1">
-                          <FileText className="w-3 h-3" /> Unduh PDF Kosong
-                        </a>
+                        {(!hv.signedDocumentUrl || hv.signedDocumentUrl === "deleted" || hv.documentMissing) && (
+                          <a href={bp(`/api/handovers/${hv.id}/generate-pdf`)} download
+                            className="text-xs text-teal-600 hover:underline font-medium flex items-center gap-1">
+                            <FileText className="w-3 h-3" /> Unduh PDF Kosong
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>

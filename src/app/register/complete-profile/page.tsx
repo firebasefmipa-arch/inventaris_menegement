@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { User, Phone, Building } from "lucide-react";
 import { useToast } from "@/components/Toaster";
 import { useSession } from "next-auth/react";
+import { onlyDigits } from "@/lib/digits";
 
 export default function CompleteProfilePage() {
   const { data: session, update } = useSession();
@@ -71,10 +72,11 @@ export default function CompleteProfilePage() {
                   <Phone className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
                   required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(onlyDigits(e.target.value))}
                   className="block w-full pl-10 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   placeholder="081234567890"
                 />
