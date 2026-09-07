@@ -212,9 +212,6 @@ export function ItemsClient({ items, categories }: Props) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Daftar Barang</h2>
-            <p className="text-gray-500 text-sm mt-1">
-              Kelola semua barang yang tersedia untuk dipinjam
-            </p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <div className="inline-flex items-center gap-1 bg-white border border-gray-100 rounded-xl p-1">

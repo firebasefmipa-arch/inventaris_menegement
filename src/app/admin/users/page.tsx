@@ -68,11 +68,6 @@ export default async function UsersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Daftar Pengguna</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            {isSuperAdmin
-              ? "Super Admin dapat promosi/demosi role, suspend, hapus akun, dan hapus history transaksi."
-              : "Admin dapat suspend akun user biasa."}
-          </p>
         </div>
         {isSuperAdmin && (
           <Link

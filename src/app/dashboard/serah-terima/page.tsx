@@ -34,9 +34,6 @@ export default async function SerahTerimaPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Serah Terima Barang</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Ajukan permintaan serah terima barang secara permanen dari Divisi TI FMIPA UII
-        </p>
       </div>
       <UserSerahTerimaFlow items={availableItems} />
     </div>
