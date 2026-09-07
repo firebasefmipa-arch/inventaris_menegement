@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toaster";
 import { completeRegistration } from "./actions";
 import { useSession, signOut } from "next-auth/react";
 import { bp } from "@/lib/basepath";
+import { onlyDigits } from "@/lib/digits";
 import clsx from "clsx";
 
 const DIVISI_OPTIONS = [
@@ -125,7 +126,7 @@ export default function CompleteRegistrationForm({ initialName, email }: { initi
         <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">No. WhatsApp / HP <span className="text-red-500">*</span></label>
         <div className="relative">
           <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)}
+          <input type="tel" inputMode="numeric" required value={phone} onChange={(e) => setPhone(onlyDigits(e.target.value))}
             className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             placeholder="08123456789" />
         </div>
@@ -136,7 +137,7 @@ export default function CompleteRegistrationForm({ initialName, email }: { initi
         <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">NIM / NIK <span className="text-red-500">*</span></label>
         <div className="relative">
           <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input type="text" required value={nim} onChange={(e) => setNim(e.target.value)}
+          <input type="text" inputMode="numeric" required value={nim} onChange={(e) => setNim(onlyDigits(e.target.value))}
             className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             placeholder="Nomor Induk Mahasiswa / Nomor Induk Karyawan" />
         </div>

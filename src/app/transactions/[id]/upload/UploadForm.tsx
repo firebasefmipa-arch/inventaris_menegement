@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, UploadCloud, CheckCircle, FileText, Loader2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { bp } from "@/lib/basepath";
 
 export default function UploadForm({ transactionId, currentStatus }: { transactionId: number, currentStatus: string }) {
   const [file, setFile] = useState<File | null>(null);
@@ -81,7 +82,7 @@ export default function UploadForm({ transactionId, currentStatus }: { transacti
             Unduh formulir peminjaman yang telah diisi otomatis dengan data Anda.
           </p>
           <a
-            href={`/api/transactions/${transactionId}/generate-pdf`}
+            href={bp(`/api/transactions/${transactionId}/generate-pdf`)}
             download
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-50 font-semibold text-sm transition-colors shadow-sm"
           >

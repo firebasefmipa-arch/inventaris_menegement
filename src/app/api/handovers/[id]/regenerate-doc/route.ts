@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { handovers, handoverItems, items } from "@/db/schema";
+import { handovers, handoverItems, items, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
 import path from "path";
 
 export async function POST(
@@ -27,7 +28,13 @@ export async function POST(
       return NextResponse.json({ error: "Tidak memiliki akses" }, { status: 403 });
     }
 
-    if (hv.signedDocumentUrl !== "deleted") {
+    // Hanya bisa regenerate jika status 'deleted' ATAU file fisik tidak ada (rusak/hilang)
+    const fileMissing =
+      hv.signedDocumentUrl &&
+      hv.signedDocumentUrl !== "deleted" &&
+      hv.signedDocumentUrl.startsWith("/uploads/") &&
+      !existsSync(path.join(process.cwd(), "public", hv.signedDocumentUrl));
+    if (hv.signedDocumentUrl !== "deleted" && !fileMissing) {
       return NextResponse.json({ error: "Dokumen belum dihapus atau sudah ada" }, { status: 400 });
     }
 
@@ -49,6 +56,13 @@ export async function POST(
       return NextResponse.json({ error: "Tidak ada barang ditemukan" }, { status: 404 });
     }
 
+    // Ambil TTD elektronik pemohon (user yang membuat handover)
+    let signatureUrl: string | null = null;
+    if (hv.userId) {
+      const [hvUser] = await db.select({ signatureUrl: users.signatureUrl }).from(users).where(eq(users.id, hv.userId as any)).limit(1);
+      signatureUrl = hvUser?.signatureUrl || null;
+    }
+
     // Generate PDF
     const pdfBuffer = await generateHandoverPDF({
       receiverName: hv.receiverName,
@@ -60,6 +74,7 @@ export async function POST(
       purpose: hv.purpose || "",
       notes: hv.notes || "",
       handoverDate: hv.handoverDate,
+      signatureUrl,
       items: hvItemRows.map((r) => ({
         name: r.itemName || "Barang",
         quantity: r.quantity,
@@ -73,7 +88,7 @@ export async function POST(
       .replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
     const d = hv.handoverDate;
     const dateStr = `${String(new Date(d).getDate()).padStart(2, "0")}${String(new Date(d).getMonth() + 1).padStart(2, "0")}${new Date(d).getFullYear()}`;
-    const filename = `${receiverSafe}_${dateStr}_regen.pdf`;
+    const filename = `ST_${receiverSafe}_${dateStr}_${hvId}_regen.pdf`;
 
     const uploadDir = path.join(process.cwd(), "public", "uploads", "handovers");
     await mkdir(uploadDir, { recursive: true });

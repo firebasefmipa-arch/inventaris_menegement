@@ -8,6 +8,7 @@ import {
   Upload, Trash2, PenTool, ImageIcon, Info,
 } from "lucide-react";
 import { useToast } from "@/components/Toaster";
+import { onlyDigits } from "@/lib/digits";
 import clsx from "clsx";
 
 const DEPARTMENT_GROUPS = [
@@ -94,7 +95,9 @@ export default function ProfilPage() {
   useEffect(() => { fetchProfile(); }, []);
 
   const handleChange = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    // NIK/NIM & No. HP hanya boleh angka
+    const v = field === "phone" || field === "nim" ? onlyDigits(value) : value;
+    setForm((prev) => ({ ...prev, [field]: v }));
     setDirty(true);
   };
 
@@ -376,7 +379,7 @@ export default function ProfilPage() {
             <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5 uppercase tracking-wide">No. WhatsApp / HP <span className="text-red-500">*</span></label>
             <div className="relative">
               <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input type="tel" required value={form.phone} onChange={(e) => handleChange("phone", e.target.value)}
+              <input type="tel" inputMode="numeric" required value={form.phone} onChange={(e) => handleChange("phone", e.target.value)}
                 className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-[#0e1c30] border border-gray-200 dark:border-[#1c2e48] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 placeholder="08123456789" />
             </div>
@@ -387,7 +390,7 @@ export default function ProfilPage() {
             <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5 uppercase tracking-wide">NIM / NIK <span className="text-red-500">*</span></label>
             <div className="relative">
               <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input type="text" required value={form.nim} onChange={(e) => handleChange("nim", e.target.value)}
+              <input type="text" inputMode="numeric" required value={form.nim} onChange={(e) => handleChange("nim", e.target.value)}
                 className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-[#0e1c30] border border-gray-200 dark:border-[#1c2e48] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 placeholder="Nomor Induk Mahasiswa / Nomor Induk Karyawan" />
             </div>

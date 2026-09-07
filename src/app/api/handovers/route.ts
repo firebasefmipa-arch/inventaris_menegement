@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
       const receiverSafe = receiverName.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
       const d = hv.handoverDate;
       const dateStr = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
-      const filename = `${receiverSafe}_${dateStr}_${hvId}.pdf`;
+      const filename = `ST_${receiverSafe}_${dateStr}_${hvId}.pdf`;
 
       const uploadDir = nodePath.default.join(process.cwd(), "public", "uploads", "pending");
       await mkdir(uploadDir, { recursive: true });

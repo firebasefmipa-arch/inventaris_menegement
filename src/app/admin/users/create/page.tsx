@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { createNativeUser } from "../actions";
 import { useToast } from "@/components/Toaster";
+import { onlyDigits } from "@/lib/digits";
 import clsx from "clsx";
 
 const DEPARTMENT_GROUPS = [
@@ -92,7 +93,9 @@ export default function CreateNativeUserPage() {
   const strength = passwordStrength();
 
   const handleChange = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    // NIK/NIM & No. HP hanya boleh angka
+    const v = field === "phone" || field === "nim" ? onlyDigits(value) : value;
+    setForm((prev) => ({ ...prev, [field]: v }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -399,6 +402,7 @@ export default function CreateNativeUserPage() {
               <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <input
                 type="tel"
+                inputMode="numeric"
                 value={form.phone}
                 onChange={(e) => handleChange("phone", e.target.value)}
                 placeholder="08123456789"
@@ -416,6 +420,7 @@ export default function CreateNativeUserPage() {
               <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <input
                 type="text"
+                inputMode="numeric"
                 value={form.nim}
                 onChange={(e) => handleChange("nim", e.target.value)}
                 placeholder="Nomor Induk Mahasiswa / Karyawan"

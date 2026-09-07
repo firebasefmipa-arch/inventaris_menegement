@@ -63,7 +63,7 @@ export async function POST(
       .slice(0, 40);
     const d = hv.handoverDate;
     const dateStr = `${String(new Date(d).getDate()).padStart(2,"0")}${String(new Date(d).getMonth()+1).padStart(2,"0")}${new Date(d).getFullYear()}`;
-    const safeFilename = `${receiverSafe}_${dateStr}${originalExt}`;
+    const safeFilename = `ST_${receiverSafe}_${dateStr}${originalExt}`;
     const filePath = path.join(uploadDir, safeFilename);
     await writeFile(filePath, buffer);
 

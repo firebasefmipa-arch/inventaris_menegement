@@ -115,7 +115,7 @@ export async function PATCH(
       const receiverSafe = hv.receiverName.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
       const d = hv.handoverDate;
       const dateStr = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
-      const filename = `${receiverSafe}_${dateStr}_${hvId}_corrected.pdf`;
+      const filename = `ST_${receiverSafe}_${dateStr}_${hvId}_corrected.pdf`;
       const uploadDir = path.join(process.cwd(), "public", "uploads", "pending");
       await mkdir(uploadDir, { recursive: true });
 

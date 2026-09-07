@@ -42,6 +42,17 @@ export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
   const role = (session?.user as any)?.role;
 
+  const navItemsAll = [
+    ...navItems,
+    ...(role === "super_admin" ? [{ href: "/admin/documents", label: "Dokumen", icon: FileArchive }] : []),
+  ];
+  const bestMatch = navItemsAll.reduce((best, nav) => {
+    if (pathname === nav.href || pathname.startsWith(nav.href + "/")) {
+      if (!best || nav.href.length > best.href.length) return nav;
+    }
+    return best;
+  }, null as typeof navItemsAll[0] | null);
+
   const handleLogout = async () => {
     try {
       await signOut({ redirectTo: bp("/admin/login") });
@@ -144,14 +155,7 @@ export function Sidebar() {
 
         {/* Navigation — scrollable */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
-          {[...navItems, ...(role === "super_admin" ? [{ href: "/admin/documents", label: "Dokumen", icon: FileArchive }] : [])].map((item) => {
-            const bestMatch = navItems.reduce((best, nav) => {
-              if (pathname === nav.href || pathname.startsWith(nav.href + "/")) {
-                if (!best || nav.href.length > best.href.length) return nav;
-              }
-              return best;
-            }, null as typeof navItems[0] | null);
-
+          {navItemsAll.map((item) => {
             const isActive = bestMatch?.href === item.href;
 
             return (

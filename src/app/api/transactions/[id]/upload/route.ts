@@ -100,7 +100,7 @@ export async function POST(
       .slice(0, 40);
     const d = tx.borrowDate;
     const dateStr = `${String(new Date(d).getDate()).padStart(2,"0")}${String(new Date(d).getMonth()+1).padStart(2,"0")}${new Date(d).getFullYear()}`;
-    const safeFilename = `${borrowerSafe}_${dateStr}${originalExt}`;
+    const safeFilename = `PB_${borrowerSafe}_${dateStr}${originalExt}`;
     const filePath = path.join(uploadDir, safeFilename);
 
     await writeFile(filePath, buffer);
