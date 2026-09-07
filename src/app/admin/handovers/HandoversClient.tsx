@@ -394,9 +394,10 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
                           type="handover"
                           id={hv.id}
                           documentMissing={hv.documentMissing}
+                          rejected={hv.status === "rejected"}
                           onRegenerated={() => fetchData()}
                         />
-                        {(!hv.signedDocumentUrl || hv.signedDocumentUrl === "deleted" || hv.documentMissing) && (
+                        {(!hv.signedDocumentUrl || hv.signedDocumentUrl === "deleted" || hv.documentMissing) && hv.status !== "rejected" && (
                           <a href={bp(`/api/handovers/${hv.id}/generate-pdf`)} download
                             className="text-xs text-teal-600 hover:underline font-medium flex items-center gap-1">
                             <FileText className="w-3 h-3" /> Unduh PDF Kosong

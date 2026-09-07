@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { deleteUploadByUrl } from "@/lib/delete-upload";
 
 // PUT /api/admin/handovers/[id] — approve atau reject
 export async function PUT(
@@ -78,11 +79,9 @@ export async function PUT(
       if (!rejectionReason?.trim())
         return NextResponse.json({ error: "Alasan penolakan wajib diisi" }, { status: 400 });
 
-      // Hapus PDF pending
-      if (hv.signedDocumentUrl?.startsWith("/uploads/pending/")) {
-        const filePath = path.join(process.cwd(), "public", hv.signedDocumentUrl);
-        if (existsSync(filePath)) await unlink(filePath).catch(() => {});
-      }
+      // Hapus PDF di folder mana pun (pending/handovers) — dokumen pengajuan
+      // ditolak tidak disimpan; riwayat tetap ada dengan status rejected.
+      await deleteUploadByUrl(hv.signedDocumentUrl);
 
       // Kembalikan stok
       const hvItems = await db.select().from(handoverItems).where(eq(handoverItems.handoverId, hvId));
@@ -101,6 +100,7 @@ export async function PUT(
       await db.update(handovers).set({
         status: "rejected",
         rejectionReason: rejectionReason.trim(),
+        signedDocumentUrl: null,
       }).where(eq(handovers.id, hvId));
 
       return NextResponse.json({ success: true, message: "Serah terima berhasil ditolak" });

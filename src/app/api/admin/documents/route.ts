@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { readdir, stat } from "fs/promises";
 import path from "path";
+import { db } from "@/db";
+import { handovers, transactions } from "@/db/schema";
+import { ne } from "drizzle-orm";
 
 export interface DocumentFile {
   name: string;
@@ -71,17 +74,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [signedForms, handoverFiles] = await Promise.all([
+    const [signedForms, handoverFiles, validHvUrls, validTxUrls] = await Promise.all([
       getFilesFromFolder("signed_forms"),
       getFilesFromFolder("handovers"),
+      // URL dokumen milik handover yang TIDAK rejected (ditolak → dokumen tak sah,
+      // tak boleh tampil di tab dokumen walau file fisiknya ada)
+      db
+        .select({ url: handovers.signedDocumentUrl })
+        .from(handovers)
+        .where(ne(handovers.status, "rejected")),
+      // Sama utk transaksi peminjaman
+      db
+        .select({ url: transactions.signedDocumentUrl })
+        .from(transactions)
+        .where(ne(transactions.status, "rejected")),
     ]);
 
-    const allFiles = [...signedForms, ...handoverFiles];
+    const validHvSet = new Set(validHvUrls.map((r) => r.url).filter((u): u is string => !!u));
+    const validTxSet = new Set(validTxUrls.map((r) => r.url).filter((u): u is string => !!u));
+    const handoverFilesFiltered = handoverFiles.filter((f) => validHvSet.has(f.url));
+    const signedFormsFiltered = signedForms.filter((f) => validTxSet.has(f.url));
+
+    const allFiles = [...signedFormsFiltered, ...handoverFilesFiltered];
     const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
 
     return NextResponse.json({
-      signedForms,
-      handovers: handoverFiles,
+      signedForms: signedFormsFiltered,
+      handovers: handoverFilesFiltered,
       totalFiles: allFiles.length,
       totalSize,
     });

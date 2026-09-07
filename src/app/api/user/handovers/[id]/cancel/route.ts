@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { handovers, handoverItems, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { deleteUploadByUrl } from "@/lib/delete-upload";
 
 export async function POST(
   request: NextRequest,
@@ -53,10 +54,12 @@ export async function POST(
       return NextResponse.json({ success: true, message: "Permintaan serah terima dibatalkan dan dihapus" });
     }
 
-    // Sudah upload → set rejected
+    // Sudah upload → set rejected; file dihapus (dokumen batal tak disimpan)
+    await deleteUploadByUrl(hv.signedDocumentUrl);
     await db.update(handovers).set({
       status: "rejected",
       rejectionReason: "Dibatalkan oleh pemohon",
+      signedDocumentUrl: null,
     }).where(eq(handovers.id, hvId));
 
     return NextResponse.json({ success: true, message: "Permintaan serah terima berhasil dibatalkan" });
