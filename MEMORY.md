@@ -34,6 +34,8 @@ src/
 │   │   ├── (auth)/login/         # Login admin/super_admin (native)
 │   │   ├── items/                # Manajemen barang
 │   │   ├── transactions/         # Manajemen peminjaman
+│   │   ├── documents/            # Manajemen dokumen (super_admin; hapus/export/regenerate)
+│   │   ├── handovers/            # Manajemen serah terima
 │   │   └── users/                # Manajemen pengguna
 │   ├── dashboard/                # Dashboard user
 │   │   ├── pinjam/               # Form pinjam barang (multi-item cart)
@@ -309,6 +311,31 @@ pending_signature → pending_approval → active → returned
                   ↘ rejected (dengan rejection_reason wajib)
 ```
 
+### Dokumen PDF (peminjaman & serah terima)
+- Generator PDF ada 2: `src/lib/pdf-generator.ts` (peminjaman, prefix file `PB_`)
+  dan `src/lib/handover-pdf-generator.ts` (serah terima, prefix `ST_`).
+- Folder upload: `public/uploads/{pending,signed_forms,handovers,signatures}/`
+  → URL publik `/uploads/<folder>/<file>` (klien wajib `bp()`/fetch ber-prefix).
+- **File upload/regenerate WAJIB ber-prefix** `PB_`/`ST_` + nama unik per id
+  (`PB_<nama>_<ddmmyyyy>_<id>_regen.pdf`). Nama tanpa id → tabrakan (hv2↔hv3
+  & tx2↔tx3 pernah saling timpa).
+- Isi barang PDF WAJIB baca tabel pivot `transaction_items` / `handover_items`
+  (transactions.item_id & handovers.item_id = NULL di data lama; fallback ke
+  item generik = salah isi dokumen).
+- TTD hv diambil live dari `users.signature_url` (URL publik `/uploads/signatures/...`
+  — path absolut bikin silent skip). Tabel `handovers` TIDAK punya kolom
+  `signature_url` meski schema.ts mendeklarasikannya.
+- Konvensi pdf-lib: `drawText` y = baseline teks (naik ke atas); `drawImage`
+  y = BOTTOM image (image naik ke atas) — jangan kurangi `sigDims.height`.
+  `drawLine` y = posisi garis.
+- Blok TTD+nama peminjam (kolom kanan) mengikuti pola serah terima:
+  nama bold + underline paling bawah; TTD bottom di `nama+12`.
+- Kolom kiri/tengah PDF peminjaman ("Penerima Barang Kembali", "Divisi Informasi
+  Teknologi"): garis TTD manual DI ATAS tulisan, digeser sehingga garisnya
+  sejajar underline nama peminjam; jarak ke "Ketentuan Peminjaman:" jaga ≥ 8pt.
+- UI admin: "Generate Ulang" tampil saat URL="deleted" ATAU file fisik hilang
+  (`documentMissing` — `existsSync` di route admin).
+
 ---
 
 ## 10. Hal yang Perlu Diperhatikan Saat Pengembangan
@@ -328,6 +355,8 @@ pending_signature → pending_approval → active → returned
 7. **Alur request auth di belakang gateway** — Next.js basePath otomatis strip prefix saat route matching. Request publik `/empati/api/auth/providers` sampai route handler sebagai `/api/auth/providers`; handler (route.ts) menambah prefix kembali (addBase) karena Auth.js dikonfigurasi `basePath = ${BASE}/api/auth` (agar callback URL Google menyertakan prefix). Jangan pindahkan route handler ke folder `src/app/empati/api/auth/` — itu pernah dicoba dan GAGAL (pathname Auth.js tidak cocok). Route handler WAJIB di `src/app/api/auth/[...nextauth]/route.ts`.
 
 8. **`images.unoptimized` jangan dihapus** — workaround bug image optimizer Next 16 yang 400 "received null" untuk semua gambar lokal di `public/`. Tanpa ini logo & gambar lain tidak muncul.
+
+9. **Sidebar admin active state** — `Sidebar.tsx` memakai `navItemsAll` (navItems + item "Dokumen" `/admin/documents` khusus super_admin) untuk menghitung `bestMatch`. Jangan hitung bestMatch hanya dari `navItems` dasar, atau item yang di-append di luar (Dokumen) tak akan pernah kehover.
 
 ---
 
