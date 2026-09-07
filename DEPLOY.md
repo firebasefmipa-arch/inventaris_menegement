@@ -22,13 +22,13 @@
 
 | | **A. Sub-path di domain gateway** (kondisi sekarang) | **B. Sub-path di domain lain** (masih gateway) | **C. Subdomain/domain sendiri** (tanpa gateway) |
 |---|---|---|---|
-| Contoh URL | pharmacy.uii.ac.id/empati | science.uii.ac.id/inventaris | inventaris.uii.ac.id |
-| `[DOMAIN]` | `pharmacy.uii.ac.id` | `science.uii.ac.id` | `inventaris.uii.ac.id` |
-| `[FORWARD_HOST]` (nginx) | `pharmacy.uii.ac.id` | `science.uii.ac.id` | `inventaris.uii.ac.id` |
-| `[BASE_PATH]` (env) | `/empati` | `/inventaris` | **KOSONG** (hapus baris) |
+| Contoh URL | science.uii.ac.id/logistik | pharmacy.uii.ac.id/empati (sudah nonaktif) | inventaris.uii.ac.id |
+| `[DOMAIN]` | `science.uii.ac.id` | `pharmacy.uii.ac.id` | `inventaris.uii.ac.id` |
+| `[FORWARD_HOST]` (nginx) | `science.uii.ac.id` | `pharmacy.uii.ac.id` | `inventaris.uii.ac.id` |
+| `[BASE_PATH]` (env) | `/logistik` | `/empati` | **KOSONG** (hapus baris) |
 | nginx rewrite prefix | perlu | perlu | **tidak perlu** |
 | SSL dari mana | gateway (Cloudflare) | gateway (Cloudflare) | **certbot sendiri** |
-| Butuh admin domain/gateway? | sudah beres | ya — arahkan path ke IP server | ya — DNS A record ke IP server + buka port 80/443 |
+| Butuh admin domain/gateway? | sudah beres | sudah beres | ya — DNS A record ke IP server + buka port 80/443 |
 | Google redirect URI | `https://[DOMAIN][BASE_PATH]/api/auth/callback/google` | sama | `https://[DOMAIN]/api/auth/callback/google` (tanpa path) |
 
 > Ringkasan aturan: **A & B identik secara teknis** — bedanya hanya nilai domain.
@@ -238,11 +238,23 @@ server {
     client_max_body_size 10M;
     merge_slashes off;
 
-    # File upload dilayani langsung Nginx
+    # File upload dilayani langsung Nginx — NO-CACHE (pernah tersaji lama dari
+    # cache Cloudflare setelah file ditimpa/regenerate; uploads wajib fresh):
     location /uploads/ {
         alias /var/www/inventaris_menegement/public/uploads/;
-        expires 7d;
-        add_header Cache-Control "public";
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+        add_header Pragma "no-cache";
+        etag off;
+    }
+
+    # Gateway kadang meneruskan //uploads/... (dobel slash) — tetap layani:
+    location ~ ^//uploads/ {
+        alias /var/www/inventaris_menegement/public/uploads/;
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+        add_header Pragma "no-cache";
+        etag off;
     }
 
     # Semua request: tambahkan prefix [BASE_PATH] kembali, lalu proxy ke Next
@@ -278,8 +290,10 @@ server {
 
     location /uploads/ {
         alias /var/www/inventaris_menegement/public/uploads/;
-        expires 7d;
-        add_header Cache-Control "public";
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+        add_header Pragma "no-cache";
+        etag off;
     }
 
     location / {
@@ -514,6 +528,7 @@ Lalu buka dari browser (URL publik sesuai skenario):
 | `Unknown column 'location'` (atau kolom lain) | DB kurang kolom | ALTER TABLE manual (Langkah 2) |
 | Logo/gambar tidak muncul | Bug image optimizer Next 16 | `images: { unoptimized: true }` (9a) |
 | Konten terlihat versi lama | Cache browser/Cloudflare | Hard refresh Ctrl+Shift+R |
+| PDF hasil regenerate tampak lama (isi/garis beda) | File PDF lama ter-cache | Uploads no-cache sudah aktif (blok `/uploads/`); file regenerasi namanya unik per id — hapus cache sekali lalu normal |
 
 ---
 
