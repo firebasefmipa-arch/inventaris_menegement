@@ -160,20 +160,20 @@ export default async function HomePage() {
           <Link
             key={card.label}
             href={card.href}
-            className="group relative bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden flex flex-col"
+            className="group relative bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
           >
             {/* Accent bar top */}
             <div className={`h-1 w-full bg-linear-to-r ${card.color}`} />
-            <div className="p-5 flex flex-col gap-3 flex-1">
-              <div className="flex items-center justify-between">
-                <div className={`w-10 h-10 ${card.bg} rounded-xl flex items-center justify-center`}>
+            <div className="p-5">
+              {/* Baris atas: ikon + angka sejajar */}
+              <div className="flex items-center justify-between gap-2">
+                <div className={`w-10 h-10 ${card.bg} rounded-xl flex items-center justify-center shrink-0`}>
                   <card.icon className={`w-5 h-5 ${card.iconColor}`} />
                 </div>
-                <span className={`text-[10px] font-semibold uppercase tracking-widest ${card.iconColor} opacity-60`}>
-                  {card.label}
-                </span>
+                <p className="text-3xl font-extrabold text-gray-900 tabular-nums leading-none">{card.value}</p>
               </div>
-              <p className="text-3xl font-extrabold text-gray-900 tabular-nums leading-none">{card.value}</p>
+              {/* Label bawah */}
+              <p className={`text-xs font-semibold mt-3 ${card.iconColor} opacity-70`}>{card.label}</p>
             </div>
           </Link>
         ))}
