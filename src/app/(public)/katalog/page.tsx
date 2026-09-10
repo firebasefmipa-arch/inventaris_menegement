@@ -51,7 +51,7 @@ export default async function KatalogPage({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain" />
-            <span className="font-bold text-gray-900 text-lg">Manajemen Inventaris</span>
+            <span className="font-bold text-gray-900 text-lg">SIM Logistik</span>
           </div>
           <Link
             href="/"

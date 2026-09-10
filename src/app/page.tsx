@@ -10,7 +10,7 @@ import { bp } from "@/lib/basepath";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Manajemen Inventaris - Portal Peminjaman",
+  title: "SIM Logistik - Portal Peminjaman",
   description: "Pinjam peralatan dengan mudah. Login dulu, pilih barang, dan ajukan peminjaman.",
 };
 
@@ -34,7 +34,7 @@ export default async function HomePage() {
           <div className="h-10 flex items-center bg-white dark:bg-white/90 rounded-xl px-2 py-1 shadow-sm">
             <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={120} height={40} className="object-contain h-8 w-auto" />
           </div>
-          <span className="font-bold text-gray-900 dark:text-slate-100 text-lg tracking-tight">Manajemen Inventaris</span>
+          <span className="font-bold text-gray-900 dark:text-slate-100 text-lg tracking-tight">SIM Logistik</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggleButton />
@@ -121,7 +121,7 @@ export default async function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-100 dark:border-[#1c2e48] py-6 text-center text-xs text-gray-400 dark:text-slate-500">
-        Manajemen Inventaris &copy; {new Date().getFullYear()} &mdash; Sistem Peminjaman Barang
+        SIM Logistik &copy; {new Date().getFullYear()} &mdash; Sistem Peminjaman Barang
       </footer>
     </div>
   );

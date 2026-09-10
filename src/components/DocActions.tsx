@@ -28,7 +28,6 @@ export function DocActions({ signedDocumentUrl, type, id, onRegenerated, documen
   const generateUrl = type === "transaction"
     ? `/api/transactions/${id}/generate-pdf`
     : `/api/handovers/${id}/generate-pdf`;
-
   const handleRegenerate = async () => {
     if (!confirm("Generate ulang dokumen ini? File baru akan dibuat dan status akan kembali ke 'Menunggu Persetujuan'.")) return;
     setRegenerating(true);
@@ -95,7 +94,7 @@ export function DocActions({ signedDocumentUrl, type, id, onRegenerated, documen
     return (
       <div className="flex items-center gap-1.5 flex-wrap">
         <a
-          href={withBase(generateUrl)}
+          href={withBase(generateUrl + "?inline=1")}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors"

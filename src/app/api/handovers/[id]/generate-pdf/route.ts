@@ -64,7 +64,7 @@ export async function GET(
     return new NextResponse(pdfBuffer as any, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${sanitizeFilename(hv.receiverName)}_${formatDateFilename(hv.handoverDate)}.pdf"`,
+        "Content-Disposition": `${request.nextUrl.searchParams.get("inline") === "1" ? "inline" : "attachment"}; filename="${sanitizeFilename(hv.receiverName)}_${formatDateFilename(hv.handoverDate)}.pdf"`,
       },
     });
   } catch (error) {
