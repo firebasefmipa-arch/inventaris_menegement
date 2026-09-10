@@ -259,7 +259,7 @@ export function PinjamFlow({ items }: { items: PublicItem[] }) {
             <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={36} height={36} className="rounded-xl object-contain" />
             <div>
               <p className="font-bold text-gray-900 leading-none">
-                Manajemen Inventaris
+                SIM Logistik
               </p>
               <p className="text-[11px] text-gray-500 mt-0.5">
                 Portal Peminjaman
@@ -896,7 +896,7 @@ export function PinjamFlow({ items }: { items: PublicItem[] }) {
         {/* Footer */}
         <footer className="border-t border-gray-100 py-8 text-center">
           <p className="text-xs text-gray-400">
-            Manajemen Inventaris — Sistem Peminjaman Barang Internal. Butuh bantuan?
+            SIM Logistik — Sistem Peminjaman Barang Internal. Butuh bantuan?
             Hubungi admin di kantor.
           </p>
         </footer>

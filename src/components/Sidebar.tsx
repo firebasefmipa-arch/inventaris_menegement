@@ -99,7 +99,7 @@ export function Sidebar() {
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
         <Link href="/admin" className="flex items-center gap-2">
           <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain" />
-          <span className="font-bold text-gray-900 dark:text-slate-100">Manajemen Inventaris</span>
+          <span className="font-bold text-gray-900 dark:text-slate-100">SIM Logistik</span>
         </Link>
         <div className="flex items-center gap-1">
           <button
@@ -146,7 +146,7 @@ export function Sidebar() {
               style={{ maxHeight: 48 }}
             />
           </div>
-          <h1 className="font-bold text-sm text-gray-900 dark:text-slate-100 leading-tight mt-1.5">Manajemen Inventaris</h1>
+          <h1 className="font-bold text-sm text-gray-900 dark:text-slate-100 leading-tight mt-1.5">SIM Logistik</h1>
           <p className="text-xs text-gray-500 dark:text-slate-400">Peminjaman & Serah Terima</p>
         </div>
 

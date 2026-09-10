@@ -99,7 +99,7 @@ export async function GET(
     return new NextResponse(pdfBuffer as any, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${sanitizeFilename(tx.borrowerName)}_${formatDateFilename(tx.borrowDate)}.pdf"`,
+        "Content-Disposition": `${request.nextUrl.searchParams.get("inline") === "1" ? "inline" : "attachment"}; filename="${sanitizeFilename(tx.borrowerName)}_${formatDateFilename(tx.borrowDate)}.pdf"`,
       },
     });
   } catch (error) {

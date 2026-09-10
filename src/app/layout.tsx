@@ -10,7 +10,7 @@ import { BasePathProvider } from "@/components/BasePathProvider";
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Manajemen Inventaris - Sistem Manajemen Peminjaman Barang",
+  title: "SIM Logistik",
   description:
     "Sistem peminjaman barang yang user-friendly dan modern dengan portal peminjaman mandiri",
 };
