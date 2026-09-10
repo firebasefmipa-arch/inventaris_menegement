@@ -22,6 +22,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Barang tidak ditemukan" }, { status: 404 });
     }
 
+    if (!item.canBorrow) {
+      return NextResponse.json(
+        { error: `Barang "${item.name}" tidak tersedia untuk dipinjam.` },
+        { status: 400 }
+      );
+    }
+
     if (item.availableQuantity < quantity) {
       return NextResponse.json(
         { error: `Stok tidak mencukupi. Tersedia: ${item.availableQuantity}` },

@@ -125,6 +125,8 @@ export async function POST(req: NextRequest) {
     for (const c of cartItems) {
       const dbItem = itemMap.get(c.itemId);
       if (!dbItem) return NextResponse.json({ error: `Barang ID ${c.itemId} tidak ditemukan` }, { status: 404 });
+      if (!dbItem.canHandover)
+        return NextResponse.json({ error: `Barang "${dbItem.name}" tidak tersedia untuk diserahterimakan.` }, { status: 400 });
       if (dbItem.availableQuantity < c.quantity)
         return NextResponse.json({ error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` }, { status: 400 });
     }

@@ -18,7 +18,7 @@ export default async function KatalogPage({
   const search = params.search || "";
   const category = params.category || "";
 
-  const conditions = [eq(items.status, "available")]; // Only show available items for public
+  const conditions = [eq(items.status, "available"), eq(items.canBorrow, true)]; // hanya barang yang boleh dipinjam
   // Sembunyikan item qty=0 (habis diserahterimakan permanen)
   conditions.push(gt(items.quantity, 0));
   
@@ -41,7 +41,7 @@ export default async function KatalogPage({
     .orderBy(items.name);
 
   // Get unique categories for available items
-  const availableItems = await db.select({ category: items.category }).from(items).where(eq(items.status, "available"));
+  const availableItems = await db.select({ category: items.category }).from(items).where(and(eq(items.status, "available"), eq(items.canBorrow, true)));
   const categories = [...new Set(availableItems.map((i) => i.category))];
 
   return (
@@ -51,7 +51,7 @@ export default async function KatalogPage({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={32} height={32} className="rounded-lg object-contain" />
-            <span className="font-bold text-gray-900 text-lg">SIM Logistik</span>
+            <span className="font-bold text-gray-900 text-lg">Management logistic</span>
           </div>
           <Link
             href="/"

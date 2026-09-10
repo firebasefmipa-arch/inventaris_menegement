@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { items, transactions } from "@/db/schema";
-import { eq, sql, count } from "drizzle-orm";
+import { eq, and, sql, count, gt } from "drizzle-orm";
 
 export async function GET() {
   try {
-    const [totalItems] = await db.select({ count: count() }).from(items);
+    const [totalItems] = await db.select({ count: count() }).from(items).where(gt(items.quantity, 0));
     const [availableItems] = await db
       .select({ count: count() })
       .from(items)
-      .where(eq(items.status, "available"));
+      .where(and(eq(items.status, "available"), gt(items.quantity, 0)));
     const [borrowedItems] = await db
       .select({ count: count() })
       .from(items)
-      .where(eq(items.status, "borrowed"));
+      .where(and(eq(items.status, "borrowed"), gt(items.quantity, 0)));
 
     // Count unique borrowers from transactions
     const [totalBorrowers] = await db
@@ -39,6 +39,7 @@ export async function GET() {
         count: count(),
       })
       .from(items)
+      .where(gt(items.quantity, 0))
       .groupBy(items.category);
 
     const recentTransactions = await db

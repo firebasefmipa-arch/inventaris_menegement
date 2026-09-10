@@ -1,4 +1,4 @@
-# Panduan Deploy Manual — Manajemen Inventaris FMIPA UII
+# Panduan Deploy Manual — Management logistic FMIPA UII
 
 > Dokumen ini adalah panduan deploy nyata di server produksi, hasil belajar
 > dari pengalaman langsung. Ikuti urutannya — jangan loncat langkah.
@@ -124,6 +124,15 @@ mysql -u inventaris -p modern_lending < database/schema_only.sql
 > ALTER TABLE <nama_tabel> ADD COLUMN <nama_kolom> varchar(255) NULL;
 > ```
 > (Contoh nyata: `ALTER TABLE handovers ADD COLUMN location varchar(255) NULL;`)
+>
+> Kolom yang ditambahkan setelah rilis pertama (jalankan pada server yang sudah
+> jalan; aman & idempoten untuk data lama):
+> ```sql
+> -- Flag ketersediaan barang (September 2026) — barang lama otomatis = 1
+> ALTER TABLE items
+>   ADD COLUMN can_borrow   TINYINT(1) NOT NULL DEFAULT 1,
+>   ADD COLUMN can_handover TINYINT(1) NOT NULL DEFAULT 1;
+> ```
 
 ---
 
@@ -592,6 +601,17 @@ pm2 logs pinjam-app --lines 100
 pm2 startup   # jalankan sekali, ikuti output-nya
 pm2 save
 ```
+
+### Tombol "Lihat Dokumen" malah mengunduh file
+Bukan bug server. Route `generate-pdf` mengirim header
+`Content-Disposition: attachment` → browser memaksa unduh. Solusinya di kode:
+tambahkan dukungan query `?inline=1` (header jadi `inline`) dan tombol
+"Lihat Dokumen" memakai param itu. Jangan ubah header jadi `inline` permanen —
+tombol "Unduh" butuh `attachment`.
+
+Kalau PDF yang muncul isinya lama (bukan hasil build terbaru), itu cache
+browser/nginx: hard refresh (Ctrl+Shift+R). Blok nginx `/uploads/` sudah
+`no-cache` (`expires -1`, `no-store`) untuk mencegah ini.
 
 ### Memori Proyek
 - Detail sourcecode & konvensi kode (struktur folder, schema, role, alur):

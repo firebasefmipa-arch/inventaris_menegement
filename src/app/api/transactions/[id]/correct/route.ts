@@ -63,6 +63,8 @@ export async function PATCH(
     for (const ni of newItems) {
       const dbItem = itemMap.get(ni.itemId);
       if (!dbItem) return NextResponse.json({ error: `Barang ID ${ni.itemId} tidak ditemukan` }, { status: 404 });
+      if (!dbItem.canBorrow)
+        return NextResponse.json({ error: `Barang "${dbItem.name}" tidak tersedia untuk dipinjam.` }, { status: 400 });
       if (dbItem.availableQuantity < ni.quantity)
         return NextResponse.json({ error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` }, { status: 400 });
     }

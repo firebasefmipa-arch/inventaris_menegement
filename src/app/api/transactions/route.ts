@@ -123,6 +123,12 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      if (!dbItem.canBorrow) {
+        return NextResponse.json(
+          { error: `Barang "${dbItem.name}" tidak tersedia untuk dipinjam.` },
+          { status: 400 }
+        );
+      }
     }
 
     const returnDate = new Date(expectedReturnDate);

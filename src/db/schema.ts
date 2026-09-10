@@ -4,6 +4,7 @@ import {
   varchar,
   text,
   int,
+  boolean,
   timestamp,
   datetime,
   primaryKey,
@@ -23,6 +24,8 @@ export const items = mysqlTable("items", {
   imageUrl: varchar("image_url", { length: 500 }),
   quantity: int("quantity").notNull().default(1),
   availableQuantity: int("available_quantity").notNull().default(1),
+  canBorrow: boolean("can_borrow").notNull().default(true),
+  canHandover: boolean("can_handover").notNull().default(true),
   status: mysqlEnum("status", ["available", "borrowed"])
     .notNull()
     .default("available"),

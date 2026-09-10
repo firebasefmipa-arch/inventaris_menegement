@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { items } from "@/db/schema";
-import { eq, gt } from "drizzle-orm";
+import { eq, gt, and } from "drizzle-orm";
 import { UserSerahTerimaFlow } from "./UserSerahTerimaFlow";
 
 export default async function SerahTerimaPage() {
@@ -28,7 +28,14 @@ export default async function SerahTerimaPage() {
       imageUrl: items.imageUrl,
     })
     .from(items)
-    .where(eq(items.status, "available"));
+    .where(
+      and(
+        eq(items.status, "available"),
+        eq(items.canHandover, true),
+        gt(items.availableQuantity, 0),
+        gt(items.quantity, 0)
+      )
+    );
 
   return (
     <div className="space-y-6">

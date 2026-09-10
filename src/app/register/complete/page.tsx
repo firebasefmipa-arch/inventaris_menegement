@@ -5,7 +5,7 @@ import CompleteRegistrationForm from "./CompleteRegistrationForm";
 import { Package } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Lengkapi Pendaftaran - SIM Logistik",
+  title: "Lengkapi Pendaftaran - Management logistic",
 };
 
 export default async function RegisterCompletePage() {

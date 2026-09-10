@@ -138,6 +138,44 @@ export default async function ItemDetailPage({
               </div>
             )}
           </div>
+
+          {/* Ketersediaan */}
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div
+              className={`rounded-xl p-4 border ${
+                item.canBorrow
+                  ? "bg-emerald-50 border-emerald-200"
+                  : "bg-gray-50 border-gray-200"
+              }`}
+            >
+              <p className="text-xs text-gray-500 mb-1">Peminjaman</p>
+              <p
+                className={`text-sm font-bold ${
+                  item.canBorrow ? "text-emerald-700" : "text-gray-500"
+                }`}
+              >
+                {item.canBorrow ? "Tersedia untuk dipinjam" : "Tidak Tersedia"}
+              </p>
+            </div>
+            <div
+              className={`rounded-xl p-4 border ${
+                item.canHandover
+                  ? "bg-emerald-50 border-emerald-200"
+                  : "bg-gray-50 border-gray-200"
+              }`}
+            >
+              <p className="text-xs text-gray-500 mb-1">Serah Terima</p>
+              <p
+                className={`text-sm font-bold ${
+                  item.canHandover ? "text-emerald-700" : "text-gray-500"
+                }`}
+              >
+                {item.canHandover
+                  ? "Tersedia untuk diserahterimakan"
+                  : "Tidak Tersedia"}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
