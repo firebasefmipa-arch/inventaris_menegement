@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { eq, like, or, and, gt } from "drizzle-orm";
+import { toBool } from "@/lib/to-bool";
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,12 +10,17 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const category = searchParams.get("category") || "";
     const status = searchParams.get("status") || "";
+    const canBorrow = searchParams.get("canBorrow");
+    const canHandover = searchParams.get("canHandover");
 
     const conditions = [];
 
     // Sembunyikan item yang sudah habis total (quantity=0, hasil serah terima
     // permanen — tidak akan kembali). Item dipinjam tetap muncul (avail 0, qty>0).
     conditions.push(gt(items.quantity, 0));
+
+    if (canBorrow === "1") conditions.push(eq(items.canBorrow, true));
+    if (canHandover === "1") conditions.push(eq(items.canHandover, true));
 
     if (search) {
       conditions.push(
@@ -56,7 +62,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, category, description, quantity, location, imageUrl, sn, inventoryNumber, assetNumber, lastCheckDate, condition } = body;
+    const { name, category, description, quantity, location, imageUrl, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover } = body;
 
     if (!name || !category) {
       return NextResponse.json(
@@ -81,6 +87,8 @@ export async function POST(request: NextRequest) {
         imageUrl: imageUrl || null,
         quantity: qty,
         availableQuantity: qty,
+        canBorrow: canBorrow === undefined ? true : toBool(canBorrow),
+        canHandover: canHandover === undefined ? true : toBool(canHandover),
         location: location || null,
         status: "available",
       })

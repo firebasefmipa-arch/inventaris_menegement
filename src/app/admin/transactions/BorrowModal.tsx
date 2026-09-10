@@ -57,7 +57,7 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
 
   useEffect(() => {
     if (isOpen) {
-      fetch("/api/items?limit=200")
+      fetch("/api/items?limit=200&canBorrow=1")
         .then((r) => r.json())
         .then((data) => setItems(Array.isArray(data) ? data : data.items || []));
     }

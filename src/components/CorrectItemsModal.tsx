@@ -39,18 +39,21 @@ export function CorrectItemsModal({ isOpen, onClose, onSaved, type, id, initialI
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Fetch semua barang yang available saat modal dibuka
+  // Fetch semua barang yang available saat modal dibuka.
+  // Filter izin mengikuti jenis dokumen: koreksi peminjaman → canBorrow,
+  // koreksi serah terima → canHandover.
   useEffect(() => {
     if (!isOpen) return;
     setItems(initialItems);
-    fetch("/api/items?limit=500")
+    const perm = type === "handover" ? "canHandover" : "canBorrow";
+    fetch(`/api/items?limit=500&${perm}=1`)
       .then((r) => r.json())
       .then((data) => {
         const arr = Array.isArray(data) ? data : data.items ?? [];
         setAllItems(arr.filter((i: AvailableItem) => i.availableQuantity > 0));
       })
       .catch(() => {});
-  }, [isOpen]);
+  }, [isOpen, type]);
 
   const filteredAvailable = allItems.filter((i) => {
     const inCart = items.some((c) => c.itemId === i.id);

@@ -40,6 +40,8 @@ export function ItemModal({ isOpen, onClose, existingCategories }: ItemModalProp
     noasset: "",
     tanggalcek: "",
     kondisi: "",
+    canBorrow: "1",
+    canHandover: "1",
   });
 
   const modalRef = useRef<HTMLDivElement>(null);
@@ -72,6 +74,8 @@ export function ItemModal({ isOpen, onClose, existingCategories }: ItemModalProp
       noasset: "",
       tanggalcek: "",
       kondisi: "",
+      canBorrow: "1",
+      canHandover: "1",
     });
     setShowCustomCategory(false);
   };
@@ -119,6 +123,8 @@ export function ItemModal({ isOpen, onClose, existingCategories }: ItemModalProp
           quantity: parseInt(form.quantity),
           location: form.location || null,
           imageUrl: form.imageUrl || null,
+          canBorrow: form.canBorrow === "1",
+          canHandover: form.canHandover === "1",
         }),
       });
 
@@ -364,6 +370,37 @@ export function ItemModal({ isOpen, onClose, existingCategories }: ItemModalProp
                   placeholder="Contoh: Ruang Server Lt.2"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                 />
+              </div>
+            </div>
+
+            {/* Ketersediaan untuk Peminjaman & Serah Terima */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Peminjaman
+                </label>
+                <select
+                  value={form.canBorrow}
+                  onChange={(e) => setForm({ ...form, canBorrow: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none appearance-none"
+                >
+                  <option value="1">Tersedia</option>
+                  <option value="0">Tidak Tersedia</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Serah Terima
+                </label>
+                <select
+                  value={form.canHandover}
+                  onChange={(e) => setForm({ ...form, canHandover: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none appearance-none"
+                >
+                  <option value="1">Tersedia</option>
+                  <option value="0">Tidak Tersedia</option>
+                </select>
               </div>
             </div>
           </form>

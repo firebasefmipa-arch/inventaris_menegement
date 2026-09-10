@@ -15,7 +15,7 @@
 
 | | |
 |---|---|
-| **Nama Sistem** | Sistem Peminjaman Alat & Barang — Divisi TI FMIPA UII |
+| **Nama Sistem** | Management logistic — Sistem Peminjaman Alat & Barang, Divisi TI FMIPA UII |
 | **Stack** | Next.js 16 (App Router) + MySQL + Drizzle ORM + NextAuth v5 |
 | **Database** | `modern_lending` (MySQL/MariaDB via XAMPP lokal) |
 | **Auth** | Google OAuth (user/admin) + Credentials (super_admin/admin native) |
@@ -133,6 +133,10 @@ transaction_id INT → transactions.id (CASCADE DELETE)
 item_id        INT → items.id        (CASCADE DELETE)
 quantity       INT
 notes          TEXT
+
+-- items (flag ketersediaan manual, ditambah September 2026)
+can_borrow   TINYINT(1) NOT NULL DEFAULT 1  -- boleh dipinjam?
+can_handover TINYINT(1) NOT NULL DEFAULT 1  -- boleh diserahterimakan?
 ```
 
 ### Foreign Key Penting
@@ -282,7 +286,17 @@ ALTER TABLE transactions MODIFY COLUMN item_id INT NULL;
 
 -- 7. Buat akun super_admin
 -- Jalankan: npm run setup:superadmin
+
+-- 8. Flag ketersediaan barang (September 2026)
+--    Barang lama otomatis dapat nilai 1 (Tersedia) — perilaku tidak berubah.
+ALTER TABLE items
+  ADD COLUMN can_borrow   TINYINT(1) NOT NULL DEFAULT 1,
+  ADD COLUMN can_handover TINYINT(1) NOT NULL DEFAULT 1;
 ```
+
+> Catatan tanggal 8: JANGAN pakai `drizzle-kit push` di produksi — pernah
+> menggagalkan/menghapus index FK `account_userId_idx`. Tambah kolom manual
+> dengan ALTER seperti di atas.
 
 ---
 
@@ -336,6 +350,36 @@ pending_signature → pending_approval → active → returned
 - UI admin: "Generate Ulang" tampil saat URL="deleted" ATAU file fisik hilang
   (`documentMissing` — `existsSync` di route admin).
 
+### Ketersediaan Barang (`can_borrow` / `can_handover`)
+
+Dua flag manual per barang (bukan hitungan otomatis). Admin menentukannya di
+form tambah/edit barang lewat 2 dropdown "Peminjaman" & "Serah Terima"
+(Tersedia / Tidak Tersedia). Bawaan keduanya `1`.
+
+Arti:
+- `can_borrow = 0` → barang disembunyikan dari halaman **Pinjam** user.
+- `can_handover = 0` → disembunyikan dari halaman **Serah Terima** user.
+- Keduanya `0` → tak muncul di dua halaman user, tapi TETAP ada di daftar
+  barang admin & riwayat.
+
+**Admin TIDAK bisa menimpa aturan ini** (keputusan pemilik produk, Sep 2026) —
+harus ubah flag dulu. Endpoint yang WAJIB menolak bila flag mati:
+`/api/pinjam`, `/api/transactions`, `/api/transactions/[id]/correct`,
+`/api/handovers`, `/api/admin/handovers`, `/api/admin/handovers/[id]/correct`,
+`/api/public/borrow` (endpoint lama).
+
+Titik filter (jangan lupa bila menambah daftar barang baru):
+- `GET /api/items?canBorrow=1` / `?canHandover=1` (query param opsional).
+- Halaman user: `dashboard/pinjam` (`canBorrow`), `dashboard/serah-terima`
+  (`canHandover` + `availableQuantity>0` + `quantity>0`).
+- Modal admin: `BorrowModal` (`canBorrow=1`), `HandoverModal` (`canHandover=1`),
+  `CorrectItemsModal` (param ikut prop `type`), `transactions/new`.
+- Label status di `ItemsClient.tsx` (kartu & list) + `admin/items/[id]`.
+- Filter dropdown "Semua Peminjaman"/"Semua Serah Terima" di `ItemsClient.tsx`.
+
+**Jangan pakai `Boolean(nilai)` untuk flag ini** — `Boolean("0")` = `true`.
+Pakai helper `toBool()` dari `src/lib/to-bool.ts`.
+
 ---
 
 ## 10. Hal yang Perlu Diperhatikan Saat Pengembangan
@@ -357,6 +401,16 @@ pending_signature → pending_approval → active → returned
 8. **`images.unoptimized` jangan dihapus** — workaround bug image optimizer Next 16 yang 400 "received null" untuk semua gambar lokal di `public/`. Tanpa ini logo & gambar lain tidak muncul.
 
 9. **Sidebar admin active state** — `Sidebar.tsx` memakai `navItemsAll` (navItems + item "Dokumen" `/admin/documents` khusus super_admin) untuk menghitung `bestMatch`. Jangan hitung bestMatch hanya dari `navItems` dasar, atau item yang di-append di luar (Dokumen) tak akan pernah kehover.
+
+10. **Brand tampilan = "Management logistic"** — dipakai di SEMUA tempat: `metadata.title` tiap halaman, teks di bawah logo (`Sidebar.tsx`, `UserSidebar.tsx`), landing (`app/page.tsx`), katalog, login, `PinjamFlow.tsx`. Kalau ganti lagi, sisir semua file (pernah 14 kemunculan) — jangan hanya layout.tsx.
+
+11. **Logo mode gelap** — pakai komponen klien `src/components/Logo.tsx`: mode terang `fmipa-logo.png`, mode gelap `fmipa-logo-kuning.png`. Wrapper-nya WAJIB `dark:bg-transparent` (kalau tetap putih, logo kuning tak terbaca di atas putih). Halaman server-component tak bisa pakai hook tema — pakai komponen ini.
+    - Katalog publik (`(public)/katalog`) tidak punya dark mode → logo statis di sana aman.
+
+12. **Item `quantity = 0` disembunyikan, bukan dihapus** — hanya dihasilkan serah terima permanen (barang tak kembali). Barang yang sedang dipinjam punya `availableQuantity = 0` tapi `quantity > 0` → TETAP tampil. Jangan DELETE item: `handover_items.item_id` CASCADE → riwayat serah terima ikut terhapus.
+    - Filter `gt(items.quantity, 0)` ada di: `admin/items/page.tsx`, `/api/items`, katalog, statistik dashboard, `/api/stats`.
+
+13. **`toBool()` untuk flag boolean dari JSON** — `Boolean("0")` bernilai `true` di JS. Semua flag `can_borrow`/`can_handover` wajib lewat `toBool()` (`src/lib/to-bool.ts`), jangan `Boolean()`.
 
 ---
 

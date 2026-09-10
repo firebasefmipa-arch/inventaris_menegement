@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { toBool } from "@/lib/to-bool";
 
 export async function GET(
   _request: NextRequest,
@@ -37,7 +38,7 @@ export async function PUT(
     const { id } = await params;
     const itemId = parseInt(id);
     const body = await request.json();
-    const { name, category, description, quantity, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition } =
+    const { name, category, description, quantity, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover } =
       body;
 
     const [existing] = await db
@@ -75,6 +76,8 @@ export async function PUT(
         ...(location !== undefined && { location }),
         ...(imageUrl !== undefined && { imageUrl }),
         ...(status !== undefined && { status }),
+        ...(canBorrow !== undefined && { canBorrow: toBool(canBorrow) }),
+        ...(canHandover !== undefined && { canHandover: toBool(canHandover) }),
         updatedAt: new Date(),
       })
       .where(eq(items.id, itemId));

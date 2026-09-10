@@ -67,7 +67,7 @@ export async function PUT(
               .update(items)
               .set({
                 availableQuantity: newAvailable,
-                status: newAvailable >= item.quantity ? "available" : "available",
+                status: newAvailable > 0 ? "available" : "borrowed",
                 updatedAt: new Date(),
               })
               .where(eq(items.id, item.id));

@@ -2,15 +2,14 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight, Package, Clock, ShieldCheck, ChevronRight } from "lucide-react";
 import { ThemeToggleButton } from "@/components/ThemeToggleButton";
-import { bp } from "@/lib/basepath";
+import { Logo } from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "SIM Logistik - Portal Peminjaman",
+  title: "Management logistic - Portal Peminjaman",
   description: "Pinjam peralatan dengan mudah. Login dulu, pilih barang, dan ajukan peminjaman.",
 };
 
@@ -31,10 +30,10 @@ export default async function HomePage() {
       {/* Navbar */}
       <nav className="border-b border-gray-100 dark:border-[#1c2e48] px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between max-w-7xl mx-auto w-full">
         <div className="flex items-center gap-2.5">
-          <div className="h-10 flex items-center bg-white dark:bg-white/90 rounded-xl px-2 py-1 shadow-sm">
-            <Image src={bp("/fmipa-logo.png")} alt="Logo FMIPA" width={120} height={40} className="object-contain h-8 w-auto" />
+          <div className="h-10 flex items-center bg-white dark:bg-transparent rounded-xl px-2 py-1">
+            <Logo maxHeight={32} />
           </div>
-          <span className="font-bold text-gray-900 dark:text-slate-100 text-lg tracking-tight">SIM Logistik</span>
+          <span className="font-bold text-gray-900 dark:text-slate-100 text-lg tracking-tight">Management logistic</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggleButton />
@@ -121,7 +120,7 @@ export default async function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-100 dark:border-[#1c2e48] py-6 text-center text-xs text-gray-400 dark:text-slate-500">
-        SIM Logistik &copy; {new Date().getFullYear()} &mdash; Sistem Peminjaman Barang
+        Management logistic &copy; {new Date().getFullYear()} &mdash; Sistem Peminjaman Barang
       </footer>
     </div>
   );

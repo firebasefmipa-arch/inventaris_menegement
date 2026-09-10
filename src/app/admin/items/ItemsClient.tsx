@@ -24,6 +24,8 @@ type Item = {
   quantity: number;
   availableQuantity: number;
   status: "available" | "borrowed";
+  canBorrow: boolean;
+  canHandover: boolean;
   location: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -64,6 +66,8 @@ export function ItemsClient({ items, categories }: Props) {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [lastCheckFilter, setLastCheckFilter] = useState("");
+  const [borrowFilter, setBorrowFilter] = useState("");
+  const [handoverFilter, setHandoverFilter] = useState("");
 
   // Close filter and dropdowns on outside click
   useEffect(() => {
@@ -123,6 +127,8 @@ export function ItemsClient({ items, categories }: Props) {
       if (categoryFilter && item.category !== categoryFilter) return false;
       if (locationFilter && (item.location || "") !== locationFilter) return false;
       if (lastCheckFilter && (item.lastCheckDate || "") !== lastCheckFilter) return false;
+      if (borrowFilter && item.canBorrow !== (borrowFilter === "yes")) return false;
+      if (handoverFilter && item.canHandover !== (handoverFilter === "yes")) return false;
 
       // Search filter
       if (searchQuery) {
@@ -141,7 +147,7 @@ export function ItemsClient({ items, categories }: Props) {
 
       return true;
     });
-  }, [items, searchQuery, statusFilter, categoryFilter, locationFilter, lastCheckFilter]);
+  }, [items, searchQuery, statusFilter, categoryFilter, locationFilter, lastCheckFilter, borrowFilter, handoverFilter]);
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
@@ -196,7 +202,20 @@ export function ItemsClient({ items, categories }: Props) {
     [...new Set(items.map((i) => i.lastCheckDate).filter(Boolean) as string[])].sort().reverse(),
     [items]
   );
-  const hasExtraFilter = categoryFilter || locationFilter || lastCheckFilter;
+  const hasExtraFilter = categoryFilter || locationFilter || lastCheckFilter || borrowFilter || handoverFilter;
+
+  const availabilityBadge = (label: string, ok: boolean) => (
+    <span
+      className={clsx(
+        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border",
+        ok
+          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+          : "bg-gray-100 text-gray-500 border-gray-200"
+      )}
+    >
+      {label}: {ok ? "Tersedia" : "Tidak"}
+    </span>
+  );
 
   const statusBadge = (status: string) => {
     const config = {
@@ -387,10 +406,42 @@ export function ItemsClient({ items, categories }: Props) {
             </select>
           )}
 
+          {/* Peminjaman */}
+          <select
+            value={borrowFilter}
+            onChange={(e) => setBorrowFilter(e.target.value)}
+            className={clsx(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all appearance-none cursor-pointer",
+              borrowFilter
+                ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300"
+            )}
+          >
+            <option value="">Semua Peminjaman</option>
+            <option value="yes">Bisa Dipinjam</option>
+            <option value="no">Tidak Bisa Dipinjam</option>
+          </select>
+
+          {/* Serah Terima */}
+          <select
+            value={handoverFilter}
+            onChange={(e) => setHandoverFilter(e.target.value)}
+            className={clsx(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all appearance-none cursor-pointer",
+              handoverFilter
+                ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300"
+            )}
+          >
+            <option value="">Semua Serah Terima</option>
+            <option value="yes">Bisa Diserahterimakan</option>
+            <option value="no">Tidak Bisa Diserahterimakan</option>
+          </select>
+
           {/* Reset filter */}
           {hasExtraFilter && (
             <button
-              onClick={() => { setCategoryFilter(""); setLocationFilter(""); setLastCheckFilter(""); }}
+              onClick={() => { setCategoryFilter(""); setLocationFilter(""); setLastCheckFilter(""); setBorrowFilter(""); setHandoverFilter(""); }}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 transition-colors"
             >
               <X className="w-3.5 h-3.5" /> Reset
@@ -488,6 +539,8 @@ export function ItemsClient({ items, categories }: Props) {
                                 Cek: {item.lastCheckDate}
                               </span>
                             )}
+                            {availabilityBadge("Pinjam", item.canBorrow)}
+                            {availabilityBadge("Serah Terima", item.canHandover)}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0 z-20">
@@ -630,6 +683,10 @@ export function ItemsClient({ items, categories }: Props) {
                                 </span>
                               )}
                               <p className="text-xs text-gray-500 truncate">{item.description || 'Tidak ada spesifikasi'}</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                              {availabilityBadge("Pinjam", item.canBorrow)}
+                              {availabilityBadge("Serah Terima", item.canHandover)}
                             </div>
                           </div>
                           <div className="col-span-4 flex flex-col gap-1 text-xs text-gray-600 font-mono">

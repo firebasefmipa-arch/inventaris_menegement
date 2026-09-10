@@ -12,7 +12,7 @@ import clsx from "clsx";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Kelola Pengguna - SIM Logistik",
+  title: "Kelola Pengguna - Management logistic",
 };
 
 export const dynamic = "force-dynamic";

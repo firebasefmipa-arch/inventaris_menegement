@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { items, transactions, users, transactionItems } from "@/db/schema";
-import { eq, sql, count, and, lte, gte } from "drizzle-orm";
+import { eq, sql, count, and, lte, gte, gt } from "drizzle-orm";
 import {
   Package,
   ArrowLeftRight,
@@ -31,6 +31,7 @@ async function getStats() {
       category:  items.category,
     })
     .from(items)
+    .where(gt(items.quantity, 0))
     .groupBy(items.category),
 
     // Query 2: stats transaksi sekaligus

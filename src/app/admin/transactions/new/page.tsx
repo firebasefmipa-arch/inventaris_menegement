@@ -39,7 +39,7 @@ export default function NewTransactionPage() {
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    fetch("/api/items?status=available")
+    fetch("/api/items?status=available&canBorrow=1")
       .then((r) => r.json())
       .then(setItems);
   }, []);

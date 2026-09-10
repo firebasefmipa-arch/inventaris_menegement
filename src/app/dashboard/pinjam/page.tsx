@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { items } from "@/db/schema";
-import { gt, asc } from "drizzle-orm";
+import { gt, asc, and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { UserPinjamFlow } from "./UserPinjamFlow";
@@ -27,7 +27,7 @@ export default async function DashboardPinjamPage() {
       imageUrl: items.imageUrl,
     })
     .from(items)
-    .where(gt(items.availableQuantity, 0))
+    .where(and(gt(items.availableQuantity, 0), eq(items.canBorrow, true)))
     .orderBy(asc(items.category), asc(items.name));
 
   return (

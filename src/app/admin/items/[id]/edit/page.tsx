@@ -35,6 +35,8 @@ export default function EditItemPage() {
     quantity: "1",
     location: "",
     status: "available",
+    canBorrow: "1",
+    canHandover: "1",
   });
 
   useEffect(() => {
@@ -54,6 +56,8 @@ export default function EditItemPage() {
           quantity: String(data.quantity),
           location: data.location || "",
           status: data.status,
+          canBorrow: data.canBorrow ? "1" : "0",
+          canHandover: data.canHandover ? "1" : "0",
         });
       })
       .catch(() => {
@@ -87,6 +91,8 @@ export default function EditItemPage() {
           quantity: parseInt(form.quantity),
           location: form.location || null,
           status: form.status,
+          canBorrow: form.canBorrow === "1",
+          canHandover: form.canHandover === "1",
         }),
       });
 
@@ -295,6 +301,43 @@ export default function EditItemPage() {
               <option value="available">Tersedia</option>
               <option value="borrowed">Dipinjam</option>
             </select>
+          </div>
+        </div>
+
+        {/* Ketersediaan untuk Peminjaman & Serah Terima */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Peminjaman
+            </label>
+            <select
+              value={form.canBorrow}
+              onChange={(e) => setForm({ ...form, canBorrow: e.target.value })}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            >
+              <option value="1">Tersedia</option>
+              <option value="0">Tidak Tersedia</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Jika Tidak Tersedia, barang disembunyikan dari halaman Pinjam user.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Serah Terima
+            </label>
+            <select
+              value={form.canHandover}
+              onChange={(e) => setForm({ ...form, canHandover: e.target.value })}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            >
+              <option value="1">Tersedia</option>
+              <option value="0">Tidak Tersedia</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Jika Tidak Tersedia, barang disembunyikan dari halaman Serah Terima user.
+            </p>
           </div>
         </div>
 

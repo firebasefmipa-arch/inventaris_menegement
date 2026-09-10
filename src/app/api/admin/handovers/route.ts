@@ -147,6 +147,12 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      if (!dbItem.canHandover) {
+        return NextResponse.json(
+          { error: `Barang "${dbItem.name}" tidak tersedia untuk diserahterimakan.` },
+          { status: 400 }
+        );
+      }
     }
 
     // Admin buat → langsung completed
