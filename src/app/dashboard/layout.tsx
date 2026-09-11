@@ -18,8 +18,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     if (status === "authenticated" && session) {
       const role = (session.user as any).role;
-      // Admin yang nyasar ke /dashboard → kirim ke /admin
-      if (role === "admin" || role === "super_admin") {
+      // Double role HANYA untuk role "admin". Superadmin tidak disentuh:
+      // tetap diarahkan ke /admin seperti sebelumnya.
+      if (role === "super_admin") {
         router.replace("/admin");
       }
     }
@@ -34,10 +35,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   if (!session) return null;
-
-  // Jangan render konten dashboard user untuk admin
-  const role = (session.user as any).role;
-  if (role === "admin" || role === "super_admin") return null;
 
   return (
     <div className="flex min-h-screen bg-gray-50">

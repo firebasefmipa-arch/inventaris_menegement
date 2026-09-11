@@ -13,12 +13,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { DueSoonCard, type DueSoonRow } from "@/components/DueSoonCard";
 
 type TransactionSummary = {
   total: number;
   active: number;
   pending: number;
   overdue: number;
+  dueSoon?: DueSoonRow[];
 };
 
 export default function DashboardPage() {
@@ -144,6 +146,9 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Kartu Segera Dikembalikan — barang milik sendiri */}
+      <DueSoonCard rows={summary?.dueSoon ?? []} variant="user" limit={10} />
 
       {/* Quick Links */}
       <div>

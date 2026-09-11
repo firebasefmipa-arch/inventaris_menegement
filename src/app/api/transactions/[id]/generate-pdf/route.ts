@@ -41,19 +41,21 @@ export async function GET(
         notes: transactionItems.notes,
         itemName: items.name,
         inventoryNumber: items.inventoryNumber,
+        itemCode: items.itemCode,
       })
       .from(transactionItems)
       .leftJoin(items, eq(transactionItems.itemId, items.id))
       .where(eq(transactionItems.transactionId, txId));
 
     // Fallback: jika transaction_items kosong tapi itemId lama masih ada
-    let pdfItems: { name: string; quantity: number; inventoryNumber?: string | null; notes?: string }[] = [];
+    let pdfItems: { name: string; quantity: number; inventoryNumber?: string | null; itemCode?: string | null; notes?: string }[] = [];
 
     if (txItemRows.length > 0) {
       pdfItems = txItemRows.map((r) => ({
         name: r.itemName || "Barang",
         quantity: r.quantity,
         inventoryNumber: r.inventoryNumber,
+        itemCode: r.itemCode,
         notes: r.notes || "",
       }));
     } else if (tx.itemId) {
@@ -64,6 +66,7 @@ export async function GET(
           name: item.name,
           quantity: tx.quantity,
           inventoryNumber: item.inventoryNumber,
+          itemCode: item.itemCode,
           notes: "",
         }];
       }

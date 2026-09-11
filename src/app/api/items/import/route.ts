@@ -3,9 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { read, utils } from "xlsx";
 import { db } from "@/db";
 import { items } from "@/db/schema";
+import { auth } from "@/auth";
+import { resolvePrefix, nextSequence, formatCode } from "@/lib/item-code";
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    const role = (session?.user as any)?.role;
+    if (!session?.user || (role !== "admin" && role !== "super_admin"))
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -31,6 +38,7 @@ export async function POST(request: NextRequest) {
       category: string;
       description?: string | null;
       sn?: string | null;
+      itemCode?: string | null;
       inventoryNumber?: string | null;
       assetNumber?: string | null;
       lastCheckDate?: string | null;
@@ -39,6 +47,11 @@ export async function POST(request: NextRequest) {
       location?: string | null;
       imageUrl?: string | null;
     }> = [];
+
+    // Penomoran per lokasi, dihitung sekali lalu ditambah di memori
+    // supaya barang dalam satu file tidak berebut nomor yang sama.
+    const seqCache = new Map<string, number>();
+    const year = new Date().getFullYear();
 
     for (const row of parsed) {
       // normalize keys to make matching robust for headers like "Nama Barang", "Spesifikasi", "No. Inv DTI"
@@ -69,17 +82,24 @@ export async function POST(request: NextRequest) {
 
       const description = spesifikasi;
 
+      // Kode dari file Excel DIABAIKAN — selalu di-generate ulang.
+      const { prefix, location: normalizedLocation } = await resolvePrefix(location);
+      let seq = seqCache.get(prefix);
+      if (seq === undefined) seq = await nextSequence(prefix, year);
+      seqCache.set(prefix, seq + 1);
+
       newItems.push({
         name,
         category,
         description,
         sn,
+        itemCode: formatCode(prefix, year, seq),
         inventoryNumber: noInv,
         assetNumber: noAsset,
         lastCheckDate: tanggalCek,
         condition: kondisi,
         quantity,
-        location,
+        location: normalizedLocation,
         imageUrl: null,
       });
     }
@@ -94,6 +114,7 @@ export async function POST(request: NextRequest) {
         category: item.category,
         description: item.description || null,
         sn: item.sn || null,
+        itemCode: item.itemCode,
         inventoryNumber: item.inventoryNumber || null,
         assetNumber: item.assetNumber || null,
         lastCheckDate: item.lastCheckDate || null,

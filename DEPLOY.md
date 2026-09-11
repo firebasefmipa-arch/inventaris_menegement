@@ -132,6 +132,15 @@ mysql -u inventaris -p modern_lending < database/schema_only.sql
 > ALTER TABLE items
 >   ADD COLUMN can_borrow   TINYINT(1) NOT NULL DEFAULT 1,
 >   ADD COLUMN can_handover TINYINT(1) NOT NULL DEFAULT 1;
+>
+> -- Kode barang otomatis (11 September 2026) — barang lama dibiarkan NULL
+> ALTER TABLE items
+>   ADD COLUMN item_code VARCHAR(255) NULL AFTER sn,
+>   ADD UNIQUE INDEX items_item_code_unique (item_code);
+>
+> -- Rapikan tulisan lokasi lama yang tidak konsisten (sekali jalan)
+> UPDATE items SET location = 'Divisi Teknologi Informasi'
+> WHERE UPPER(location) IN ('DIVISI TI', 'DIVISI IT', 'DIVISI TEKNOLOGI INFORMASI');
 > ```
 
 ---

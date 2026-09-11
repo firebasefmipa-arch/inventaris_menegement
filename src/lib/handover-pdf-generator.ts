@@ -18,6 +18,7 @@ export interface HandoverData {
     quantity: number;
     assetNumber?: string | null;
     inventoryNumber?: string | null;
+    itemCode?: string | null;
   }>;
 }
 
@@ -83,8 +84,8 @@ function drawTableRow(
   cells.forEach((cell, cIdx) => {
     const padding = 6;
     const textY = rowY - rowHeight / 2 - fontSize / 3;
-    // Center untuk kolom No (0), No. Asset/No. Inventaris (2), dan Jumlah (3)
-    if (cIdx === 0 || cIdx === 2 || cIdx === 3) {
+    // Center untuk kolom No (0), No. Asset/No. Inventaris (3), dan Jumlah (4)
+    if (cIdx === 0 || cIdx === 3 || cIdx === 4) {
       const tw = font.widthOfTextAtSize(cell, fontSize);
       page.drawText(cell, { x: cellX + (colWidths[cIdx] - tw) / 2, y: textY, size: fontSize, font, color: rgb(0, 0, 0) });
     } else {
@@ -189,8 +190,8 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   y -= 18;
 
   // ── Tabel barang ──
-  // No | Nama Barang | No. Asset/No. Inventaris | Jumlah
-  const colWidths = [30, CONTENT_W - 30 - 120 - 40, 120, 40];
+  // No | Nama Barang | Kode Barang | No. Asset/No. Inventaris | Jumlah
+  const colWidths = [30, CONTENT_W - 30 - 110 - 120 - 40, 110, 120, 40];
   const rowHeight = 22;
   const lineColor = rgb(0, 0, 0);
   const FOOTER_HEIGHT = 260;
@@ -198,18 +199,19 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   const dataRows: string[][] = data.items.map((item, idx) => [
     String(idx + 1),
     item.name,
+    item.itemCode || '',
     item.assetNumber || item.inventoryNumber || '-',
     String(item.quantity),
   ]);
   // Minimal 4 baris kosong
   while (dataRows.length < 4) {
-    dataRows.push([String(dataRows.length + 1), '', '', '']);
+    dataRows.push([String(dataRows.length + 1), '', '', '', '']);
   }
 
   // Header tabel
   drawTableRow(
     currentPage, y, colWidths,
-    ['No', 'Nama Barang', 'No. Asset/No. Inventaris', 'Jumlah'],
+    ['No', 'Nama Barang', 'Kode Barang', 'No. Asset/No. Inventaris', 'Jumlah'],
     boldFont, 9, rowHeight, true, MARGIN_LEFT, lineColor
   );
   y -= rowHeight;
@@ -225,7 +227,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
 
       drawTableRow(
         currentPage, y, colWidths,
-        ['No', 'Nama Barang', 'No. Asset/No. Inventaris', 'Jumlah'],
+        ['No', 'Nama Barang', 'Kode Barang', 'No. Asset/No. Inventaris', 'Jumlah'],
         boldFont, 9, rowHeight, true, MARGIN_LEFT, lineColor
       );
       y -= rowHeight;

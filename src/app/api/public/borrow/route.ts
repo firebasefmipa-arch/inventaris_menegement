@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transactions, items } from "@/db/schema";
+import { transactions, items, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { auth } from "@/auth";
 
+// Endpoint lama untuk katalog publik (tanpa login). Katalog publik sudah
+// dihapus dari UI dan peminjaman sekarang wajib login lewat /api/pinjam.
+// Endpoint ini ditutup: wajib login + aturan yang sama dengan /api/pinjam
+// (NIM & tanda tangan elektronik wajib ada) supaya tidak jadi jalur bypass.
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { itemId, name, department, email, phone, quantity, returnDate, notes } = body;
 
@@ -17,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     // 1. Check if item exists and has enough quantity
     const [item] = await db.select().from(items).where(eq(items.id, itemId));
-    
+
     if (!item) {
       return NextResponse.json({ error: "Barang tidak ditemukan" }, { status: 404 });
     }
@@ -36,10 +46,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Create transaction
+    // 2. Wajib NIM + tanda tangan elektronik (sama seperti /api/pinjam)
+    const [userRow] = await db
+      .select({ nim: users.nim, signatureUrl: users.signatureUrl })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1);
+
+    if (!userRow?.nim) {
+      return NextResponse.json({ error: "NIM_REQUIRED" }, { status: 422 });
+    }
+    if (!userRow?.signatureUrl) {
+      return NextResponse.json({ error: "SIGNATURE_REQUIRED" }, { status: 422 });
+    }
+
+    // 3. Create transaction
     const [transaction] = await db
       .insert(transactions)
       .values({
+        userId: session.user.id,
         itemId,
         borrowerName: name,
         borrowerDepartment: department,

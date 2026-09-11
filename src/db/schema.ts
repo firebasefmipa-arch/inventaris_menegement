@@ -17,6 +17,9 @@ export const items = mysqlTable("items", {
   category: varchar("category", { length: 100 }).notNull(),
   description: text("description"),
   sn: varchar("sn", { length: 255 }),
+  // Kode barang otomatis: FMIPA-<KODE LOKASI>-<TAHUN>-<URUT>.
+  // Dibuat di server, terkunci (input klien diabaikan), unik.
+  itemCode: varchar("item_code", { length: 255 }),
   inventoryNumber: varchar("inventory_number", { length: 255 }),
   assetNumber: varchar("asset_number", { length: 255 }),
   lastCheckDate: varchar("last_check_date", { length: 255 }),

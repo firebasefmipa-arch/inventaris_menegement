@@ -16,6 +16,7 @@ interface TransactionData {
     name: string;
     quantity: number;
     inventoryNumber?: string | null;
+    itemCode?: string | null;
     notes?: string;
   }>;
 }
@@ -277,7 +278,9 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
   y -= 18;
 
   // ── Setup tabel ──
-  const colWidths  = [30, 210, 50, 110, CONTENT_W - 30 - 210 - 50 - 110];
+  // No | Nama Barang | Kode Barang | Jumlah | No. Inventaris | Keterangan
+  const colWidths  = [30, 190, 110, 45, 105, 0];
+  colWidths[colWidths.length - 1] = CONTENT_W - colWidths.slice(0, -1).reduce((a, b) => a + b, 0);
   const rowHeight  = 22;
   const lineColor  = rgb(0, 0, 0);
 
@@ -285,12 +288,13 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
   const dataRows: string[][] = data.items.map((item, idx) => [
     String(idx + 1),
     item.name,
+    item.itemCode || '',
     String(item.quantity),
     item.inventoryNumber || '',
     item.notes || '',
   ]);
   while (dataRows.length < 5) {
-    dataRows.push([String(dataRows.length + 1), '', '', '', '']);
+    dataRows.push([String(dataRows.length + 1), '', '', '', '', '']);
   }
 
   // ── Tinggi yang dibutuhkan footer ──
@@ -298,7 +302,7 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
   const NOTE_HEIGHT   = 30;
 
   // ── Render header tabel ──
-  drawTableRow(currentPage, y, colWidths, ['No', 'Nama Alat/Barang', 'Jumlah', 'No. Inventaris', 'Keterangan'],
+  drawTableRow(currentPage, y, colWidths, ['No', 'Nama Alat/Barang', 'Kode Barang', 'Jumlah', 'No. Inventaris', 'Keterangan'],
     boldFont, 9, rowHeight, true, MARGIN_LEFT, lineColor);
   y -= rowHeight;
 
@@ -317,7 +321,7 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
       y = PAGE_H - MARGIN_BOTTOM;
 
       // Ulangi header tabel di halaman baru
-      drawTableRow(currentPage, y, colWidths, ['No', 'Nama Alat/Barang', 'Jumlah', 'No. Inventaris', 'Keterangan'],
+      drawTableRow(currentPage, y, colWidths, ['No', 'Nama Alat/Barang', 'Kode Barang', 'Jumlah', 'No. Inventaris', 'Keterangan'],
         boldFont, 9, rowHeight, true, MARGIN_LEFT, lineColor);
       y -= rowHeight;
     }

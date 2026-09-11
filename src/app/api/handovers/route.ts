@@ -86,12 +86,19 @@ export async function POST(req: NextRequest) {
     const { cart, purpose, notes } = body;
     const user = session.user as any;
 
-    const receiverName = (body.receiverName || user.name || "").trim();
-    const receiverNim  = (body.receiverNim  || user.nim  || "").trim();
-    const unitName     = (body.unitName     || "").trim();
-    const department   = (body.department   || user.department || "").trim();
-    const phone        = (body.phone        || user.phone || "").trim();
-    const location     = (body.location     || "").trim();
+    // ── Aturan data diri (double role) ──
+    // Admin/super_admin (mode admin) boleh mengisi data penerima custom.
+    // User biasa — termasuk admin yang sedang di "Mode User" — wajib memakai
+    // data dirinya sendiri; body diabaikan.
+    const isAdmin = user.role === "admin" || user.role === "super_admin";
+    const src = isAdmin ? body : {};
+
+    const receiverName = (src.receiverName || user.name || "").trim();
+    const receiverNim  = (src.receiverNim  || user.nim  || "").trim();
+    const unitName     = isAdmin ? (src.unitName || "").trim() : "";
+    const department   = (src.department   || user.department || "").trim();
+    const phone        = (src.phone        || user.phone || "").trim();
+    const location     = (src.location     || "").trim();
 
     if (!receiverName || !department || !phone)
       return NextResponse.json({ error: "Nama, divisi/prodi, dan nomor HP wajib diisi" }, { status: 400 });
@@ -186,6 +193,7 @@ export async function POST(req: NextRequest) {
           name: itemMap.get(c.itemId)?.name || "Barang",
           quantity: c.quantity,
           assetNumber: itemMap.get(c.itemId)?.assetNumber ?? null,
+          itemCode: itemMap.get(c.itemId)?.itemCode ?? null,
           inventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
         })),
       });

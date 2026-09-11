@@ -3,12 +3,26 @@ import { db } from "@/db";
 import { items } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { toBool } from "@/lib/to-bool";
+import { auth } from "@/auth";
+import { normalizeLocation } from "@/lib/locations";
+
+// Panel admin saja — halaman user membaca DB langsung (server component).
+async function requireAdmin() {
+  const session = await auth();
+  const role = (session?.user as any)?.role;
+  if (!session?.user || (role !== "admin" && role !== "super_admin"))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return null;
+}
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const { id } = await params;
     const [item] = await db
       .select()
@@ -35,12 +49,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const { id } = await params;
     const itemId = parseInt(id);
     const body = await request.json();
     const { name, category, description, quantity, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover } =
       body;
-
     const [existing] = await db
       .select()
       .from(items)
@@ -73,7 +89,7 @@ export async function PUT(
             existing.availableQuantity + (quantity - existing.quantity)
           ),
         }),
-        ...(location !== undefined && { location }),
+        ...(location !== undefined && { location: normalizeLocation(location) || null }),
         ...(imageUrl !== undefined && { imageUrl }),
         ...(status !== undefined && { status }),
         ...(canBorrow !== undefined && { canBorrow: toBool(canBorrow) }),
@@ -98,6 +114,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const { id } = await params;
     const itemId = parseInt(id);
 

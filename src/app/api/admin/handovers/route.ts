@@ -211,6 +211,7 @@ export async function POST(req: NextRequest) {
           name: itemMap.get(c.itemId)?.name || "Barang",
           quantity: c.quantity,
           assetNumber: itemMap.get(c.itemId)?.assetNumber ?? null,
+          itemCode: itemMap.get(c.itemId)?.itemCode ?? null,
           inventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
         })),
       });

@@ -7,7 +7,7 @@ import Image from "next/image";
 import {
   LayoutDashboard, ClipboardList, History,
   UserCircle, Menu, X, LogOut, ChevronRight, ClipboardCheck,
-  Sun, Moon,
+  Sun, Moon, ShieldCheck,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useToast } from "./Toaster";
@@ -149,6 +149,16 @@ export function UserSidebar() {
 
       {/* Footer */}
       <div className="p-4 space-y-2 border-t border-gray-100 dark:border-slate-700">
+        {/* Mode Admin — hanya untuk role admin (double role) */}
+        {(user?.role === "admin") && (
+          <Link
+            href="/admin"
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all"
+            title="Kembali ke dashboard admin"
+          >
+            <ShieldCheck className="w-4 h-4 text-indigo-500" /> Mode Admin
+          </Link>
+        )}
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
