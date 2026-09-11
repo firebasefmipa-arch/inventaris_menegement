@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,12 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
 
     const conditions = [eq(transactions.userId, userId)];
-    if (status) {
+    if (status === "overdue") {
+      // "Terlambat" dihitung dari TANGGAL — kolom status "overdue" tidak pernah
+      // ditulis kode mana pun, jadi memfilter status='overdue' selalu kosong.
+      conditions.push(eq(transactions.status, "active"));
+      conditions.push(sql`${transactions.expectedReturnDate} < NOW()`);
+    } else if (status) {
       conditions.push(
         eq(transactions.status, status as any)
       );

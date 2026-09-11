@@ -41,6 +41,21 @@ function drawCentered(page: PDFPage, text: string, y: number, font: PDFFont, siz
   page.drawText(text, { x: (PAGE_W - tw) / 2, y, size, font, color });
 }
 
+// Potong teks agar tidak meluber keluar kolom (tambah "…" kalau kepanjangan).
+// Sengaja dikurangi 1pt dari lebar tersedia: teks yang lebarnya pas-pasan
+// (mis. "409010025366" = 60.0pt di kolom 60.0pt) tetap terpotong karena
+// pembulatan floating point.
+function fitText(text: string, font: PDFFont, size: number, maxWidth: number) {
+  const limit = maxWidth - 1;
+  if (!text) return '';
+  if (font.widthOfTextAtSize(text, size) <= limit) return text;
+  let cut = text;
+  while (cut.length > 1 && font.widthOfTextAtSize(cut + '…', size) > limit) {
+    cut = cut.slice(0, -1);
+  }
+  return cut + '…';
+}
+
 // ── Gambar satu baris tabel (tanpa border luar, border luar ditangani terpisah) ──
 function drawTableRow(
   page: PDFPage,
@@ -80,12 +95,13 @@ function drawTableRow(
   cells.forEach((cell, cIdx) => {
     const padding = 6;
     const textY = rowY - rowHeight / 2 - fontSize / 3;
-    // Center untuk kolom No (0) dan Jumlah (2)
-    if (cIdx === 0 || cIdx === 2) {
+    // Center untuk kolom No (0), Jumlah (3), dan judul kolom Nama Barang (1)
+    if (cIdx === 0 || cIdx === 3 || (isHeader && cIdx === 1)) {
       const tw = font.widthOfTextAtSize(cell, fontSize);
       page.drawText(cell, { x: cellX + (colWidths[cIdx] - tw) / 2, y: textY, size: fontSize, font, color: rgb(0, 0, 0) });
     } else {
-      page.drawText(cell, { x: cellX + padding, y: textY, size: fontSize, font, color: rgb(0, 0, 0) });
+      const txt = fitText(cell, font, fontSize, colWidths[cIdx] - padding * 2);
+      page.drawText(txt, { x: cellX + padding, y: textY, size: fontSize, font, color: rgb(0, 0, 0) });
     }
     cellX += colWidths[cIdx];
   });
@@ -279,7 +295,9 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
 
   // ── Setup tabel ──
   // No | Nama Barang | Kode Barang | Jumlah | No. Inventaris | Keterangan
-  const colWidths  = [30, 190, 110, 45, 105, 0];
+  // Lebar dari hasil ukur teks 9pt: kode terpanjang 96.9, "No. Inventaris" 60,
+  // header "Jumlah" 31.3, "Nama Alat/Barang" 77.5 — sisanya buat Keterangan.
+  const colWidths  = [24, 131, 112, 44, 74, 0];
   colWidths[colWidths.length - 1] = CONTENT_W - colWidths.slice(0, -1).reduce((a, b) => a + b, 0);
   const rowHeight  = 22;
   const lineColor  = rgb(0, 0, 0);

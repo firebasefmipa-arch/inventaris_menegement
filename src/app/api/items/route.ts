@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
           like(items.inventoryNumber, `%${search}%`),
           like(items.assetNumber, `%${search}%`),
           like(items.sn, `%${search}%`),
+          like(items.itemCode, `%${search}%`),
+          like(items.location, `%${search}%`),
           like(items.condition, `%${search}%`)
         )
       );

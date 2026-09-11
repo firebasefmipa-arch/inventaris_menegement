@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
           name: itemMap.get(c.itemId)?.name || "Barang",
           quantity: c.quantity,
           inventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
+          itemCode: itemMap.get(c.itemId)?.itemCode ?? null,
           notes: c.notes || "",
         })),
       });

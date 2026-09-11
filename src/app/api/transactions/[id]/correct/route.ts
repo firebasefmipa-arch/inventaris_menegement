@@ -122,6 +122,7 @@ export async function PATCH(
           name: itemMap.get(ni.itemId)?.name || "Barang",
           quantity: ni.quantity,
           inventoryNumber: itemMap.get(ni.itemId)?.inventoryNumber ?? null,
+          itemCode: itemMap.get(ni.itemId)?.itemCode ?? null,
           notes: ni.notes || "",
         })),
       });
