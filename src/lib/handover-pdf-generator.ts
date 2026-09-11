@@ -49,6 +49,19 @@ function drawCentered(page: PDFPage, text: string, y: number, font: PDFFont, siz
   page.drawText(text, { x: (PAGE_W - tw) / 2, y, size, font, color });
 }
 
+// Potong teks agar tidak meluber keluar kolom (tambah "…" kalau kepanjangan).
+// Dikurangi 1pt dari lebar tersedia untuk aman terhadap pembulatan floating point.
+function fitText(text: string, font: PDFFont, size: number, maxWidth: number) {
+  const limit = maxWidth - 1;
+  if (!text) return '';
+  if (font.widthOfTextAtSize(text, size) <= limit) return text;
+  let cut = text;
+  while (cut.length > 1 && font.widthOfTextAtSize(cut + '…', size) > limit) {
+    cut = cut.slice(0, -1);
+  }
+  return cut + '…';
+}
+
 function drawTableRow(
   page: PDFPage,
   rowY: number,
@@ -84,12 +97,14 @@ function drawTableRow(
   cells.forEach((cell, cIdx) => {
     const padding = 6;
     const textY = rowY - rowHeight / 2 - fontSize / 3;
-    // Center untuk kolom No (0), No. Asset/No. Inventaris (3), dan Jumlah (4)
-    if (cIdx === 0 || cIdx === 3 || cIdx === 4) {
+    // Center untuk kolom No (0), Jumlah (4), judul Nama Barang (1), dan
+    // judul No. Asset/No. Inventaris (3)
+    if (cIdx === 0 || cIdx === 4 || (isHeader && (cIdx === 1 || cIdx === 3))) {
       const tw = font.widthOfTextAtSize(cell, fontSize);
       page.drawText(cell, { x: cellX + (colWidths[cIdx] - tw) / 2, y: textY, size: fontSize, font, color: rgb(0, 0, 0) });
     } else {
-      page.drawText(cell, { x: cellX + padding, y: textY, size: fontSize, font, color: rgb(0, 0, 0) });
+      const txt = fitText(cell, font, fontSize, colWidths[cIdx] - padding * 2);
+      page.drawText(txt, { x: cellX + padding, y: textY, size: fontSize, font, color: rgb(0, 0, 0) });
     }
     cellX += colWidths[cIdx];
   });
@@ -191,7 +206,9 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
 
   // ── Tabel barang ──
   // No | Nama Barang | Kode Barang | No. Asset/No. Inventaris | Jumlah
-  const colWidths = [30, CONTENT_W - 30 - 110 - 120 - 40, 110, 120, 40];
+  // Kode 112 (kode terpanjang 96.9), No. Asset 118 (header 102.4), sisanya Nama.
+  const colWidths = [24, 0, 112, 120, 44];
+  colWidths[1] = CONTENT_W - 24 - 112 - 120 - 44;
   const rowHeight = 22;
   const lineColor = rgb(0, 0, 0);
   const FOOTER_HEIGHT = 260;

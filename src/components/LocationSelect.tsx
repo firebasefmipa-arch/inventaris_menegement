@@ -37,9 +37,12 @@ export function LocationSelect({
   const [showCustom, setShowCustom] = useState(isCustomValue);
   const [custom, setCustom] = useState(isCustomValue ? value : "");
 
-  // Sinkron kalau `value` berubah dari luar (mis. data edit baru selesai dimuat)
+  // Sinkron kalau `value` berubah dari luar (mis. data edit baru selesai dimuat).
+  // Sengaja TIDAK mereset saat value masih kosong — kalau direset, memilih
+  // "Lainnya (isi manual)" langsung menutup inputnya sendiri.
   useEffect(() => {
-    const isCustom = !!value && !options.includes(value);
+    if (!value) return;
+    const isCustom = !options.includes(value);
     setShowCustom(isCustom);
     setCustom(isCustom ? value : "");
   }, [value, options]);

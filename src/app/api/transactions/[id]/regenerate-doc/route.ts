@@ -47,22 +47,24 @@ export async function POST(
         notes: transactionItems.notes,
         itemName: items.name,
         inventoryNumber: items.inventoryNumber,
+        itemCode: items.itemCode,
       })
       .from(transactionItems)
       .leftJoin(items, eq(transactionItems.itemId, items.id))
       .where(eq(transactionItems.transactionId, txId));
 
-    let pdfItems: { name: string; quantity: number; inventoryNumber?: string | null; notes?: string }[] = [];
+    let pdfItems: { name: string; quantity: number; inventoryNumber?: string | null; itemCode?: string | null; notes?: string }[] = [];
     if (txItemRows.length > 0) {
       pdfItems = txItemRows.map((r) => ({
         name: r.itemName || "Barang",
         quantity: r.quantity,
         inventoryNumber: r.inventoryNumber,
+        itemCode: r.itemCode,
         notes: r.notes || "",
       }));
     } else if (tx.itemId) {
       const [item] = await db.select().from(items).where(eq(items.id, tx.itemId)).limit(1);
-      if (item) pdfItems = [{ name: item.name, quantity: tx.quantity, inventoryNumber: item.inventoryNumber }];
+      if (item) pdfItems = [{ name: item.name, quantity: tx.quantity, inventoryNumber: item.inventoryNumber, itemCode: item.itemCode }];
     }
 
     if (pdfItems.length === 0) {

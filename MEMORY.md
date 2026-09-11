@@ -75,7 +75,8 @@ src/
 └── types/next-auth.d.ts         # Type augmentation NextAuth (role, phone, department)
 
 scripts/
-└── create-super-admin.ts         # Script interaktif buat akun super_admin
+├── create-super-admin.ts         # Script interaktif buat akun super_admin
+└── check-pdf-layout.ts           # Uji tata letak tabel PDF (npm run check:pdf)
 
 database/
 ├── add_role_column.sql           # Migrasi: tambah kolom role ke tabel user
@@ -253,6 +254,9 @@ npm run dev                    # Jalankan dev server
 # TypeScript check
 npm run typecheck              # Harus 0 errors sebelum deploy
 
+# Uji tata letak tabel PDF (generate PDF asli lalu baca isinya)
+npm run check:pdf              # Harus "SEMUA LOLOS" setelah mengubah kolom PDF
+
 # Database
 npm run db:studio              # Buka Drizzle Studio (GUI database)
 npm run db:generate            # Generate migrasi dari perubahan schema
@@ -335,6 +339,10 @@ WHERE UPPER(location) IN ('DIVISI TI', 'DIVISI IT', 'DIVISI TEKNOLOGI INFORMASI'
 
 ### API Routes
 - Selalu ada auth guard di setiap endpoint yang butuh login
+- **`/api/transactions` GET wajib admin** — mengembalikan data pribadi peminjam
+  (nama, email, no HP, prodi). Pernah terbuka untuk umum; jangan dilonggarkan.
+- Endpoint ber-ID (`transactions/[id]/*`, `handovers/[id]/*`) memakai pola
+  "pemilik ATAU admin": `if (x.userId !== session.user.id && role !== "admin" && role !== "super_admin")`
 - Gunakan `(session?.user as any)?.role` untuk cek role
 - Kembalikan stok item saat transaksi ditolak atau dihapus
 - Untuk multi-item, selalu query `transaction_items` terlebih dahulu, fallback ke `transactions.item_id` legacy
@@ -360,6 +368,25 @@ pending_signature → pending_approval → active → returned
 (tidak ada cron). "Terlambat" dihitung saat query:
 `status = 'active' AND expected_return_date < NOW()`. Jangan cari penulis
 status `overdue`; kalau ada kode yang memfilter `status = 'overdue'`, itu bug.
+Titik yang sudah benar: `/api/user/transactions?status=overdue`,
+`/api/user/transactions/summary`, `/api/transactions?status=overdue`,
+`/api/stats`, dashboard admin & user, `DueSoonCard`.
+
+### PDF — tata letak tabel
+Tabel barang di kedua generator PDF sekarang punya kolom **Kode Barang**:
+- `pdf-generator.ts` (peminjaman): `No | Nama Alat/Barang | Kode Barang | Jumlah | No. Inventaris | Keterangan`
+- `handover-pdf-generator.ts` (serah terima): `No | Nama Barang | Kode Barang | No. Asset/No. Inventaris | Jumlah`
+
+Lebar kolom ditentukan dari **hasil ukur teks nyata** (`font.widthOfTextAtSize`),
+bukan perkiraan — kode terpanjang (`FMIPA-FMIPA-2026-001`) = 96.9pt di 9pt.
+`fitText()` memotong teks yang melebihi kolom dan menambah "…".
+Ada `npm run check:pdf` (`scripts/check-pdf-layout.ts`) yang meng-generate PDF
+sungguhan lalu membaca content stream untuk memastikan: kode & No. Inventaris
+utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
+
+> Catatan: teks di PDF di-encode WinAnsi, jadi "…" di content stream muncul
+> sebagai byte `0x85` — bukan UTF-8. Alat pembaca teks eksternal bisa gagal
+> membacanya; jangan panik, itu hanya tanda potong.
 
 ### Lokasi & Kode Barang
 - Dropdown lokasi: komponen `src/components/LocationSelect.tsx` (dipakai

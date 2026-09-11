@@ -6,6 +6,13 @@ import { auth } from "@/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    // Panel admin saja — endpoint ini mengembalikan data pribadi peminjam
+    // (nama, email, no HP, prodi). Sebelumnya terbuka untuk umum.
+    const session = await auth();
+    const role = (session?.user as any)?.role;
+    if (!session?.user || (role !== "admin" && role !== "super_admin"))
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || "";
 

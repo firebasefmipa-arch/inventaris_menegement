@@ -12,7 +12,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
-    "setup:superadmin": "tsx scripts/create-super-admin.ts"
+    "setup:superadmin": "tsx scripts/create-super-admin.ts",
+    "check:pdf": "tsx scripts/check-pdf-layout.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
