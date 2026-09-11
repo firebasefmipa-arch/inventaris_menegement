@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 
 export async function GET(request: NextRequest) {
@@ -10,10 +10,12 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") || "";
 
     const conditions = [];
-    if (status) {
-      conditions.push(
-        eq(transactions.status, status as "active" | "returned" | "overdue")
-      );
+    if (status === "overdue") {
+      // "Terlambat" dihitung dari tanggal — kolom status "overdue" tidak pernah ditulis.
+      conditions.push(eq(transactions.status, "active"));
+      conditions.push(sql`${transactions.expectedReturnDate} < NOW()`);
+    } else if (status) {
+      conditions.push(eq(transactions.status, status as any));
     }
 
     const data = await db
@@ -39,6 +41,29 @@ export async function GET(request: NextRequest) {
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(transactions.createdAt));
 
+    // Nama barang lengkap dari pivot transaction_items (transaksi multi-barang
+    // punya item_id NULL di tabel transactions)
+    if (data.length > 0) {
+      const rows = await db
+        .select({
+          transactionId: transactionItems.transactionId,
+          itemName: items.name,
+        })
+        .from(transactionItems)
+        .leftJoin(items, eq(transactionItems.itemId, items.id))
+        .where(inArray(transactionItems.transactionId, data.map((t) => t.id)));
+
+      const namesByTx = new Map<number, string[]>();
+      for (const r of rows) {
+        const list = namesByTx.get(r.transactionId) ?? [];
+        list.push(r.itemName ?? "Barang");
+        namesByTx.set(r.transactionId, list);
+      }
+      return NextResponse.json(
+        data.map((t) => ({ ...t, itemNames: namesByTx.get(t.id) ?? [] }))
+      );
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error("GET /api/transactions error:", error);
@@ -54,6 +79,16 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Endpoint ini khusus panel admin (pencatatan peminjaman atas nama orang lain).
+    // User biasa wajib lewat /api/pinjam yang memaksa data diri sendiri.
+    const role = (session.user as any).role;
+    if (role !== "admin" && role !== "super_admin") {
+      return NextResponse.json(
+        { error: "Hanya admin yang boleh mencatat peminjaman atas nama orang lain" },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();

@@ -10,27 +10,7 @@ import { createNativeUser } from "../actions";
 import { useToast } from "@/components/Toaster";
 import { onlyDigits } from "@/lib/digits";
 import clsx from "clsx";
-
-const DEPARTMENT_GROUPS = [
-  { group: "Divisi", options: [
-    "Divisi Administrasi Akademik",
-    "Divisi Administrasi Keuangan",
-    "Divisi Teknologi Informasi",
-    "Divisi Administrasi Umum, Rumah Tangga",
-  ]},
-  { group: "Program Studi", options: [
-    "D3 Analisis Kimia",
-    "S1 Statistika",
-    "S1 Kimia",
-    "S1 Farmasi",
-    "S1 Pendidikan Kimia",
-    "Program Profesi Apoteker",
-    "S2 Magister Kimia",
-    "S2 Magister Farmasi",
-    "S2 Magister Statistika",
-  ]},
-  { group: "Lainnya", options: ["Lainnya (isi manual)"] },
-];
+import { DEPARTMENT_GROUPS } from "@/lib/departments";
 
 type RoleOption = "admin" | "user";
 

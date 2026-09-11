@@ -55,10 +55,17 @@ src/
 │   ├── BasePathProvider.tsx     # Patch window.fetch: tambah prefix base path ke /api & /uploads
 │   ├── UserSidebar.tsx          # Sidebar dashboard user (badge notifikasi)
 │   ├── Sidebar.tsx              # Sidebar dashboard admin
-│   ├── PinjamFlow.tsx           # Form pinjam untuk halaman publik /katalog
+│   ├── PinjamFlow.tsx           # Form pinjam untuk halaman publik /katalog (DEAD CODE)
+│   ├── UserPinjamFlow.tsx       # Form pinjam yang benar-benar dipakai dashboard user
+│   ├── DueSoonCard.tsx          # Kartu "Segera Dikembalikan" (variant user|admin)
+│   ├── LocationSelect.tsx       # Dropdown lokasi barang (25 opsi resmi + custom)
 │   └── Toaster.tsx              # Komponen notifikasi toast
 ├── lib/
 │   ├── basepath.ts              # Util bp()/withBase — prefix URL asset/link (cek pemakaian)
+│   ├── locations.ts             # Sumber tunggal daftar lokasi + normalizeLocation/locationCode
+│   ├── item-code.ts             # Generator kode barang FMIPA-<LOKASI>-<TAHUN>-<URUT>
+│   ├── departments.ts           # Sumber tunggal daftar prodi/divisi (11 prodi)
+│   ├── to-bool.ts               # Helper Boolean aman (Boolean("0") === true!)
 │   └── pdf-generator.ts         # Generate PDF formulir peminjaman multi-halaman
 ├── db/
 │   ├── index.ts                 # Koneksi Drizzle + MySQL pool
@@ -82,8 +89,13 @@ database/
 | Role | Login | Akses | Dibuat Oleh |
 |---|---|---|---|
 | `super_admin` | `/admin/login` (email+password) | Semua fitur admin + kelola role + hapus data | Script `npm run setup:superadmin` |
-| `admin` | `/admin/login` (email+password atau Google jika dipromosi) | Kelola barang, transaksi, suspend user | Super admin |
+| `admin` | `/admin/login` (email+password atau Google jika dipromosi) | Kelola barang, transaksi, suspend user. **Double role**: boleh masuk `/dashboard` sebagai user, tombol switch 2 arah di sidebar | Super admin |
 | `user` | `/login` (Google OAuth) | Dashboard user, pinjam barang, riwayat | Registrasi Google |
+
+Catatan double role: hanya `role === 'admin'` yang bisa masuk `/dashboard`;
+`super_admin` tetap di-redirect ke `/admin` (perilaku lama). Di dashboard admin,
+data diri peminjam boleh custom; di dashboard user, data diri dipaksa milik
+akun sendiri — dikunci di server (`/api/pinjam`, `/api/handovers`, `/api/transactions`).
 
 ### Otoritas per Role
 
@@ -137,7 +149,16 @@ notes          TEXT
 -- items (flag ketersediaan manual, ditambah September 2026)
 can_borrow   TINYINT(1) NOT NULL DEFAULT 1  -- boleh dipinjam?
 can_handover TINYINT(1) NOT NULL DEFAULT 1  -- boleh diserahterimakan?
+
+-- items (kode barang otomatis, ditambah 11 September 2026)
+item_code VARCHAR(255) NULL UNIQUE  -- FMIPA-<KODE LOKASI>-<TAHUN>-<URUT>
+                                    -- dibuat server, terkunci, barang lama NULL
 ```
+
+Sumber tunggal daftar lokasi + kode: `src/lib/locations.ts` (25 lokasi resmi,
+`normalizeLocation()`, `locationCode()`, `buildItemCode()`). Penomoran:
+`src/lib/item-code.ts` (`generateItemCode()`, `resolvePrefix()`, `nextSequence()`,
+`formatCode()`).
 
 ### Foreign Key Penting
 
@@ -292,6 +313,16 @@ ALTER TABLE transactions MODIFY COLUMN item_id INT NULL;
 ALTER TABLE items
   ADD COLUMN can_borrow   TINYINT(1) NOT NULL DEFAULT 1,
   ADD COLUMN can_handover TINYINT(1) NOT NULL DEFAULT 1;
+
+-- 9. Kode barang otomatis (11 September 2026)
+--    Barang lama dibiarkan NULL; kode dibuat saat barang baru disimpan.
+ALTER TABLE items
+  ADD COLUMN item_code VARCHAR(255) NULL AFTER sn,
+  ADD UNIQUE INDEX items_item_code_unique (item_code);
+
+-- 9b. Bersihkan tulisan lokasi lama yang tidak konsisten (opsional, sekali jalan)
+UPDATE items SET location = 'Divisi Teknologi Informasi'
+WHERE UPPER(location) IN ('DIVISI TI', 'DIVISI IT', 'DIVISI TEKNOLOGI INFORMASI');
 ```
 
 > Catatan tanggal 8: JANGAN pakai `drizzle-kit push` di produksi — pernah
@@ -321,9 +352,31 @@ ALTER TABLE items
 ### Status Transaksi
 ```
 pending_signature → pending_approval → active → returned
-                                     ↘ overdue (via cron/logic)
+                                     ↘ overdue (DIHITUNG dari tanggal, bukan ditulis)
                   ↘ rejected (dengan rejection_reason wajib)
 ```
+
+**Penting — status `overdue` TIDAK PERNAH ditulis** ke DB oleh kode mana pun
+(tidak ada cron). "Terlambat" dihitung saat query:
+`status = 'active' AND expected_return_date < NOW()`. Jangan cari penulis
+status `overdue`; kalau ada kode yang memfilter `status = 'overdue'`, itu bug.
+
+### Lokasi & Kode Barang
+- Dropdown lokasi: komponen `src/components/LocationSelect.tsx` (dipakai
+  `ItemModal`, `add/page.tsx`, `[id]/edit/page.tsx`). Opsi resmi dari
+  `LOCATION_OPTIONS` + lokasi custom yang sudah dipakai barang di DB
+  (`existingLocations`), jadi custom otomatis "tersimpan" tanpa tabel baru.
+- Kapitalisasi lokasi dirapikan `normalizeLocation()` — cocok beda
+  besar-kecil dengan opsi resmi langsung jadi bentuk resmi, nama baru jadi
+  Title Case (akronim TI/IT/UII/FMIPA/OSCE/CEOS/D3/S1/S2/S3 dipertahankan).
+- Kode barang `FMIPA-<KODE LOKASI>-<TAHUN>-<URUT>` dibuat di server oleh
+  `generateItemCode()`. Input kode dari klien SELALU diabaikan; import Excel
+  juga mengabaikan kolom kode dan men-generate ulang.
+- Kode lokasi custom = inisial kata (2–3 huruf); bentrok → tambah huruf kata
+  berikutnya, lalu angka (`locations.ts` → `locationCode()`).
+- Tampil di: kartu & list `ItemsClient.tsx`, halaman detail `[id]/page.tsx`,
+  kolom baru PDF peminjaman (`pdf-generator.ts`) dan PDF serah terima
+  (`handover-pdf-generator.ts`). Pencarian barang ikut mencocokkan kode.
 
 ### Dokumen PDF (peminjaman & serah terima)
 - Generator PDF ada 2: `src/lib/pdf-generator.ts` (peminjaman, prefix file `PB_`)

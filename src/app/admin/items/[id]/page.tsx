@@ -139,6 +139,16 @@ export default async function ItemDetailPage({
             )}
           </div>
 
+          {/* Kode Barang */}
+          {item.itemCode && (
+            <div className="mt-4 bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+              <p className="text-xs text-indigo-500 mb-1">Kode Barang</p>
+              <p className="text-lg font-bold text-indigo-700 font-mono">
+                {item.itemCode}
+              </p>
+            </div>
+          )}
+
           {/* Ketersediaan */}
           <div className="grid grid-cols-2 gap-4 mt-4">
             <div

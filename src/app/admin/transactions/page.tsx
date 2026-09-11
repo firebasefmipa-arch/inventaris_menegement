@@ -14,9 +14,13 @@ export default async function TransactionsPage({
   const statusFilter = status || "";
 
   const conditions = [];
-  if (statusFilter) {
+  if (statusFilter === "overdue") {
+    // "Terlambat" dihitung dari TANGGAL — status "overdue" tak pernah ditulis kode.
+    conditions.push(eq(transactions.status, "active"));
+    conditions.push(sql`${transactions.expectedReturnDate} < NOW()`);
+  } else if (statusFilter) {
     conditions.push(
-      eq(transactions.status, statusFilter as "pending_signature" | "pending_approval" | "active" | "returned" | "overdue" | "rejected")
+      eq(transactions.status, statusFilter as any)
     );
   }
 

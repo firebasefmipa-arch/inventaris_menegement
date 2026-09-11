@@ -34,6 +34,7 @@ export async function GET(
         itemName: items.name,
         inventoryNumber: items.inventoryNumber,
         assetNumber: items.assetNumber,
+        itemCode: items.itemCode,
       })
       .from(handoverItems)
       .leftJoin(items, eq(handoverItems.itemId, items.id))
@@ -57,6 +58,7 @@ export async function GET(
         name: r.itemName || "Barang",
         quantity: r.quantity,
         assetNumber: r.assetNumber,
+        itemCode: r.itemCode,
         inventoryNumber: r.inventoryNumber,
       })),
     });

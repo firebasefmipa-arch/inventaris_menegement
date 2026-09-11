@@ -16,6 +16,7 @@ type Item = {
   category: string;
   description: string | null;
   sn: string | null;
+  itemCode: string | null;
   inventoryNumber: string | null;
   assetNumber: string | null;
   lastCheckDate: string | null;
@@ -139,6 +140,7 @@ export function ItemsClient({ items, categories }: Props) {
           (item.description?.toLowerCase().includes(q) ?? false) ||
           (item.location?.toLowerCase().includes(q) ?? false) ||
           (item.inventoryNumber?.toLowerCase().includes(q) ?? false) ||
+          (item.itemCode?.toLowerCase().includes(q) ?? false) ||
           (item.assetNumber?.toLowerCase().includes(q) ?? false) ||
           (item.sn?.toLowerCase().includes(q) ?? false) ||
           (item.condition?.toLowerCase().includes(q) ?? false)
@@ -575,6 +577,12 @@ export function ItemsClient({ items, categories }: Props) {
                     <div className="p-4 pt-3 flex-1 flex flex-col gap-3">
                       {/* Identifiers Grid */}
                       <div className="grid grid-cols-2 gap-2">
+                        {item.itemCode && (
+                          <div className="bg-indigo-50 rounded-lg p-2 border border-indigo-100 col-span-2">
+                            <div className="text-[9px] uppercase tracking-wider font-semibold text-indigo-400 mb-0.5">Kode Barang</div>
+                            <div className="text-xs font-semibold text-indigo-700 font-mono truncate" title={item.itemCode}>{item.itemCode}</div>
+                          </div>
+                        )}
                         <div className="bg-gray-50 rounded-lg p-2 border border-gray-100/50">
                           <div className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">No. Inv</div>
                           <div className="text-xs font-medium text-gray-700 font-mono truncate" title={item.inventoryNumber || '-'}>{item.inventoryNumber || '-'}</div>
@@ -690,6 +698,7 @@ export function ItemsClient({ items, categories }: Props) {
                             </div>
                           </div>
                           <div className="col-span-4 flex flex-col gap-1 text-xs text-gray-600 font-mono">
+                            <div className="flex gap-2"><span className="text-[10px] uppercase tracking-wider font-semibold text-indigo-400">Kode:</span><span className="truncate font-semibold text-indigo-700">{item.itemCode || '-'}</span></div>
                             <div className="flex gap-2"><span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">Inv:</span><span className="truncate">{item.inventoryNumber || '-'}</span></div>
                             <div className="flex gap-2"><span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">Ast:</span><span className="truncate">{item.assetNumber || '-'}</span></div>
                           </div>
@@ -767,6 +776,7 @@ export function ItemsClient({ items, categories }: Props) {
         isOpen={showItemModal}
         onClose={() => setShowItemModal(false)}
         existingCategories={categories}
+        existingLocations={uniqueLocations}
       />
     </div>
     </>

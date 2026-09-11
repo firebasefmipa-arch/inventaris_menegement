@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, Package } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/Toaster";
+import { LocationSelect } from "@/components/LocationSelect";
 
 const CATEGORY_SUGGESTIONS = [
   "Elektronik",
@@ -235,12 +236,10 @@ export default function AddItemPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Lokasi
             </label>
-            <input
-              type="text"
+            <LocationSelect
               value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-              placeholder="Contoh: Ruang Server Lt.2"
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              onChange={(v) => setForm({ ...form, location: v })}
+              className="!px-4 !py-2.5"
             />
           </div>
         </div>

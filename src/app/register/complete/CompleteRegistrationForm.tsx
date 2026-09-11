@@ -9,21 +9,7 @@ import { useSession, signOut } from "next-auth/react";
 import { bp } from "@/lib/basepath";
 import { onlyDigits } from "@/lib/digits";
 import clsx from "clsx";
-
-const DIVISI_OPTIONS = [
-  { group: "Divisi", options: [
-    "Divisi Administrasi Akademik",
-    "Divisi Administrasi Keuangan",
-    "Divisi Teknologi Informasi",
-    "Divisi Administrasi Umum, Rumah Tangga",
-  ]},
-  { group: "Program Studi", options: [
-    "D3 Analisis Kimia", "S1 Statistika", "S1 Kimia", "S1 Farmasi",
-    "S1 Pendidikan Kimia", "Program Profesi Apoteker",
-    "S2 Magister Kimia", "S2 Magister Farmasi", "S2 Magister Statistika",
-  ]},
-  { group: "Lainnya", options: ["Lainnya (isi manual)"] },
-];
+import { DEPARTMENT_GROUPS } from "@/lib/departments";
 
 export default function CompleteRegistrationForm({ initialName, email }: { initialName: string; email: string }) {
   const [name, setName] = useState(initialName);
@@ -152,7 +138,7 @@ export default function CompleteRegistrationForm({ initialName, email }: { initi
             onChange={(e) => { setDepartment(e.target.value); if (e.target.value !== "Lainnya (isi manual)") setCustomDepartment(""); }}
             className="block w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 appearance-none">
             <option value="" disabled>Pilih Program Studi / Divisi</option>
-            {DIVISI_OPTIONS.map((group) => (
+            {DEPARTMENT_GROUPS.map((group) => (
               <optgroup key={group.group} label={`── ${group.group} ──`}>
                 {group.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
               </optgroup>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { X, Save, Plus } from "lucide-react";
 import { useToast } from "@/components/Toaster";
 import { AVAILABLE_ICONS_LIST } from "@/lib/iconMap";
+import { LocationSelect } from "@/components/LocationSelect";
 
 const CATEGORY_SUGGESTIONS = [
   "Elektronik",
@@ -20,9 +21,10 @@ interface ItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   existingCategories: string[];
+  existingLocations?: string[];
 }
 
-export function ItemModal({ isOpen, onClose, existingCategories }: ItemModalProps) {
+export function ItemModal({ isOpen, onClose, existingCategories, existingLocations = [] }: ItemModalProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -363,12 +365,10 @@ export function ItemModal({ isOpen, onClose, existingCategories }: ItemModalProp
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Lokasi
                 </label>
-                <input
-                  type="text"
+                <LocationSelect
                   value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  placeholder="Contoh: Ruang Server Lt.2"
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  onChange={(v) => setForm({ ...form, location: v })}
+                  extraOptions={existingLocations}
                 />
               </div>
             </div>

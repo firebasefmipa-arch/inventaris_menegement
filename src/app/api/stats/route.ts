@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { items, transactions } from "@/db/schema";
 import { eq, and, sql, count, gt } from "drizzle-orm";
+import { auth } from "@/auth";
 
 export async function GET() {
   try {
+    const session = await auth();
+    const role = (session?.user as any)?.role;
+    if (!session?.user || (role !== "admin" && role !== "super_admin"))
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const [totalItems] = await db.select({ count: count() }).from(items).where(gt(items.quantity, 0));
     const [availableItems] = await db
       .select({ count: count() })

@@ -3,9 +3,25 @@ import { db } from "@/db";
 import { items } from "@/db/schema";
 import { eq, like, or, and, gt } from "drizzle-orm";
 import { toBool } from "@/lib/to-bool";
+import { auth } from "@/auth";
+import { generateItemCode } from "@/lib/item-code";
+
+// Semua endpoint /api/items adalah panel admin. Halaman user membaca DB
+// langsung (server component), jadi tidak ada konsumen non-admin.
+async function requireAdmin() {
+  const session = await auth();
+  const role = (session?.user as any)?.role;
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (role !== "admin" && role !== "super_admin")
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return null;
+}
 
 export async function GET(request: NextRequest) {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const category = searchParams.get("category") || "";
@@ -61,6 +77,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const denied = await requireAdmin();
+    if (denied) return denied;
+
     const body = await request.json();
     const { name, category, description, quantity, location, imageUrl, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover } = body;
 
@@ -73,6 +92,9 @@ export async function POST(request: NextRequest) {
 
     const qty = quantity || 1;
 
+    // Kode barang dibuat di server, terkunci — nilai itemCode dari klien diabaikan.
+    const { code: itemCode, location: normalizedLocation } = await generateItemCode(location);
+
     const [{ id }] = await db
       .insert(items)
       .values({
@@ -80,6 +102,7 @@ export async function POST(request: NextRequest) {
         category,
         description: description || null,
         sn: sn || null,
+        itemCode,
         inventoryNumber: inventoryNumber || null,
         assetNumber: assetNumber || null,
         lastCheckDate: lastCheckDate || null,
@@ -89,7 +112,7 @@ export async function POST(request: NextRequest) {
         availableQuantity: qty,
         canBorrow: canBorrow === undefined ? true : toBool(canBorrow),
         canHandover: canHandover === undefined ? true : toBool(canHandover),
-        location: location || null,
+        location: normalizedLocation || null,
         status: "available",
       })
       .$returningId();

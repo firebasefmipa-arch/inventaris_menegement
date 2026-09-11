@@ -17,11 +17,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const borrowerInput = body.borrower || {};
 
-    const name       = (borrowerInput.name       || session.user.name             || "").trim();
-    const email      = (borrowerInput.email      || session.user.email            || "").trim();
-    const phone      = (borrowerInput.phone      || (session.user as any).phone   || "").trim();
-    const nim        = (borrowerInput.nim        || (session.user as any).nim     || "").trim();
-    const department = (borrowerInput.department || (session.user as any).department || "").trim();
+    // ── Aturan data diri (double role) ──
+    // Admin/super_admin (dari dashboard admin) BOLEH mengisi data diri custom
+    // (mencatat peminjaman atas nama orang lain). User biasa — termasuk admin
+    // yang sedang di "Mode User" — WAJIB memakai data dirinya sendiri, body
+    // diabaikan agar tidak bisa dipalsukan.
+    const role = (session.user as any).role;
+    const isAdmin = role === "admin" || role === "super_admin";
+    const src = isAdmin ? borrowerInput : {};
+
+    const name       = (src.name       || session.user.name             || "").trim();
+    const email      = (src.email      || session.user.email            || "").trim();
+    const phone      = (src.phone      || (session.user as any).phone   || "").trim();
+    const nim        = (src.nim        || (session.user as any).nim     || "").trim();
+    const department = (src.department || (session.user as any).department || "").trim();
     const userId     = session.user.id!;
     const { expectedReturnDate, notes, purpose, location, cart } = body;
 
