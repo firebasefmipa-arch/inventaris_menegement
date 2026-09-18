@@ -230,6 +230,22 @@ mountpoint -q /var/www/inventaris_menegement/public/uploads && echo "OK ter-moun
 #   curl -o /dev/null -w '%{http_code}\n' https://<domain>/<basePath>/uploads/signatures/<file>
 ```
 
+### Backup & pindah server — folder upload BUKAN lewat git
+
+Isi `/var/www/inventaris_uploads` (tanda tangan + PDF bertanda tangan) sengaja
+tidak masuk repo, jadi `git clone` TIDAK membawanya. Pindahkan terpisah:
+
+```bash
+# backup
+tar czf /root/uploads-$(date +%F).tar.gz -C /var/www inventaris_uploads
+
+# restore di server baru (sebelum app jalan)
+mkdir -p /var/www/inventaris_uploads
+tar xzf /root/uploads-<tanggal>.tar.gz -C /var/www
+
+# lalu pasang bind mount-nya (lihat Langkah 6)
+```
+
 ---
 
 ## Langkah 7 — Build & Jalankan Aplikasi
@@ -277,7 +293,7 @@ server {
     # File upload dilayani langsung Nginx — NO-CACHE (pernah tersaji lama dari
     # cache Cloudflare setelah file ditimpa/regenerate; uploads wajib fresh):
     location /uploads/ {
-        alias /var/www/inventaris_menegement/public/uploads/;
+        alias /var/www/inventaris_uploads/;
         expires -1;
         add_header Cache-Control "no-store, no-cache, must-revalidate";
         add_header Pragma "no-cache";
@@ -286,7 +302,7 @@ server {
 
     # Gateway kadang meneruskan //uploads/... (dobel slash) — tetap layani:
     location ~ ^//uploads/ {
-        alias /var/www/inventaris_menegement/public/uploads/;
+        alias /var/www/inventaris_uploads/;
         expires -1;
         add_header Cache-Control "no-store, no-cache, must-revalidate";
         add_header Pragma "no-cache";
@@ -325,7 +341,7 @@ server {
     client_max_body_size 10M;
 
     location /uploads/ {
-        alias /var/www/inventaris_menegement/public/uploads/;
+        alias /var/www/inventaris_uploads/;
         expires -1;
         add_header Cache-Control "no-store, no-cache, must-revalidate";
         add_header Pragma "no-cache";

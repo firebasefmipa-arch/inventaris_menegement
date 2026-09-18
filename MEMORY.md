@@ -535,4 +535,4 @@ Pakai helper `toBool()` dari `src/lib/to-bool.ts`.
 - [ ] Jika mengubah schema DB: tambahkan migrasi SQL manual di `database/` — JANGAN `drizzle-kit push` di produksi (bisa gagal pada index FK)
 - [ ] Jika mengubah alur auth: cek 5 lapis basePath tetap sinkron (bagian 6)
 - [ ] Semua migrasi DB sudah dijalankan (lihat bagian 8)
-- [ ] Folder `public/uploads/signed_forms/` dkk ada (urusan server, DEPLOY.md)
+- [ ] `public/uploads` sudah ter-bind-mount ke `/var/www/inventaris_uploads` (cek: `mountpoint -q public/uploads`) — urusan server, DEPLOY.md
