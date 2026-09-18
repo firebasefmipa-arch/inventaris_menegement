@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { format } from "date-fns";
-import { id } from "date-fns/locale";
 import {
   Clock, CheckCircle2, ArrowLeftRight, User, Plus,
   Search, SlidersHorizontal, ChevronDown,
@@ -17,6 +15,7 @@ import { RejectModal } from "./RejectModal";
 import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
 import { DocActions } from "@/components/DocActions";
 import { CorrectItemsModal, type CorrectItem } from "@/components/CorrectItemsModal";
+import { formatTanggalWIB, formatTanggalJamWIB } from "@/lib/tanggal";
 
 type Transaction = {
   id: number;
@@ -309,10 +308,16 @@ export function TransactionsClient({ transactions }: Props) {
                             </span>
                             {tx.borrowerDepartment && <span>{tx.borrowerDepartment}</span>}
                             <span>
-                              {format(new Date(tx.borrowDate), "dd MMM yyyy", { locale: id })}
+                              {formatTanggalWIB(tx.borrowDate)}
                               {" → "}
-                              {format(new Date(tx.expectedReturnDate), "dd MMM yyyy", { locale: id })}
+                              {formatTanggalWIB(tx.expectedReturnDate)}
                             </span>
+                            {tx.status === "returned" && tx.actualReturnDate && (
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Dikembalikan {formatTanggalJamWIB(tx.actualReturnDate)}
+                              </span>
+                            )}
                           </div>
                           {tx.notes && (
                             <p className="text-xs text-gray-400 mt-1.5 bg-gray-50 dark:bg-[#0e1c30] px-2.5 py-1.5 rounded-lg border border-gray-100 dark:border-[#1c2e48]">

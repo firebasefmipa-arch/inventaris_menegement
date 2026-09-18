@@ -372,6 +372,31 @@ Titik yang sudah benar: `/api/user/transactions?status=overdue`,
 `/api/user/transactions/summary`, `/api/transactions?status=overdue`,
 `/api/stats`, dashboard admin & user, `DueSoonCard`.
 
+### Tanggal dikembalikan (actualReturnDate)
+
+`transactions.actual_return_date` diisi `new Date()` di
+`PUT /api/transactions/[id]` saat admin menekan "Kembalikan" — jadi waktu klik,
+bukan tanggal dokumen. Satu-satunya tempat yang menulis status `returned`.
+
+Yang menampilkannya:
+- riwayat user `src/app/dashboard/riwayat/page.tsx` (baris "Dikembalikan")
+- history admin `src/app/admin/transactions/TransactionsClient.tsx`
+  (hanya bila `status === "returned"`)
+- **Bukan** PDF peminjaman. Baris "Tanggal Kembali" di PDF tetap
+  `expectedReturnDate` (tenggat). User pernah minta jangan diubah.
+- **Bukan** halaman detail barang `/admin/items/[id]`.
+
+### Zona waktu — pakai `src/lib/tanggal.ts`
+
+Server jalan di **UTC**, pengguna WIB. Jangan pakai `date-fns`/`toLocaleDateString`
+langsung untuk tanggal yang dilihat user: bisa geser sehari (klik jam 07:00 WIB
+= 00:00 UTC). Pakai `formatTanggalWIB()` / `formatTanggalJamWIB()`
+(Intl + `timeZone: "Asia/Jakarta"`, format `18 Sep 2026, 10:09`).
+
+Catatan: ini HANYA untuk tampilan. Nilai DB tetap UTC, dan perhitungan
+"Terlambat"/"Segera Dikembalikan" masih pakai `NOW()` server (UTC) — belum
+diseragamkan (pilihan B, bukan C).
+
 ### PDF — tata letak tabel
 Tabel barang di kedua generator PDF sekarang punya kolom **Kode Barang**:
 - `pdf-generator.ts` (peminjaman): `No | Nama Alat/Barang | Kode Barang | Jumlah | No. Inventaris | Keterangan`

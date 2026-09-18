@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import Link from "next/link";
 import { DocActions } from "@/components/DocActions";
+import { formatTanggalJamWIB } from "@/lib/tanggal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -307,7 +308,7 @@ function PeminjamanTab() {
                           <div>
                             <span className="text-gray-400">Dikembalikan</span>
                             <p className="font-medium text-emerald-600">
-                              {format(new Date(tx.actualReturnDate), "dd MMM yyyy", { locale: idLocale })}
+                              {formatTanggalJamWIB(tx.actualReturnDate)}
                             </p>
                           </div>
                         )}
