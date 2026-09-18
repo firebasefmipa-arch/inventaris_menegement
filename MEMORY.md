@@ -415,6 +415,9 @@ utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
   File tetap di disk server, aplikasi tetap melayaninya lewat nginx `/uploads/`.
   Jangan pernah `git add -f public/uploads`, dan jangan pakai `git add -A`
   kalau `.gitignore` ini sampai hilang.
+  (Riwayat: 3 PNG TTD sempat ter-commit; sudah dibersihkan dari seluruh
+  riwayat dengan `git filter-repo --path public/uploads --invert-paths`
+  + force-push pada 2026-09-18 — semua hash commit berubah di titik itu.)
 - **File upload/regenerate WAJIB ber-prefix** `PB_`/`ST_` + nama unik per id
   (`PB_<nama>_<ddmmyyyy>_<id>_regen.pdf`). Nama tanpa id → tabrakan (hv2↔hv3
   & tx2↔tx3 pernah saling timpa).
