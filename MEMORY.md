@@ -410,6 +410,13 @@ utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
   dan `src/lib/handover-pdf-generator.ts` (serah terima, prefix `ST_`).
 - Folder upload: `public/uploads/{pending,signed_forms,handovers,signatures}/`
   → URL publik `/uploads/<folder>/<file>` (klien wajib `bp()`/fetch ber-prefix).
+- **Folder fisik upload DI LUAR repo:** `/var/www/inventaris_uploads`,
+  di-bind-mount ke `public/uploads` (entri di `/etc/fstab`). Tujuannya supaya
+  tanda tangan & dokumen bertanda tangan tak mungkin ikut ter-commit.
+  Diperiksa: `mountpoint -q public/uploads && echo ADA`.
+  **JANGAN diganti symlink** — Turbopack (build Next 16) gagal dengan
+  "Symlink ... points out of the filesystem root". Harus bind mount.
+  Kode tidak berubah (`process.cwd()/public/uploads/...` tetap jalan).
 - **`public/uploads/` DILARANG masuk git** (`.gitignore` barisnya ada). Isinya
   tanda tangan asli + dokumen bertanda tangan peminjam = data pribadi.
   File tetap di disk server, aplikasi tetap melayaninya lewat nginx `/uploads/`.

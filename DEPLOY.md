@@ -202,20 +202,32 @@ login di `/admin/login`.
 
 ---
 
-## Langkah 6 — Buat Folder Upload
+## Langkah 6 — Buat Folder Upload (DI LUAR repo, lewat bind mount)
 
 ```bash
-mkdir -p /var/www/inventaris_menegement/public/uploads/signed_forms
-mkdir -p /var/www/inventaris_menegement/public/uploads/handovers
-mkdir -p /var/www/inventaris_menegement/public/uploads/pending
-mkdir -p /var/www/inventaris_menegement/public/uploads/signatures
-chmod -R 755 /var/www/inventaris_menegement/public/uploads/
+# Folder fisik upload SENGAJA di luar folder project, supaya tanda tangan
+# dan dokumen bertanda tangan tak mungkin ikut ter-commit.
+mkdir -p /var/www/inventaris_uploads/{pending,signed_forms,handovers,signatures}
+chmod -R 755 /var/www/inventaris_uploads
 
-# PENTING: folder uploads TIDAK ikut ter-clone dari git (.gitignore).
-# Isinya (tanda tangan + PDF bertanda tangan) sengaja tidak masuk repo.
-# Kalau pindah/restore server: folder-folder di atas harus dibuat manual
-# dan isinya dipindah terpisah (rsync/scp), bukan lewat git.
-# JANGAN pakai `git add -f` untuk apa pun di dalam public/uploads/.
+# public/uploads di-bind-mount ke folder itu (bukan symlink!)
+mkdir -p /var/www/inventaris_menegement/public/uploads
+echo '/var/www/inventaris_uploads /var/www/inventaris_menegement/public/uploads none bind,defaults 0 0' >> /etc/fstab
+mount -a
+mountpoint -q /var/www/inventaris_menegement/public/uploads && echo "OK ter-mount"
+
+# PENTING — jangan pakai symlink:
+#   Turbopack (build Next 16) GAGAL dengan
+#   "Symlink [...] is invalid, it points out of the filesystem root"
+# Bind mount tidak masalah karena terlihat sebagai direktori biasa.
+
+# PENTING: folder uploads tidak pernah ikut git (.gitignore).
+# Kalau pindah/restore server: isinya dipindah manual (rsync/scp), bukan git.
+# JANGAN pakai `git add -f` untuk apa pun di dalam public/uploads.
+
+# Verifikasi setelah deploy:
+#   mountpoint -q public/uploads
+#   curl -o /dev/null -w '%{http_code}\n' https://<domain>/<basePath>/uploads/signatures/<file>
 ```
 
 ---

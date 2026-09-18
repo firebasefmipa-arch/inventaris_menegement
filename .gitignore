@@ -44,8 +44,10 @@ extract-pdf.js
 
 # ── Upload user (tanda tangan asli, dokumen bertanda tangan) ──
 # JANGAN pernah di-commit: berisi data pribadi peminjam.
-# Isinya tetap ada di server, cuma tidak lagi dilacak git.
-public/uploads/
+# Sejak 2026-09-18 folder fisiknya DI LUAR repo: /var/www/inventaris_uploads
+# (public/uploads di-bind-mount ke sana lewat /etc/fstab; lihat DEPLOY.md).
+# Tanpa trailing slash supaya entri apa pun bernama public/uploads terabaikan.
+public/uploads
 
 # ── OS & Editor ───────────────────────────────────────────────
 .DS_Store
