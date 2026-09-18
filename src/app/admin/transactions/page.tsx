@@ -15,9 +15,18 @@ export default async function TransactionsPage({
 
   const conditions = [];
   if (statusFilter === "overdue") {
-    // "Terlambat" dihitung dari TANGGAL — status "overdue" tak pernah ditulis kode.
-    conditions.push(eq(transactions.status, "active"));
-    conditions.push(sql`${transactions.expectedReturnDate} < NOW()`);
+    // "Terlambat" dihitung dari TANGGAL — status "overdue" tak pernah ditulis
+    // kode. Mencakup yang belum kembali & lewat tenggat, PLUS yang sudah
+    // kembali tapi dulu lewat tenggat (dibandingkan di zona WIB).
+    conditions.push(sql`
+      (
+        (${transactions.status} = 'active' AND ${transactions.expectedReturnDate} < NOW())
+        OR
+        (${transactions.status} = 'returned'
+          AND DATE(CONVERT_TZ(${transactions.expectedReturnDate}, '+00:00', '+07:00'))
+            < DATE(CONVERT_TZ(${transactions.actualReturnDate}, '+00:00', '+07:00')))
+      )
+    `);
   } else if (statusFilter) {
     conditions.push(
       eq(transactions.status, statusFilter as any)

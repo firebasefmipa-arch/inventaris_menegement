@@ -15,7 +15,7 @@ import { RejectModal } from "./RejectModal";
 import { FilterBar, defaultFilter, applyTimeFilter, type FilterState } from "@/components/FilterBar";
 import { DocActions } from "@/components/DocActions";
 import { CorrectItemsModal, type CorrectItem } from "@/components/CorrectItemsModal";
-import { formatTanggalWIB, formatTanggalJamWIB } from "@/lib/tanggal";
+import { formatTanggalWIB, formatTanggalJamWIB, hariTerlambat } from "@/lib/tanggal";
 
 type Transaction = {
   id: number;
@@ -80,7 +80,13 @@ export function TransactionsClient({ transactions }: Props) {
   const filteredTransactions = useMemo(() => {
     // Daftar nama peminjam unik untuk dropdown
     let result = transactions.filter((tx) => {
-      if (statusFilter && tx.status !== statusFilter) return false;
+      if (statusFilter === "overdue") {
+        // "Terlambat" = dihitung dari TANGGAL, bukan kolom status (status
+        // 'overdue' tak pernah ditulis ke DB). Mencakup yang belum kembali
+        // DAN yang sudah kembali tapi dulu telat.
+        const pernahTelat = hariTerlambat(tx.expectedReturnDate, tx.actualReturnDate ?? undefined) > 0;
+        if (!pernahTelat) return false;
+      } else if (statusFilter && tx.status !== statusFilter) return false;
       if (advFilter.user && tx.borrowerName !== advFilter.user) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -160,6 +166,7 @@ export function TransactionsClient({ transactions }: Props) {
     { key: "pending_approval", label: "Menunggu Persetujuan" },
     { key: "active", label: "Dipinjam (Aktif)" },
     { key: "returned", label: "Dikembalikan" },
+    { key: "overdue", label: "Terlambat" },
     { key: "rejected", label: "Ditolak" },
   ];
 
@@ -257,7 +264,12 @@ export function TransactionsClient({ transactions }: Props) {
         ) : (
           <div className="space-y-3">
             {filteredTransactions.map((tx) => {
-              const isOverdue = tx.status === "active" && new Date(tx.expectedReturnDate) < new Date();
+              const isOverdue = tx.status === "active" && hariTerlambat(tx.expectedReturnDate) > 0;
+              // Transaksi yang sudah kembali tapi dulu telat — badge "Terlambat"
+              // tetap ditampilkan di samping "Dikembalikan".
+              const telatKembali = tx.status === "returned"
+                ? hariTerlambat(tx.expectedReturnDate, tx.actualReturnDate ?? undefined)
+                : 0;
 
               return (
                 <div
@@ -338,21 +350,32 @@ export function TransactionsClient({ transactions }: Props) {
 
                         {/* Status badge + actions */}
                         <div className="flex flex-col items-end gap-2 shrink-0">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                            tx.status === "returned"            ? "bg-emerald-100 text-emerald-700"
-                            : tx.status === "active"            ? (isOverdue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")
-                            : tx.status === "pending_signature" ? "bg-gray-100 text-gray-600"
-                            : tx.status === "pending_approval"  ? "bg-blue-100 text-blue-700"
-                            : tx.status === "rejected"          ? "bg-red-100 text-red-700"
-                            : "bg-gray-100 text-gray-600"
-                          }`}>
-                            {tx.status === "returned"            ? "Dikembalikan"
-                             : tx.status === "active"            ? (isOverdue ? "Terlambat!" : "Dipinjam")
-                             : tx.status === "pending_signature" ? "Menunggu TTD"
-                             : tx.status === "pending_approval"  ? "Menunggu Persetujuan"
-                             : tx.status === "rejected"          ? "Ditolak"
-                             : tx.status}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                              tx.status === "returned"            ? "bg-emerald-100 text-emerald-700"
+                              : tx.status === "active"            ? (isOverdue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")
+                              : tx.status === "pending_signature" ? "bg-gray-100 text-gray-600"
+                              : tx.status === "pending_approval"  ? "bg-blue-100 text-blue-700"
+                              : tx.status === "rejected"          ? "bg-red-100 text-red-700"
+                              : "bg-gray-100 text-gray-600"
+                            }`}>
+                              {tx.status === "returned"            ? "Dikembalikan"
+                               : tx.status === "active"            ? (isOverdue ? "Terlambat!" : "Dipinjam")
+                               : tx.status === "pending_signature" ? "Menunggu TTD"
+                               : tx.status === "pending_approval"  ? "Menunggu Persetujuan"
+                               : tx.status === "rejected"          ? "Ditolak"
+                               : tx.status}
+                            </span>
+
+                            {/* Sudah dikembalikan tapi dulu lewat tenggat —
+                                status terlambatnya tidak boleh hilang. */}
+                            {telatKembali > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                Terlambat
+                              </span>
+                            )}
+                          </div>
 
                           {(tx.signedDocumentUrl || tx.status === "rejected") && (
                             <DocActions

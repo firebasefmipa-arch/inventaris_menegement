@@ -19,10 +19,18 @@ export async function GET(req: NextRequest) {
 
     const conditions = [eq(transactions.userId, userId)];
     if (status === "overdue") {
-      // "Terlambat" dihitung dari TANGGAL — kolom status "overdue" tidak pernah
-      // ditulis kode mana pun, jadi memfilter status='overdue' selalu kosong.
-      conditions.push(eq(transactions.status, "active"));
-      conditions.push(sql`${transactions.expectedReturnDate} < NOW()`);
+      // "Terlambat" dihitung dari TANGGAL (bukan kolom status, yang tak pernah
+      // ditulis). Mencakup: belum kembali & sudah lewat tenggat, PLUS yang sudah
+      // kembali tapi dulu lewat tenggat — tanggalnya dibandingkan di zona WIB.
+      conditions.push(sql`
+        (
+          (${transactions.status} = 'active' AND ${transactions.expectedReturnDate} < NOW())
+          OR
+          (${transactions.status} = 'returned'
+            AND DATE(CONVERT_TZ(${transactions.expectedReturnDate}, '+00:00', '+07:00'))
+              < DATE(CONVERT_TZ(${transactions.actualReturnDate}, '+00:00', '+07:00')))
+        )
+      `);
     } else if (status) {
       conditions.push(
         eq(transactions.status, status as any)

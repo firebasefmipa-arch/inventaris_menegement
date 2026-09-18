@@ -25,6 +25,12 @@ const jamMenit = (d: Date) => {
   return `${p.hour}:${p.minute}`;
 };
 
+// Format ISO (YYYY-MM-DD) di zona WIB — dipakai untuk membandingkan tanggal
+// kalender. fmtTanggal tidak bisa dipakai karena bulannya berbentuk "Sep".
+const fmtISO = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric", month: "2-digit", day: "2-digit", timeZone: TZ,
+});
+
 /** "18 Sep 2026" */
 export function formatTanggalWIB(date: Date | string | null | undefined): string {
   if (!date) return "-";
@@ -37,4 +43,32 @@ export function formatTanggalJamWIB(date: Date | string | null | undefined): str
   if (!date) return "-";
   const d = typeof date === "string" ? new Date(date) : date;
   return isNaN(d.getTime()) ? "-" : `${fmtTanggal.format(d)}, ${jamMenit(d)}`;
+}
+
+/**
+ * Berapa hari TERLAMBAT mengembalikan (kalender WIB), 0 = tidak telat.
+ *
+ * "Tanggal kembali" (expected_return_date) jamnya selalu 00:00, jadi
+ * membandingkan jam mentah bikin salah: tenggat 14 Sep 00:00 vs kembali
+ * 14 Sep 10:00 -> terbaca telat padahal masih hari yang sama. Karena itu
+ * yang dibandingkan TANGGAL kalender WIB, bukan jam.
+ *
+ * Dipakai untuk badge "Terlambat" pada transaksi yang sudah dikembalikan
+ * (lewat tanggal kembali) maupun yang masih dipinjam (dibandingkan hari ini).
+ */
+export function hariTerlambat(
+  tenggat: Date | string | null | undefined,
+  dikembalikan: Date | string | null | undefined = new Date()
+): number {
+  if (!tenggat || !dikembalikan) return 0;
+  const ke = (v: Date | string) => {
+    const d = typeof v === "string" ? new Date(v) : v;
+    if (isNaN(d.getTime())) return null;
+    const [y, m, day] = fmtISO.format(d).split("-").map(Number);
+    return Date.UTC(y, m - 1, day);
+  };
+  const a = ke(tenggat);
+  const b = ke(dikembalikan);
+  if (a === null || b === null) return 0;
+  return Math.max(0, Math.round((b - a) / 86400000));
 }

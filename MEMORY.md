@@ -394,8 +394,34 @@ langsung untuk tanggal yang dilihat user: bisa geser sehari (klik jam 07:00 WIB
 (Intl + `timeZone: "Asia/Jakarta"`, format `18 Sep 2026, 10:09`).
 
 Catatan: ini HANYA untuk tampilan. Nilai DB tetap UTC, dan perhitungan
-"Terlambat"/"Segera Dikembalikan" masih pakai `NOW()` server (UTC) — belum
-diseragamkan (pilihan B, bukan C).
+"Terlambat"/"Segera Dikembalikan" untuk **kartu statistik** masih pakai `NOW()`
+server (UTC) — belum diseragamkan (pilihan B, bukan C).
+
+### "Terlambat" pada transaksi yang SUDAH dikembalikan
+
+Dulu badge "Terlambat" hilang begitu barang dikembalikan (statusnya jadi
+`returned`, syarat `status='active'` gagal). Sekarang tetap tampil.
+
+Definisi tunggal di `src/lib/tanggal.ts` → **`hariTerlambat(tenggat, dikembalikan)`**:
+selisih hari **kalender WIB**, 0 = tidak telat. Tanpa argumen kedua, dibandingkan
+dengan hari ini (untuk yang masih dipinjam).
+
+**Jebakan penting:** `expected_return_date` jamnya SELALU 00:00 (tenggat itu
+tanggal). Membandingkan jam mentah bikin salah — tenggat 14 Sep 00:00 vs kembali
+14 Sep 10:00 terbaca "telat" padahal hari yang sama. Karena itu bandingkan
+TANGGAL kalender (helper pakai `fmtISO`; jangan pakai `fmtTanggal` yang bulannya
+"Sep" → `NaN`).
+
+Titik yang memakainya:
+- admin: `TransactionsClient.tsx` (badge kedua + filter "Terlambat")
+- user: `dashboard/riwayat/page.tsx` (badge kedua + tab "Terlambat")
+- query: `admin/transactions/page.tsx` + `api/user/transactions/route.ts`
+  → `overdue` = `(active AND expected < NOW()) OR (returned AND
+  DATE(CONVERT_TZ(expected,'+00:00','+07:00')) < DATE(CONVERT_TZ(actual,...)))`
+
+Bentuk tampilan: **dua badge** ("Dikembalikan" + "Terlambat"), tanpa jumlah hari.
+Kartu statistik "Terlambat" di dashboard admin **sengaja tidak diubah** — tetap
+hanya menghitung yang belum dikembalikan (perlu ditindaklanjuti).
 
 ### PDF — tata letak tabel
 Tabel barang di kedua generator PDF sekarang punya kolom **Kode Barang**:

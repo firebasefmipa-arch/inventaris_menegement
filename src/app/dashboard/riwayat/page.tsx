@@ -11,7 +11,7 @@ import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import Link from "next/link";
 import { DocActions } from "@/components/DocActions";
-import { formatTanggalJamWIB } from "@/lib/tanggal";
+import { formatTanggalJamWIB, hariTerlambat } from "@/lib/tanggal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -246,7 +246,11 @@ function PeminjamanTab() {
             const StatusIcon = cfg.icon;
             const borrowDate = new Date(tx.borrowDate);
             const expectedDate = new Date(tx.expectedReturnDate);
-            const isOverdue = tx.status === "active" && expectedDate < new Date();
+            const isOverdue = tx.status === "active" && hariTerlambat(tx.expectedReturnDate) > 0;
+            // Sudah kembali tapi dulu telat — badge "Terlambat" tetap tampil.
+            const telatKembali = tx.status === "returned"
+              ? hariTerlambat(tx.expectedReturnDate, tx.actualReturnDate ?? undefined) > 0
+              : false;
             const isExpanded = expandedIds.has(tx.id);
             const multiItem = tx.items && tx.items.length > 1;
             const needsUpload = tx.status === "pending_signature" && !tx.signedDocumentUrl;
@@ -288,9 +292,16 @@ function PeminjamanTab() {
                               : `${tx.quantity} unit`}
                           </p>
                         </div>
-                        <span className={clsx("text-xs font-semibold px-2.5 py-1 rounded-full border", cfg.bg, cfg.color, cfg.border)}>
-                          {isOverdue ? "Terlambat" : cfg.label}
-                        </span>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className={clsx("text-xs font-semibold px-2.5 py-1 rounded-full border", cfg.bg, cfg.color, cfg.border)}>
+                            {isOverdue ? "Terlambat" : cfg.label}
+                          </span>
+                          {telatKembali && (
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-red-50 text-red-700 border-red-200">
+                              Terlambat
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs text-gray-500">
