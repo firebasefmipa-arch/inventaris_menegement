@@ -42,6 +42,11 @@ extract-pdf.js
 # Kecuali template publik
 !public/templates/*.pdf
 
+# ── Upload user (tanda tangan asli, dokumen bertanda tangan) ──
+# JANGAN pernah di-commit: berisi data pribadi peminjam.
+# Isinya tetap ada di server, cuma tidak lagi dilacak git.
+public/uploads/
+
 # ── OS & Editor ───────────────────────────────────────────────
 .DS_Store
 Thumbs.db

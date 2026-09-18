@@ -210,6 +210,12 @@ mkdir -p /var/www/inventaris_menegement/public/uploads/handovers
 mkdir -p /var/www/inventaris_menegement/public/uploads/pending
 mkdir -p /var/www/inventaris_menegement/public/uploads/signatures
 chmod -R 755 /var/www/inventaris_menegement/public/uploads/
+
+# PENTING: folder uploads TIDAK ikut ter-clone dari git (.gitignore).
+# Isinya (tanda tangan + PDF bertanda tangan) sengaja tidak masuk repo.
+# Kalau pindah/restore server: folder-folder di atas harus dibuat manual
+# dan isinya dipindah terpisah (rsync/scp), bukan lewat git.
+# JANGAN pakai `git add -f` untuk apa pun di dalam public/uploads/.
 ```
 
 ---

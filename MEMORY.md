@@ -410,6 +410,11 @@ utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
   dan `src/lib/handover-pdf-generator.ts` (serah terima, prefix `ST_`).
 - Folder upload: `public/uploads/{pending,signed_forms,handovers,signatures}/`
   → URL publik `/uploads/<folder>/<file>` (klien wajib `bp()`/fetch ber-prefix).
+- **`public/uploads/` DILARANG masuk git** (`.gitignore` barisnya ada). Isinya
+  tanda tangan asli + dokumen bertanda tangan peminjam = data pribadi.
+  File tetap di disk server, aplikasi tetap melayaninya lewat nginx `/uploads/`.
+  Jangan pernah `git add -f public/uploads`, dan jangan pakai `git add -A`
+  kalau `.gitignore` ini sampai hilang.
 - **File upload/regenerate WAJIB ber-prefix** `PB_`/`ST_` + nama unik per id
   (`PB_<nama>_<ddmmyyyy>_<id>_regen.pdf`). Nama tanpa id → tabrakan (hv2↔hv3
   & tx2↔tx3 pernah saling timpa).
