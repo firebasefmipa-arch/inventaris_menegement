@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, MapPin, Package, Plus, SlidersHorizontal, ChevronDown, Monitor, Speaker, Camera, Tent, Activity, Car, PenTool, Upload, LayoutGrid, List, Trash2, CheckSquare, MoreVertical, Edit2, Tag, X, CalendarDays } from "lucide-react";
+import { Search, MapPin, Package, Plus, SlidersHorizontal, ChevronDown, Monitor, Speaker, Camera, Tent, Activity, Car, PenTool, Upload, LayoutGrid, List, Trash2, CheckSquare, MoreVertical, Edit2, Tag, X, CalendarDays, Printer } from "lucide-react";
 import clsx from "clsx";
 import { DeleteItemButton } from "./DeleteItemButton"; // kept for potential single-item use
 import { ItemModal } from "./ItemModal";
@@ -60,6 +60,7 @@ export function ItemsClient({ items, categories }: Props) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
 
@@ -179,6 +180,55 @@ export function ItemsClient({ items, categories }: Props) {
     if (newSet.has(id)) newSet.delete(id);
     else newSet.add(id);
     setSelectedIds(newSet);
+  };
+
+  // Barang lama bisa belum punya Kode Barang — tidak bisa dilabeli.
+  const selectedTanpaKode = useMemo(
+    () => filteredItems.filter((i) => selectedIds.has(i.id) && !i.itemCode?.trim()).length,
+    [filteredItems, selectedIds]
+  );
+  const bisaDilabeli = selectedIds.size - selectedTanpaKode;
+
+  const handlePrintLabels = async () => {
+    if (selectedIds.size === 0) return;
+    if (bisaDilabeli === 0) {
+      toast("Barang yang dipilih belum punya Kode Barang, jadi belum bisa dilabeli.", "error");
+      return;
+    }
+
+    setIsPrinting(true);
+    try {
+      const res = await fetch("/api/items/labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Gagal membuat label");
+      }
+
+      // Buka di tab baru supaya bisa langsung dicetak; dianggap "popup"
+      // karena dipicu klik user.
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+      const dilewati = Number(res.headers.get("X-Label-Skipped") || 0);
+      const dicetak = Number(res.headers.get("X-Label-Count") || 0);
+      toast(
+        dilewati > 0
+          ? `${dicetak} label dibuat. ${dilewati} barang dilewati karena belum punya Kode Barang.`
+          : `${dicetak} label dibuat.`,
+        "success"
+      );
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Gagal membuat label", "error");
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   const toggleSelectAll = () => {
@@ -759,6 +809,15 @@ export function ItemsClient({ items, categories }: Props) {
               className="px-3 py-1.5 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
               Batal
+            </button>
+            <button
+              onClick={handlePrintLabels}
+              disabled={isPrinting || bisaDilabeli === 0}
+              title={bisaDilabeli === 0 ? "Barang yang dipilih belum punya Kode Barang" : "Cetak label barang"}
+              className="px-4 py-1.5 text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Printer className="w-4 h-4" />
+              {isPrinting ? "Membuat..." : `Cetak Label${bisaDilabeli > 0 ? ` (${bisaDilabeli})` : ""}`}
             </button>
             <button
               onClick={handleBulkDelete}

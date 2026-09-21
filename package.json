@@ -13,7 +13,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "setup:superadmin": "tsx scripts/create-super-admin.ts",
-    "check:pdf": "tsx scripts/check-pdf-layout.ts"
+    "check:pdf": "tsx scripts/check-pdf-layout.ts",
+    "check:label": "tsx scripts/check-label-layout.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",

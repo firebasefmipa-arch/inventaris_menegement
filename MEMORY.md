@@ -257,6 +257,9 @@ npm run typecheck              # Harus 0 errors sebelum deploy
 # Uji tata letak tabel PDF (generate PDF asli lalu baca isinya)
 npm run check:pdf              # Harus "SEMUA LOLOS" setelah mengubah kolom PDF
 
+# Uji label barang (geometri + isi PDF nyata)
+npm run check:label            # Harus "SEMUA LOLOS" setelah mengubah label
+
 # Database
 npm run db:studio              # Buka Drizzle Studio (GUI database)
 npm run db:generate            # Generate migrasi dari perubahan schema
@@ -455,6 +458,27 @@ utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
 - Tampil di: kartu & list `ItemsClient.tsx`, halaman detail `[id]/page.tsx`,
   kolom baru PDF peminjaman (`pdf-generator.ts`) dan PDF serah terima
   (`handover-pdf-generator.ts`). Pencarian barang ikut mencocokkan kode.
+
+### Label Barang (cetak fisik)
+- Generator: `src/lib/label-pdf-generator.ts` (pdf-lib, tanpa dependency baru).
+  Mengikuti template "Pelabelan Barang": A4 **landscape**, 2 kolom x 3 baris,
+  **5 label per halaman** (baris terakhir sengaja 1 label, sama seperti template).
+- API: `POST /api/items/labels` body `{ ids: number[] }` (guard admin/super_admin).
+  Balas PDF + header `X-Label-Count` dan `X-Label-Skipped`.
+- UI: mode pilih (`selectMode`) di `ItemsClient.tsx` → tombol "Cetak Label (n)"
+  di bilah aksi bawah. Menu ini SUDAH ADA sebelumnya (dipakai hapus massal).
+- Isi label (urut atas→bawah): Kode Barang (bold) · Nama · Spesifikasi ·
+  `No. Inventaris: ...` (**hanya kalau ada**) · `Tanggal Cek: ...` · `Kondisi ...`.
+  Logo FMIPA di kanan atas; baris kode dipotong agar tidak menabrak logo.
+- **Barang tanpa Kode Barang DILEWATI** — kode TIDAK dibuat otomatis saat cetak
+  (keputusan user; barang lama akan dibersihkan/dikosongkan kodenya).
+- Uji: `npm run check:label` — geometri (tidak keluar sel / tidak menabrak logo)
+  + baca ulang teks PDF nyata (parser content-stream sama seperti `check:pdf`).
+- Layout dihitung fungsi murni `planLabels()` supaya bisa diuji tanpa menggambar.
+  `ponytail:` kalau perlu ukuran label/stiker khusus (bukan A4), tambahkan preset
+  ukuran di `LABEL_GEO` — sekarang hanya A4 landscape.
+- Catatan: `pdf-parse` (devDep) v2 TIDAK punya default export seperti asumsi lama —
+  jangan pakai untuk uji; pakai parser content-stream di `check-pdf-layout.ts`.
 
 ### Dokumen PDF (peminjaman & serah terima)
 - Generator PDF ada 2: `src/lib/pdf-generator.ts` (peminjaman, prefix file `PB_`)
