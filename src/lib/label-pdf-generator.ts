@@ -8,7 +8,8 @@ import path from "path";
  * (baris terakhir sengaja cuma 1 label, sama seperti template).
  *
  * Bilah teks per label (urut dari atas):
- *   Kode Barang · Nama · Spesifikasi · [No. Inventaris] · Tanggal Cek · Kondisi
+ *   logo FMIPA (pojok kiri atas) · Kode Barang · Nama · Spesifikasi ·
+ *   [No. Inventaris] · Tanggal Cek · Kondisi
  * Baris dalam [] hanya muncul kalau datanya ada.
  */
 
@@ -32,9 +33,11 @@ export const LABEL_GEO = {
   perRow: 2,
   perPage: 5,
   padX: 10,
-  padY: 9,
+  padY: 7,
   logoW: 87.75,
   logoH: 23.93,
+  logoGap: 4, // jarak logo ke baris teks pertama
+  lineGap: 1, // jarak antar baris teks
   sizeKode: 12,
   sizeNama: 12,
   sizeSpesifikasi: 11,
@@ -167,8 +170,6 @@ export function planLabels(items: LabelData[], fonts: Fonts): LabelPlan[] {
   const cellW = (gridW - g.colGap * (g.perRow - 1)) / g.perRow;
   const cellH = (gridH - g.rowGap * 2) / 3;
   const innerW = cellW - g.padX * 2;
-  const firstW = innerW - g.logoW - 6; // baris kode tidak boleh menabrak logo
-
   return items.map((item, i) => {
     const onPage = i % g.perPage;
     const row = Math.floor(onPage / g.perRow);
@@ -178,18 +179,19 @@ export function planLabels(items: LabelData[], fonts: Fonts): LabelPlan[] {
     const yTop = g.pageH - g.margin - row * (cellH + g.rowGap);
     const cell = { x, y: yTop - cellH, w: cellW, h: cellH };
 
+    // Logo di pojok KIRI ATAS sel (sama seperti template), teks mulai di bawahnya.
     const logo = {
-      x: cell.x + cellW - g.padX - g.logoW,
+      x: cell.x + g.padX,
       y: cell.y + cellH - g.padY - g.logoH,
       w: g.logoW,
       h: g.logoH,
     };
 
-    const lines = buildLines(item, fonts, innerW, firstW);
+    const lines = buildLines(item, fonts, innerW, innerW);
 
-    let cursor = cell.y + cellH - g.padY;
+    let cursor = logo.y - g.logoGap;
     const placed = lines.map((l) => {
-      cursor -= l.size + 2;
+      cursor -= l.size + g.lineGap;
       return { ...l, x: cell.x + g.padX, y: cursor };
     });
 
@@ -229,7 +231,6 @@ export async function generateLabelsPDF(items: LabelData[]): Promise<Uint8Array>
         height: plan.cell.h,
         borderColor: rgb(0.8, 0.8, 0.8),
         borderWidth: 0.5,
-        borderDashArray: [2, 3],
       });
 
       if (logoImg) {

@@ -131,23 +131,22 @@ async function main() {
     condition: "Rusak Ringan, Perlu Servis",
   }]);
 
-  console.log("\n=== 5. Baris kode tidak menabrak logo ===");
+  console.log("\n=== 5. Logo di pojok kiri atas & tidak ditabrak teks ===");
   const plansKode = planLabels(Array.from({ length: 30 }, () => penuh), fonts);
-  let nabrak = false;
-  for (const p of plansKode) {
-    const kode = p.lines[0];
-    const batasKiriLogo = p.logo.x - G.padX; // kode harus selesai sebelum area logo
-    const sebarisLogo = kode.y < p.logo.y + p.logo.h && kode.y + kode.size > p.logo.y;
-    if (sebarisLogo && kode.x + kode.width > batasKiriLogo + EPS) {
-      cek("baris kode tidak menabrak logo", false, `kode berakhir ${(kode.x + kode.width).toFixed(1)} > batas ${batasKiriLogo.toFixed(1)}`);
-      nabrak = true;
-      break;
-    }
-  }
-  if (!nabrak) cek("baris kode tidak menabrak logo (30 label)", true);
-  cek("kode panjang sekalipun tetap dipotong sebelum logo",
-    plansKode.every((p) => p.lines[0].width <= p.cell.w - G.padX * 2 - G.logoW - 6 + EPS));
-  cek("logo di dalam sel", planLabels([penuh], fonts).every((p) =>
+  cek("logo menempel kiri sel", plansKode.every((p) => Math.abs(p.logo.x - (p.cell.x + G.padX)) < EPS));
+  cek("logo di sisi ATAS sel (bukan kanan)",
+    plansKode.every((p) => p.logo.x < p.cell.x + p.cell.w / 2),
+    `logo.x ${plansKode[0].logo.x.toFixed(1)} vs tengah sel ${(plansKode[0].cell.x + plansKode[0].cell.w / 2).toFixed(1)}`);
+  cek("logo menempel atas sel",
+    plansKode.every((p) => Math.abs((p.logo.y + p.logo.h) - (p.cell.y + p.cell.h - G.padY)) < EPS));
+
+  // Semua teks harus MULAI di bawah logo
+  const diBawahLogo = plansKode.every((p) => p.lines.every((l) => l.y + l.size <= p.logo.y + EPS));
+  cek("semua baris teks di bawah logo", diBawahLogo,
+    `baris teratas y+size ${(plansKode[0].lines[0].y + plansKode[0].lines[0].size).toFixed(1)} vs dasar logo ${plansKode[0].logo.y.toFixed(1)}`);
+  cek("baris kode selebar isi sel (tidak lagi dipotong karena logo)",
+    plansKode.every((p) => p.lines[0].width <= p.cell.w - G.padX * 2 + EPS));
+  cek("logo di dalam sel", plansKode.every((p) =>
     p.logo.x >= p.cell.x && p.logo.x + p.logo.w <= p.cell.x + p.cell.w &&
     p.logo.y >= p.cell.y && p.logo.y + p.logo.h <= p.cell.y + p.cell.h
   ));
