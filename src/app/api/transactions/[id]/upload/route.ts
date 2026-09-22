@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { uploadPath } from "@/lib/upload-dir";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -89,7 +90,7 @@ export async function POST(
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "signed_forms");
+    const uploadDir = uploadPath("signed_forms");
     // mkdir dengan recursive:true sudah idempoten — tidak perlu existsSync
     await mkdir(uploadDir, { recursive: true });
 
@@ -100,7 +101,7 @@ export async function POST(
       .slice(0, 40);
     const d = tx.borrowDate;
     const dateStr = `${String(new Date(d).getDate()).padStart(2,"0")}${String(new Date(d).getMonth()+1).padStart(2,"0")}${new Date(d).getFullYear()}`;
-    const safeFilename = `PB_${borrowerSafe}_${dateStr}${originalExt}`;
+    const safeFilename = `PB_${borrowerSafe}_${dateStr}_${tx.id}${originalExt}`;
     const filePath = path.join(uploadDir, safeFilename);
 
     await writeFile(filePath, buffer);
