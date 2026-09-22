@@ -7,6 +7,7 @@ import { Search, MapPin, Package, Plus, SlidersHorizontal, ChevronDown, Monitor,
 import clsx from "clsx";
 import { DeleteItemButton } from "./DeleteItemButton"; // kept for potential single-item use
 import { ItemModal } from "./ItemModal";
+import { ImportModal } from "./ImportModal";
 import { AVAILABLE_ICONS_MAP } from "@/lib/iconMap";
 import { useToast } from "@/components/Toaster";
 
@@ -51,11 +52,10 @@ interface Props {
 export function ItemsClient({ items, categories }: Props) {
   const router = useRouter();
   const [showItemModal, setShowItemModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [importLoading, setImportLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -89,41 +89,6 @@ export function ItemsClient({ items, categories }: Props) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-
-  async function handleImportFile(files: FileList | null) {
-    if (!files?.length) return;
-
-    const file = files[0];
-    setImportLoading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/items/import", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Gagal mengimpor file");
-      }
-
-      toast(`Berhasil mengimpor ${data.importedCount} barang.`, "success");
-      router.refresh();
-    } catch (error) {
-      toast(
-        error instanceof Error ? error.message : "Gagal mengimpor file",
-        "error"
-      );
-    } finally {
-      setImportLoading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  }
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -369,12 +334,11 @@ export function ItemsClient({ items, categories }: Props) {
 
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importLoading}
+              onClick={() => setShowImportModal(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-sm text-xs font-medium"
             >
               <Upload className="w-3.5 h-3.5" />
-              {importLoading ? "Memproses..." : "Impor"}
+              Impor
             </button>
             <button
               onClick={() => setShowItemModal(true)}
@@ -385,13 +349,6 @@ export function ItemsClient({ items, categories }: Props) {
             </button>
           </div>
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          className="hidden"
-          onChange={(e) => handleImportFile(e.target.files)}
-        />
 
         {/* Search Bar + Filter */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex items-center gap-2">
@@ -991,6 +948,11 @@ export function ItemsClient({ items, categories }: Props) {
         onClose={() => setShowItemModal(false)}
         existingCategories={categories}
         existingLocations={uniqueLocations}
+      />
+
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
       />
     </div>
     </>
