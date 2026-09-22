@@ -507,6 +507,59 @@ utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
 - Kode barang `FMIPA-<KODE LOKASI>-<TAHUN>-<URUT>` dibuat di server oleh
   `generateItemCode()`. Input kode dari klien SELALU diabaikan; import Excel
   juga mengabaikan kolom kode dan men-generate ulang.
+
+### Impor Barang dari Excel (`.xlsx` / `.xls` / `.csv`)
+
+**Satu sumber kebenaran kolom: `src/lib/item-import.ts`** (`IMPORT_COLUMNS`).
+Dipakai bersama oleh parser, pembuat template, dan modal petunjuk — jangan
+menduplikasi nama kolom di tempat lain. Kalau daftar berubah, template dan
+petunjuk ikut berubah sendiri.
+
+| Kolom (tulisan di file) | Wajib | Alias yang juga diterima |
+|---|---|---|
+| Nama Barang | ya | nama, name |
+| Kategori | — | category (kosong → kata pertama nama) |
+| Spesifikasi | — | deskripsi, description |
+| SN | — | serialnumber |
+| No. Inv DTI | — | noinventaris, noinv, nomorinventaris, inventorynumber |
+| No. Asset | — | nomorasset, assetnumber |
+| Tanggal Cek | — | lastcheckdate, tanggalpengecekan |
+| Kondisi | — | condition |
+| Jumlah | — | quantity, qty (harus bilangan bulat ≥1, kalau tidak → 1 + peringatan) |
+| Lokasi | — | location |
+
+Normalisasi nama kolom: huruf kecil, spasi/titik/strip/underscore dibuang
+(`normalizeHeader()`), jadi "No. Inv DTI" ≡ "NO_INV_DTI" ≡ "noinv-dti".
+
+**Perbedaan penting:** header lama hanya menerima `noinvdti` untuk nomor
+inventaris, sehingga "No Inventaris" dibuang diam-diam. Sekarang pakai alias.
+
+**Duplikat** (`kunciBarang()`): kunci = `No. Inv DTI` → kalau kosong `SN` →
+kalau dua-duanya kosong `Nama + Lokasi`. Dinormalisasi huruf kecil + spasi
+dipadatkan. Barang yang sudah ada di DB, ATAU kembar di dalam file yang sama,
+**DILEWATI** (tidak diimpor ulang, tidak menimpa). Dilaporkan di
+`duplicateRows` + `duplicates[]`.
+
+**Balasan route** `POST /api/items/import`:
+`{ importedCount, skippedRows, duplicateRows, duplicates[], warnings[] }`.
+`skippedRows` = baris tanpa nama; `warnings` = baris yang tetap masuk tapi ada
+kolom bermasalah. Kalau semua baris dilewati → 400 dengan pesan sebabnya.
+
+**Template** di-generate route `GET /api/items/import/template` (bukan berkas
+biner di `public/`) memakai `xlsx` yang sudah jadi dependency. Isi: baris header
++ 2 baris contoh + lebar kolom. `<a download>` dari modal memakai `bp()`.
+Unduh template **admin-only** (anon 401).
+
+**UI**: tombol Impor membuka `src/app/admin/items/ImportModal.tsx` (bukan
+langsung file picker). Modal memuat: tombol unduh template, tabel susunan kolom
+(dari `IMPORT_COLUMNS`), drop zone + input file, dan ringkasan hasil setelah
+selesai. Impor jalan otomatis begitu file dipilih.
+
+**PITFALL saat menguji:** `xlsx@0.18.5` **salah membaca berkas lewat PATH** di
+lingkungan `tsx` — hasilnya sampah, tapi tidak error. Selalu baca lewat
+`read(fs.readFileSync(path), { type: "buffer" })`. Di dalam Next.js (route) hal
+ini tidak terjadi.
+
 - Kode lokasi custom = inisial kata (2–3 huruf); bentrok → tambah huruf kata
   berikutnya, lalu angka (`locations.ts` → `locationCode()`).
 - Tampil di: kartu & list `ItemsClient.tsx`, halaman detail `[id]/page.tsx`,
