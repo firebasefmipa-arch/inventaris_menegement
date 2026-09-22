@@ -90,6 +90,34 @@ body {
 .dark .bg-cyan-50     { background-color: #081620 !important; }
 .dark .bg-cyan-100    { background-color: #0a1e28 !important; }
 .dark .bg-orange-50   { background-color: #1a1008 !important; }
+.dark .bg-slate-50    { background-color: #0c1525 !important; }
+
+/* Varian ber-opasitas (bg-x-50/50 dsb) token CSS-nya BEDA dari bg-x-50,
+   jadi aturan di atas TIDAK ikut kena. Tanpa blok ini, kotak berwarna di
+   mode gelap tetap memakai warna terang + tulisan gelap = nyaris tak terbaca. */
+.dark .bg-gray-50\/50   { background-color: #0f1b2e !important; }
+.dark .bg-gray-50\/70   { background-color: #111d35 !important; }
+.dark .bg-gray-50\/80   { background-color: #111d35 !important; }
+.dark .bg-gray-100\/50  { background-color: #101e33 !important; }
+.dark .bg-gray-200\/70  { background-color: #162240 !important; }
+.dark .bg-indigo-50\/30 { background-color: #0d1230 !important; }
+.dark .bg-indigo-50\/50 { background-color: #0d1230 !important; }
+.dark .bg-indigo-50\/60 { background-color: #0d1230 !important; }
+.dark .bg-indigo-50\/70 { background-color: #0d1230 !important; }
+.dark .bg-blue-50\/50   { background-color: #0c1a30 !important; }
+.dark .bg-teal-50\/50   { background-color: #081814 !important; }
+.dark .bg-amber-50\/40  { background-color: #1a1208 !important; }
+.dark .bg-amber-50\/50  { background-color: #1a1208 !important; }
+.dark .bg-emerald-50\/50{ background-color: #081a14 !important; }
+.dark .bg-red-50\/30    { background-color: #1c0c0c !important; }
+.dark .bg-red-50\/50    { background-color: #1c0c0c !important; }
+.dark .bg-purple-50\/30 { background-color: #130c28 !important; }
+.dark .bg-purple-50\/40 { background-color: #130c28 !important; }
+.dark .border-gray-100\/50 { border-color: #1c2e48 !important; }
+.dark .border-gray-200\/70 { border-color: #1e3050 !important; }
+.dark .border-indigo-100\/50 { border-color: #131840 !important; }
+.dark .border-indigo-100\/60 { border-color: #131840 !important; }
+.dark .text-indigo-700\/80   { color: #818cf8 !important; }
 
 /* ── Coloured text ──────────────────────────────── */
 .dark .text-blue-700    { color: #60a5fa !important; }
@@ -99,6 +127,8 @@ body {
 .dark .text-indigo-600  { color: #6366f1 !important; }
 .dark .text-emerald-700 { color: #34d399 !important; }
 .dark .text-emerald-600 { color: #10b981 !important; }
+.dark .text-emerald-800 { color: #6ee7b7 !important; }
+.dark .text-emerald-900 { color: #a7f3d0 !important; }
 .dark .text-teal-700    { color: #2dd4bf !important; }
 .dark .text-teal-600    { color: #14b8a6 !important; }
 .dark .text-amber-700   { color: #fbbf24 !important; }
@@ -156,6 +186,7 @@ body {
 .dark .shadow    { box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important; }
 .dark .shadow-md { box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important; }
 .dark .shadow-lg { box-shadow: 0 8px 24px rgba(0,0,0,0.55) !important; }
+.dark .shadow-xl { box-shadow: 0 12px 32px rgba(0,0,0,0.6) !important; }
 
 /* ── Filter / toolbar bar ───────────────────────── */
 .dark .bg-gray-50.rounded-xl,
@@ -174,6 +205,7 @@ body {
 
 /* ── Modal backdrop ─────────────────────────────── */
 .dark .bg-black\/50 { background-color: rgba(0,0,0,0.7) !important; }
+.dark .bg-black\/40 { background-color: rgba(0,0,0,0.6) !important; }
 
 /* ── Animations ─────────────────────────────────── */
 @keyframes slide-in {
