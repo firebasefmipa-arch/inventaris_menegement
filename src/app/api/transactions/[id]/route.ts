@@ -37,6 +37,16 @@ export async function PUT(
       );
     }
 
+    // ── Validasi transisi status ──
+    // Tanpa ini, `returned` bisa dijalankan pada transaksi yang stoknya BELUM
+    // pernah dipotong (mis. rejected) sehingga stok bertambah dari udara.
+    if (status === "returned" && transaction.status !== "active") {
+      return NextResponse.json(
+        { error: "Hanya transaksi berstatus aktif yang bisa dikembalikan." },
+        { status: 400 }
+      );
+    }
+
     if (status === "returned" && transaction.status !== "returned") {
       // Kembalikan stok dari transaction_items (multi-item)
       const txItems = await db
@@ -103,13 +113,19 @@ export async function PUT(
         })
         .where(eq(transactions.id, txId));
     } else if (status !== undefined || notes !== undefined) {
-      // Hanya update kalau ada yang berubah — hindari empty set
+      // Hanya update kalau ada yang berubah — hindari empty set.
+      // `status` bebas TIDAK diizinkan: perubahan status harus lewat jalur yang
+      // benar (approve/reject, atau `returned` di atas yang memvalidasi status
+      // asal). Ini mencegah "approve palsu" yang memotong/menaikkan stok salah.
+      if (status !== undefined) {
+        return NextResponse.json(
+          { error: "Perubahan status harus lewat aksi yang sesuai." },
+          { status: 400 }
+        );
+      }
       await db
         .update(transactions)
-        .set({
-          ...(status !== undefined && { status }),
-          ...(notes !== undefined && { notes }),
-        })
+        .set({ notes })
         .where(eq(transactions.id, txId));
     }
 
