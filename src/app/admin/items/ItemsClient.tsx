@@ -27,6 +27,7 @@ type Item = {
   status: "available" | "borrowed";
   canBorrow: boolean;
   canHandover: boolean;
+  isLabelable: boolean;
   location: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -62,7 +63,7 @@ export function ItemsClient({ items, categories }: Props) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
+  const [selectMode, setSelectMode] = useState<null | "label" | "hapus">(null);
   const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
 
   // Filter tambahan: kategori, lokasi, tanggal cek
@@ -183,17 +184,20 @@ export function ItemsClient({ items, categories }: Props) {
     setSelectedIds(newSet);
   };
 
-  // Barang lama bisa belum punya Kode Barang — tidak bisa dilabeli.
-  const selectedTanpaKode = useMemo(
-    () => filteredItems.filter((i) => selectedIds.has(i.id) && !i.itemCode?.trim()).length,
+  // Barang bisa dilabeli kalau punya Kode Barang DAN tidak ditandai
+  // "tidak bisa dilabeli" (kabel, dongle wifi — permukaannya tak bisa ditempeli).
+  // Barang lama bisa belum punya Kode Barang.
+  const bisaCetakLabel = (i: Item) => Boolean(i.itemCode?.trim()) && i.isLabelable;
+  const selectedTakBisa = useMemo(
+    () => filteredItems.filter((i) => selectedIds.has(i.id) && !bisaCetakLabel(i)).length,
     [filteredItems, selectedIds]
   );
-  const bisaDilabeli = selectedIds.size - selectedTanpaKode;
+  const bisaDilabeli = selectedIds.size - selectedTakBisa;
 
   const handlePrintLabels = async () => {
     if (selectedIds.size === 0) return;
     if (bisaDilabeli === 0) {
-      toast("Barang yang dipilih belum punya Kode Barang, jadi belum bisa dilabeli.", "error");
+      toast("Barang yang dipilih belum memenuhi syarat cetak label.", "error");
       return;
     }
 
@@ -217,12 +221,15 @@ export function ItemsClient({ items, categories }: Props) {
       window.open(url, "_blank");
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
-      const dilewati = Number(res.headers.get("X-Label-Skipped") || 0);
       const dicetak = Number(res.headers.get("X-Label-Count") || 0);
+      const tanpaKode = Number(res.headers.get("X-Label-NoCode") || 0);
+      const takLabelable = Number(res.headers.get("X-Label-NotLabelable") || 0);
+      const sebab = [
+        tanpaKode > 0 ? `${tanpaKode} belum punya Kode Barang` : "",
+        takLabelable > 0 ? `${takLabelable} ditandai tidak bisa dilabeli` : "",
+      ].filter(Boolean).join(", ");
       toast(
-        dilewati > 0
-          ? `${dicetak} label dibuat. ${dilewati} barang dilewati karena belum punya Kode Barang.`
-          : `${dicetak} label dibuat.`,
+        sebab ? `${dicetak} label dibuat. Dilewati: ${sebab}.` : `${dicetak} label dibuat.`,
         "success"
       );
     } catch (error) {
@@ -257,6 +264,17 @@ export function ItemsClient({ items, categories }: Props) {
     }
   };
 
+  // Tombol kedua: pilih hanya baris yang lolos syarat cetak label — supaya
+  // "Cetak Label" tak pernah menolak karena ada baris tak layak ikut terpilih.
+  const toggleSelectLabelable = () => {
+    const bisa = filteredItems.filter(bisaCetakLabel);
+    if (bisa.length > 0 && bisa.every(i => selectedIds.has(i.id))) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(bisa.map(i => i.id)));
+    }
+  };
+
   const filterOptions = [
     { key: "", label: "Semua Status" },
     { key: "available", label: "Tersedia" },
@@ -284,6 +302,13 @@ export function ItemsClient({ items, categories }: Props) {
       )}
     >
       {label}: {ok ? "Tersedia" : "Tidak Tersedia"}
+    </span>
+  );
+
+  // Penanda barang yang tak bisa ditempeli label (kabel, dongle wifi).
+  const tidakBisaDilabeliBadge = (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-amber-50 text-amber-700 border-amber-200">
+      Tidak bisa dilabeli
     </span>
   );
 
@@ -411,15 +436,29 @@ export function ItemsClient({ items, categories }: Props) {
               </div>
             )}
           </div>
+          {/* Dua mode terpisah: cetak label vs hapus massal — jangan dicampur,
+              karena syarat "bisa dilabeli" tidak berlaku untuk hapus. */}
           <button
             type="button"
-            onClick={() => { const next = !selectMode; setSelectMode(next); if (!next) setSelectedIds(new Set()); }}
+            onClick={() => { const next = selectMode === "label" ? null : "label"; setSelectMode(next); if (!next) setSelectedIds(new Set()); }}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border shrink-0 ${
-              selectMode ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+              selectMode === "label" ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
             }`}
+            title="Pilih barang untuk dicetak labelnya"
           >
-            <CheckSquare className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Select</span>
+            <Printer className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Cetak Label</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { const next = selectMode === "hapus" ? null : "hapus"; setSelectMode(next); if (!next) setSelectedIds(new Set()); }}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border shrink-0 ${
+              selectMode === "hapus" ? 'border-red-200 bg-red-50 text-red-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+            title="Pilih barang yang ingin dihapus"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Hapus</span>
           </button>
         </div>
 
@@ -525,18 +564,42 @@ export function ItemsClient({ items, categories }: Props) {
           )}
         </div>
 
-        {/* Select All bar */}
+        {/* Select All bar — isinya menyesuaikan mode */}
         {selectMode && (
-          <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
-            <button
-              type="button"
-              onClick={toggleSelectAll}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm"
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-              {selectedIds.size === filteredItems.length && filteredItems.length > 0 ? 'Batal Pilih Semua' : 'Pilih Semua'}
-            </button>
-            <span className="text-xs text-indigo-500">{selectedIds.size} dari {filteredItems.length} dipilih</span>
+          <div className={clsx(
+            "flex items-center gap-3 px-4 py-2 rounded-xl border",
+            selectMode === "label" ? "bg-indigo-50 border-indigo-100" : "bg-red-50 border-red-100"
+          )}>
+            {selectMode === "label" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={toggleSelectLabelable}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  {filteredItems.filter(bisaCetakLabel).length > 0 &&
+                   filteredItems.filter(bisaCetakLabel).every(i => selectedIds.has(i.id))
+                    ? 'Batal Pilih Semua' : 'Pilih Semua'}
+                </button>
+                <span className="text-xs text-indigo-500">
+                  {selectedIds.size} dari {filteredItems.length} dipilih
+                  {selectedTakBisa > 0 && ` · ${selectedTakBisa} tak bisa dilabeli`}
+                </span>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-100 hover:border-red-300 transition-colors shadow-sm"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  {selectedIds.size === filteredItems.length && filteredItems.length > 0 ? 'Batal Pilih Semua' : 'Pilih Semua'}
+                </button>
+                <span className="text-xs text-red-500">{selectedIds.size} dari {filteredItems.length} dipilih</span>
+              </>
+            )}
           </div>
         )}
 
@@ -613,6 +676,7 @@ export function ItemsClient({ items, categories }: Props) {
                             )}
                             {availabilityBadge("Pinjam", item.canBorrow)}
                             {availabilityBadge("Serah Terima", item.canHandover)}
+                            {!item.isLabelable && tidakBisaDilabeliBadge}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0 z-20">
@@ -728,6 +792,7 @@ export function ItemsClient({ items, categories }: Props) {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{item.name}</p>
                         <p className="text-xs text-gray-400">{item.category} · {item.availableQuantity}/{item.quantity} unit</p>
+                        {!item.isLabelable && <div className="mt-1">{tidakBisaDilabeliBadge}</div>}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {statusBadge(item.status)}
@@ -792,6 +857,7 @@ export function ItemsClient({ items, categories }: Props) {
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700">{item.condition || 'Tidak diketahui'}</span>
                               <span className="text-[10px] text-gray-400">{item.lastCheckDate || 'Belum dicek'}</span>
+                              {!item.isLabelable && tidakBisaDilabeliBadge}
                             </div>
                           </div>
                         </div>
@@ -852,23 +918,35 @@ export function ItemsClient({ items, categories }: Props) {
             >
               Batal
             </button>
-            <button
-              onClick={handlePrintLabels}
-              disabled={isPrinting || bisaDilabeli === 0}
-              title={bisaDilabeli === 0 ? "Barang yang dipilih belum punya Kode Barang" : "Cetak label barang"}
-              className="px-4 py-1.5 text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Printer className="w-4 h-4" />
-              {isPrinting ? "Membuat..." : `Cetak Label${bisaDilabeli > 0 ? ` (${bisaDilabeli})` : ""}`}
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
-              className="px-4 py-1.5 text-sm font-semibold text-red-100 bg-red-500 hover:bg-red-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Trash2 className="w-4 h-4" />
-              {isDeleting ? "Menghapus..." : "Hapus"}
-            </button>
+            {selectMode === "label" ? (
+              <button
+                onClick={handlePrintLabels}
+                disabled={isPrinting || bisaDilabeli === 0}
+                title={bisaDilabeli === 0 ? "Barang yang dipilih belum memenuhi syarat cetak label" : "Cetak label barang"}
+                className="px-4 py-1.5 text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Printer className="w-4 h-4" />
+                {isPrinting ? "Membuat..." : `Cetak Label${bisaDilabeli > 0 ? ` (${bisaDilabeli})` : ""}`}
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isDeleting}
+                  className="px-4 py-1.5 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {isDeleting ? "Menghapus..." : `Hapus (${selectedIds.size})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="px-3 py-1.5 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  Pilih Semua
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

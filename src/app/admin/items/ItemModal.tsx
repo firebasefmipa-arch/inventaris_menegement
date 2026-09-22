@@ -44,6 +44,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
     kondisi: "",
     canBorrow: "1",
     canHandover: "1",
+    isLabelable: "1",
   });
 
   const modalRef = useRef<HTMLDivElement>(null);
@@ -78,6 +79,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
       kondisi: "",
       canBorrow: "1",
       canHandover: "1",
+      isLabelable: "1",
     });
     setShowCustomCategory(false);
   };
@@ -127,6 +129,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
           imageUrl: form.imageUrl || null,
           canBorrow: form.canBorrow === "1",
           canHandover: form.canHandover === "1",
+          isLabelable: form.isLabelable === "1",
         }),
       });
 
@@ -373,8 +376,8 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
               </div>
             </div>
 
-            {/* Ketersediaan untuk Peminjaman & Serah Terima */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Ketersediaan untuk Peminjaman & Serah Terima + Label */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Peminjaman
@@ -400,6 +403,21 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
                 >
                   <option value="1">Tersedia</option>
                   <option value="0">Tidak Tersedia</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Label
+                </label>
+                <select
+                  value={form.isLabelable}
+                  onChange={(e) => setForm({ ...form, isLabelable: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none appearance-none"
+                  title="Barang kecil/tidak rata (kabel, dongle wifi) tidak bisa ditempeli label"
+                >
+                  <option value="1">Bisa Dilabeli</option>
+                  <option value="0">Tidak Bisa</option>
                 </select>
               </div>
             </div>

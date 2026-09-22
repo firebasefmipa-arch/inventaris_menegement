@@ -38,6 +38,7 @@ export default function EditItemPage() {
     status: "available",
     canBorrow: "1",
     canHandover: "1",
+    isLabelable: "1",
   });
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export default function EditItemPage() {
           status: data.status,
           canBorrow: data.canBorrow ? "1" : "0",
           canHandover: data.canHandover ? "1" : "0",
+          isLabelable: data.isLabelable ? "1" : "0",
         });
       })
       .catch(() => {
@@ -94,6 +96,7 @@ export default function EditItemPage() {
           status: form.status,
           canBorrow: form.canBorrow === "1",
           canHandover: form.canHandover === "1",
+          isLabelable: form.isLabelable === "1",
         }),
       });
 
@@ -304,8 +307,8 @@ export default function EditItemPage() {
           </div>
         </div>
 
-        {/* Ketersediaan untuk Peminjaman & Serah Terima */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Ketersediaan untuk Peminjaman, Serah Terima & Label */}
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Peminjaman
@@ -337,6 +340,23 @@ export default function EditItemPage() {
             </select>
             <p className="text-xs text-gray-400 mt-1">
               Jika Tidak Tersedia, barang disembunyikan dari halaman Serah Terima user.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Label
+            </label>
+            <select
+              value={form.isLabelable}
+              onChange={(e) => setForm({ ...form, isLabelable: e.target.value })}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            >
+              <option value="1">Bisa Dilabeli</option>
+              <option value="0">Tidak Bisa</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Barang kecil atau permukaannya tidak rata (kabel, dongle wifi) tidak bisa ditempeli label.
             </p>
           </div>
         </div>
