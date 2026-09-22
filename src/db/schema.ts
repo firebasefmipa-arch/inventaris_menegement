@@ -152,6 +152,12 @@ export const transactionItems = mysqlTable("transaction_items", {
     .references(() => items.id, { onDelete: "cascade" }),
   quantity: int("quantity").notNull().default(1),
   notes: text("notes"),
+  // ── Snapshot barang SAAT TRANSAKSI DIBUAT ──────────────────────────────
+  // Riwayat & dokumen yang sudah ditandatangani tidak boleh ikut berubah
+  // kalau data master barang diubah/dihapus. Lihat src/lib/item-snapshot.ts.
+  itemName: varchar("item_name", { length: 255 }),
+  itemCode: varchar("item_code", { length: 255 }),
+  itemInventoryNumber: varchar("item_inventory_number", { length: 255 }),
 });
 
 // ── Serah Terima (permanen, stok berkurang permanen) ──────────────────────
@@ -193,4 +199,8 @@ export const handoverItems = mysqlTable("handover_items", {
     .references(() => items.id, { onDelete: "cascade" }),
   quantity: int("quantity").notNull().default(1),
   notes: text("notes"),
+  // Snapshot barang saat serah terima dibuat — alasan sama seperti transactionItems.
+  itemName: varchar("item_name", { length: 255 }),
+  itemCode: varchar("item_code", { length: 255 }),
+  itemInventoryNumber: varchar("item_inventory_number", { length: 255 }),
 });

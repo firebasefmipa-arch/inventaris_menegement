@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { items, transactions, users, transactionItems } from "@/db/schema";
 import { eq, sql, count, and, lte, inArray, gt } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import {
   Package,
   ArrowLeftRight,
@@ -83,7 +84,7 @@ async function getStats() {
     ? await db
         .select({
           transactionId: transactionItems.transactionId,
-          itemName: items.name,
+          itemName: namaSql(items.name, transactionItems.itemName),
         })
         .from(transactionItems)
         .leftJoin(items, eq(transactionItems.itemId, items.id))

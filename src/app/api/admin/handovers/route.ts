@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { handovers, handoverItems, items, users } from "@/db/schema";
 import { eq, desc, inArray, and } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
         itemId: handoverItems.itemId,
         quantity: handoverItems.quantity,
         notes: handoverItems.notes,
-        itemName: items.name,
+        itemName: namaSql(items.name, handoverItems.itemName),
         itemCategory: items.category,
         itemInventoryNumber: items.inventoryNumber,
         itemAssetNumber: items.assetNumber,
@@ -178,6 +179,9 @@ export async function POST(req: NextRequest) {
         itemId: c.itemId,
         quantity: c.quantity,
         notes: c.notes || null,
+        itemName: itemMap.get(c.itemId)?.name ?? null,
+        itemCode: itemMap.get(c.itemId)?.itemCode ?? null,
+        itemInventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
       }))
     );
 

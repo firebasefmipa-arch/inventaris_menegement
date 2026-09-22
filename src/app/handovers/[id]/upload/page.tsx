@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { handovers, handoverItems, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import HandoverUploadForm from "./HandoverUploadForm";
 import Link from "next/link";
 import { ArrowLeft, Package, CheckCircle2 } from "lucide-react";
@@ -29,7 +30,7 @@ export default async function HandoverUploadPage({
   const hvItemRows = await db
     .select({
       quantity: handoverItems.quantity,
-      itemName: items.name,
+      itemName: namaSql(items.name, handoverItems.itemName),
       itemCategory: items.category,
       inventoryNumber: items.inventoryNumber,
       assetNumber: items.assetNumber,

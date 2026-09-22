@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems, items, users } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { generateBorrowingPDF } from "@/lib/pdf-generator";
 
@@ -39,7 +40,7 @@ export async function GET(
         itemId: transactionItems.itemId,
         quantity: transactionItems.quantity,
         notes: transactionItems.notes,
-        itemName: items.name,
+        itemName: namaSql(items.name, transactionItems.itemName),
         inventoryNumber: items.inventoryNumber,
         itemCode: items.itemCode,
       })

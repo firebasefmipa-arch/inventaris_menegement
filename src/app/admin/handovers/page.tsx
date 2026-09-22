@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { handovers, handoverItems, items } from "@/db/schema";
 import { desc, inArray, eq } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import { HandoversClient } from "./HandoversClient";
 
 export default async function AdminHandoversPage() {
@@ -26,7 +27,7 @@ export default async function AdminHandoversPage() {
         itemId: handoverItems.itemId,
         quantity: handoverItems.quantity,
         notes: handoverItems.notes,
-        itemName: items.name,
+        itemName: namaSql(items.name, handoverItems.itemName),
         itemCategory: items.category,
         itemInventoryNumber: items.inventoryNumber,
         itemAssetNumber: items.assetNumber,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 
 export async function GET(
@@ -25,7 +26,7 @@ export async function GET(
       itemId: transactionItems.itemId,
       quantity: transactionItems.quantity,
       notes: transactionItems.notes,
-      itemName: items.name,
+      itemName: namaSql(items.name, transactionItems.itemName),
       availableQuantity: items.availableQuantity,
       inventoryNumber: items.inventoryNumber,
     })

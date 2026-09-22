@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { transactions, transactionItems, items, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { namaBarang } from "@/lib/item-snapshot";
 import { generateBorrowingPDF } from "@/lib/pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
@@ -39,7 +40,8 @@ export async function POST(
       return NextResponse.json({ error: "Dokumen belum dihapus atau sudah ada" }, { status: 400 });
     }
 
-    // Ambil item transaksi
+    // Ambil item transaksi. Data master (live) menang; snapshot dari baris riwayat
+    // jadi cadangan kalau barangnya sudah dihapus.
     const txItemRows = await db
       .select({
         itemId: transactionItems.itemId,
@@ -48,6 +50,9 @@ export async function POST(
         itemName: items.name,
         inventoryNumber: items.inventoryNumber,
         itemCode: items.itemCode,
+        snapName: transactionItems.itemName,
+        snapCode: transactionItems.itemCode,
+        snapInventoryNumber: transactionItems.itemInventoryNumber,
       })
       .from(transactionItems)
       .leftJoin(items, eq(transactionItems.itemId, items.id))
@@ -56,10 +61,10 @@ export async function POST(
     let pdfItems: { name: string; quantity: number; inventoryNumber?: string | null; itemCode?: string | null; notes?: string }[] = [];
     if (txItemRows.length > 0) {
       pdfItems = txItemRows.map((r) => ({
-        name: r.itemName || "Barang",
+        name: namaBarang(r.snapName, r.itemName),
         quantity: r.quantity,
-        inventoryNumber: r.inventoryNumber,
-        itemCode: r.itemCode,
+        inventoryNumber: r.inventoryNumber ?? r.snapInventoryNumber,
+        itemCode: r.itemCode ?? r.snapCode,
         notes: r.notes || "",
       }));
     } else if (tx.itemId) {

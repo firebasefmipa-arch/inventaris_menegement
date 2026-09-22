@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { transactions, items, transactionItems } from "@/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import { TransactionsClient } from "./TransactionsClient";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,7 @@ export default async function TransactionsPage({
       notes: transactions.notes,
       rejectionReason: transactions.rejectionReason,
       createdAt: transactions.createdAt,
-      itemName: items.name,
+      itemName: namaSql(items.name, transactionItems.itemName),
       itemCategory: items.category,
       borrowerName: transactions.borrowerName,
       borrowerDepartment: transactions.borrowerDepartment,
@@ -64,7 +65,7 @@ export default async function TransactionsPage({
     const rows = await db
       .select({
         transactionId: transactionItems.transactionId,
-        itemName: items.name,
+        itemName: namaSql(items.name, transactionItems.itemName),
         quantity: transactionItems.quantity,
       })
       .from(transactionItems)

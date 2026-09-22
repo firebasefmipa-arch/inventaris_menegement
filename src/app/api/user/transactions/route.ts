@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
         itemId: transactionItems.itemId,
         quantity: transactionItems.quantity,
         notes: transactionItems.notes,
-        itemName: items.name,
+        itemName: namaSql(items.name, transactionItems.itemName),
         itemCategory: items.category,
         itemLocation: items.location,
         itemInventoryNumber: items.inventoryNumber,

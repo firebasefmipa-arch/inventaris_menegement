@@ -330,6 +330,30 @@ ALTER TABLE items
 -- 9b. Bersihkan tulisan lokasi lama yang tidak konsisten (opsional, sekali jalan)
 UPDATE items SET location = 'Divisi Teknologi Informasi'
 WHERE UPPER(location) IN ('DIVISI TI', 'DIVISI IT', 'DIVISI TEKNOLOGI INFORMASI');
+
+-- 10. Snapshot identitas barang di baris riwayat (22 September 2026)
+--     Riwayat & dokumen tetap menampilkan nama/data barang walau barangnya
+--     sudah dihapus. Lihat src/lib/item-snapshot.ts.
+ALTER TABLE transaction_items
+  ADD COLUMN item_name             VARCHAR(255) NULL,
+  ADD COLUMN item_code             VARCHAR(255) NULL,
+  ADD COLUMN item_inventory_number VARCHAR(255) NULL;
+
+ALTER TABLE handover_items
+  ADD COLUMN item_name             VARCHAR(255) NULL,
+  ADD COLUMN item_code             VARCHAR(255) NULL,
+  ADD COLUMN item_inventory_number VARCHAR(255) NULL;
+
+-- Backfill baris lama dari tabel items (yang masih ada)
+UPDATE transaction_items ri JOIN items i ON i.id = ri.item_id
+  SET ri.item_name = i.name, ri.item_code = i.item_code,
+      ri.item_inventory_number = i.inventory_number
+  WHERE ri.item_name IS NULL;
+
+UPDATE handover_items ri JOIN items i ON i.id = ri.item_id
+  SET ri.item_name = i.name, ri.item_code = i.item_code,
+      ri.item_inventory_number = i.inventory_number
+  WHERE ri.item_name IS NULL;
 ```
 
 > Catatan tanggal 8: JANGAN pakai `drizzle-kit push` di produksi — pernah
@@ -359,6 +383,25 @@ WHERE UPPER(location) IN ('DIVISI TI', 'DIVISI IT', 'DIVISI TEKNOLOGI INFORMASI'
 - Semua query lewat Drizzle ORM (`db` dari `@/db`)
 - Gunakan `Promise.all()` untuk query paralel yang tidak saling bergantung
 - Jangan gunakan `db.query.*` karena butuh schema di drizzle config
+
+### Riwayat ↔ Data Barang (PENTING)
+Aturan yang disepakati:
+- **Riwayat selalu baca DATA MASTER (live)** — admin membetulkan nama barang,
+  riwayat ikut berubah sendiri. Tidak ada yang dikunci.
+- **Dokumen ikut data terbaru saat di-regenerate** (bukan otomatis).
+- **Barang dihapus → riwayat tetap menampilkan nama & data barang.** Snapshot
+  di `transaction_items`/`handover_items` disegarkan TEPAT SEBELUM hapus
+  (`snapshotSebelumHapus()`), bukan saat transaksi dibuat — supaya yang
+  tersimpan adalah kondisi TERAKHIR sebelum barang hilang.
+
+Cara pakai (`src/lib/item-snapshot.ts`):
+```ts
+itemName: namaSql(items.name, transactionItems.itemName)   // di dalam select
+namaBarang(snap, live)                                     // di luar query
+```
+JANGAN menulis `itemName: items.name` langsung — barang yang sudah dihapus
+akan tampil "Barang". Sudah diterapkan di 20 tempat (riwayat user/admin,
+PDF generate & regenerate, statistik).
 
 ### Status Transaksi
 ```

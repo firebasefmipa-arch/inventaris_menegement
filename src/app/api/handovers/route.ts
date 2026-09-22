@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { handovers, handoverItems, items, users } from "@/db/schema";
 import { eq, desc, inArray, and } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 
 // GET /api/handovers — daftar serah terima milik user yang login
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
         itemId: handoverItems.itemId,
         quantity: handoverItems.quantity,
         notes: handoverItems.notes,
-        itemName: items.name,
+        itemName: namaSql(items.name, handoverItems.itemName),
         itemCategory: items.category,
         itemLocation: items.location,
         itemInventoryNumber: items.inventoryNumber,
@@ -156,7 +157,15 @@ export async function POST(req: NextRequest) {
       .$returningId();
 
     await db.insert(handoverItems).values(
-      cartItems.map((c: any) => ({ handoverId: hvId, itemId: c.itemId, quantity: c.quantity, notes: c.notes || null }))
+      cartItems.map((c: any) => ({
+        handoverId: hvId,
+        itemId: c.itemId,
+        quantity: c.quantity,
+        notes: c.notes || null,
+        itemName: itemMap.get(c.itemId)?.name ?? null,
+        itemCode: itemMap.get(c.itemId)?.itemCode ?? null,
+        itemInventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
+      }))
     );
 
     // ── Kurangi stok sementara ──

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { items } from "@/db/schema";
 import { inArray } from "drizzle-orm";
 import { auth } from "@/auth";
+import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +22,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Salin identitas barang terakhir ke baris riwayat SEBELUM barang dihapus,
+    // supaya riwayat yang terdampak tetap menampilkan nama & data barangnya.
+    await snapshotSebelumHapus(ids);
     await db.delete(items).where(inArray(items.id, ids));
 
     return NextResponse.json({ message: "Items deleted successfully" });

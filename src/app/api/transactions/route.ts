@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 
 export async function GET(request: NextRequest) {
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
         actualReturnDate: transactions.actualReturnDate,
         notes: transactions.notes,
         createdAt: transactions.createdAt,
-        itemName: items.name,
+        itemName: namaSql(items.name, transactionItems.itemName),
         itemCategory: items.category,
         borrowerName: transactions.borrowerName,
         borrowerDepartment: transactions.borrowerDepartment,
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
       const rows = await db
         .select({
           transactionId: transactionItems.transactionId,
-          itemName: items.name,
+          itemName: namaSql(items.name, transactionItems.itemName),
         })
         .from(transactionItems)
         .leftJoin(items, eq(transactionItems.itemId, items.id))
@@ -210,6 +211,11 @@ export async function POST(request: NextRequest) {
         itemId: c.itemId,
         quantity: c.quantity,
         notes: c.notes || null,
+        // Snapshot identitas barang saat transaksi dibuat — dokumen lama tidak
+        // ikut berubah kalau data master barang diubah/dihapus.
+        itemName: itemMap.get(c.itemId)?.name ?? null,
+        itemCode: itemMap.get(c.itemId)?.itemCode ?? null,
+        itemInventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
       }))
     );
 

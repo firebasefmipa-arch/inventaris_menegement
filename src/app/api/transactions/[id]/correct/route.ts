@@ -77,6 +77,10 @@ export async function PATCH(
         itemId: ni.itemId,
         quantity: ni.quantity,
         notes: ni.notes?.trim() || null,
+        // Transaksi dikoreksi → snapshot diperbarui, karena transaksinya sendiri berubah.
+        itemName: itemMap.get(ni.itemId)?.name ?? null,
+        itemCode: itemMap.get(ni.itemId)?.itemCode ?? null,
+        itemInventoryNumber: itemMap.get(ni.itemId)?.inventoryNumber ?? null,
       }))
     );
 

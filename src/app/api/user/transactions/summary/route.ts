@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq, and, count, inArray, sql } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +81,7 @@ export async function GET() {
       const rows = await db
         .select({
           transactionId: transactionItems.transactionId,
-          itemName: items.name,
+          itemName: namaSql(items.name, transactionItems.itemName),
         })
         .from(transactionItems)
         .leftJoin(items, eq(transactionItems.itemId, items.id))

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { handovers, handoverItems, items, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { namaBarang } from "@/lib/item-snapshot";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
@@ -38,7 +39,8 @@ export async function POST(
       return NextResponse.json({ error: "Dokumen belum dihapus atau sudah ada" }, { status: 400 });
     }
 
-    // Ambil item serah terima
+    // Ambil item serah terima. Data master (live) menang; snapshot dari baris
+    // riwayat jadi cadangan kalau barangnya sudah dihapus.
     const hvItemRows = await db
       .select({
         itemId: handoverItems.itemId,
@@ -48,6 +50,9 @@ export async function POST(
         inventoryNumber: items.inventoryNumber,
         assetNumber: items.assetNumber,
         itemCode: items.itemCode,
+        snapName: handoverItems.itemName,
+        snapCode: handoverItems.itemCode,
+        snapInventoryNumber: handoverItems.itemInventoryNumber,
       })
       .from(handoverItems)
       .leftJoin(items, eq(handoverItems.itemId, items.id))
@@ -77,11 +82,11 @@ export async function POST(
       handoverDate: hv.handoverDate,
       signatureUrl,
       items: hvItemRows.map((r) => ({
-        name: r.itemName || "Barang",
+        name: namaBarang(r.snapName, r.itemName),
         quantity: r.quantity,
         assetNumber: r.assetNumber,
-        itemCode: r.itemCode,
-        inventoryNumber: r.inventoryNumber,
+        itemCode: r.itemCode ?? r.snapCode,
+        inventoryNumber: r.inventoryNumber ?? r.snapInventoryNumber,
       })),
     });
 

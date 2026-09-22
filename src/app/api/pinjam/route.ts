@@ -101,7 +101,15 @@ export async function POST(request: NextRequest) {
       .$returningId();
 
     await db.insert(transactionItems).values(
-      cartItems.map((c) => ({ transactionId: txId, itemId: c.itemId, quantity: c.quantity, notes: c.notes || null }))
+      cartItems.map((c) => ({
+        transactionId: txId,
+        itemId: c.itemId,
+        quantity: c.quantity,
+        notes: c.notes || null,
+        itemName: itemMap.get(c.itemId)?.name ?? null,
+        itemCode: itemMap.get(c.itemId)?.itemCode ?? null,
+        itemInventoryNumber: itemMap.get(c.itemId)?.inventoryNumber ?? null,
+      }))
     );
 
     // ── Kurangi stok ──

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { namaSql } from "@/lib/item-snapshot";
 import UploadForm from "./UploadForm";
 import Link from "next/link";
 import { ArrowLeft, Package, CheckCircle2 } from "lucide-react";
@@ -37,7 +38,7 @@ export default async function UploadPage({
       itemId: transactionItems.itemId,
       quantity: transactionItems.quantity,
       notes: transactionItems.notes,
-      itemName: items.name,
+      itemName: namaSql(items.name, transactionItems.itemName),
       itemCategory: items.category,
       inventoryNumber: items.inventoryNumber,
       itemLocation: items.location,

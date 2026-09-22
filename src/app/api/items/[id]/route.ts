@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { toBool } from "@/lib/to-bool";
 import { auth } from "@/auth";
 import { normalizeLocation } from "@/lib/locations";
+import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 
 // Panel admin saja — halaman user membaca DB langsung (server component).
 async function requireAdmin() {
@@ -131,6 +132,9 @@ export async function DELETE(
       );
     }
 
+    // Salin identitas barang terakhir ke baris riwayat SEBELUM barang dihapus,
+    // supaya riwayat yang terdampak tetap menampilkan nama & data barangnya.
+    await snapshotSebelumHapus([itemId]);
     await db.delete(items).where(eq(items.id, itemId));
     return NextResponse.json({ message: "Item berhasil dihapus" });
   } catch (error) {

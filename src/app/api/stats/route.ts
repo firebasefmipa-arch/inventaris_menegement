@@ -55,7 +55,9 @@ export async function GET() {
         status: transactions.status,
         borrowDate: transactions.borrowDate,
         expectedReturnDate: transactions.expectedReturnDate,
-        itemName: items.name,
+        // Snapshot ada di transaction_items (transactions tidak punya kolomnya),
+        // jadi pakai subquery: data master menang, snapshot cadangan.
+        itemName: sql<string>`COALESCE(${items.name}, (SELECT ti.item_name FROM transaction_items ti WHERE ti.item_id = ${transactions.itemId} LIMIT 1))`,
         borrowerName: transactions.borrowerName,
       })
       .from(transactions)
