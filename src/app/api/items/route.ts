@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     if (denied) return denied;
 
     const body = await request.json();
-    const { name, category, description, quantity, location, imageUrl, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover } = body;
+    const { name, category, description, quantity, location, imageUrl, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } = body;
 
     if (!name || !category) {
       return NextResponse.json(
@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
         availableQuantity: qty,
         canBorrow: canBorrow === undefined ? true : toBool(canBorrow),
         canHandover: canHandover === undefined ? true : toBool(canHandover),
+        isLabelable: isLabelable === undefined ? true : toBool(isLabelable),
         location: normalizedLocation || null,
         status: "available",
       })

@@ -67,7 +67,7 @@ export async function PUT(
     if (itemId === null)
       return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
     const body = await request.json();
-    const { name, category, description, quantity, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover } =
+    const { name, category, description, quantity, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } =
       body;
     const [existing] = await db
       .select()
@@ -106,6 +106,7 @@ export async function PUT(
         ...(status !== undefined && { status }),
         ...(canBorrow !== undefined && { canBorrow: toBool(canBorrow) }),
         ...(canHandover !== undefined && { canHandover: toBool(canHandover) }),
+        ...(isLabelable !== undefined && { isLabelable: toBool(isLabelable) }),
         updatedAt: new Date(),
       })
       .where(eq(items.id, itemId));

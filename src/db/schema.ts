@@ -29,6 +29,9 @@ export const items = mysqlTable("items", {
   availableQuantity: int("available_quantity").notNull().default(1),
   canBorrow: boolean("can_borrow").notNull().default(true),
   canHandover: boolean("can_handover").notNull().default(true),
+  // Barang dengan bentuk/ukuran yang tak memungkinkan ditempeli label
+  // (kabel, dongle wifi, adaptor) → dicentang 0 supaya tak ikut cetak.
+  isLabelable: boolean("is_labelable").notNull().default(true),
   status: mysqlEnum("status", ["available", "borrowed"])
     .notNull()
     .default("available"),

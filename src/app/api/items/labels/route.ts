@@ -9,8 +9,12 @@ import { generateLabelsPDF } from "@/lib/label-pdf-generator";
  * Cetak label barang fisik (PDF siap cetak).
  * Body: { ids: number[] }
  *
- * Barang tanpa Kode Barang DILEWATI (bukan dibuatkan kode otomatis) —
- * jumlah yang dilewati dikirim lewat header X-Label-Skipped.
+ * Barang yang tidak memenuhi syarat DILEWATI (bukan dibuatkan kode otomatis).
+ * Header balasan:
+ *   X-Label-Count      — jumlah label yang benar-benar dibuat
+ *   X-Label-Skipped    — total baris yang dilewati
+ *   X-Label-NoCode     — dilewati karena belum punya Kode Barang
+ *   X-Label-NotLabelable — dilewati karena ditandai "tidak bisa dilabeli"
  */
 export async function POST(req: NextRequest) {
   try {
@@ -34,13 +38,21 @@ export async function POST(req: NextRequest) {
 
     const rows = await db.select().from(items).where(inArray(items.id, ids));
 
-    // Hanya yang punya kode barang yang bisa dilabeli
-    const printable = rows.filter((r) => r.itemCode?.trim());
+    // Dua syarat: punya Kode Barang, dan tidak ditandai "tidak bisa dilabeli".
+    const printable = rows.filter((r) => r.itemCode?.trim() && r.isLabelable);
+    const tanpaKode = rows.filter((r) => !r.itemCode?.trim()).length;
+    const takLabelable = rows.filter((r) => r.itemCode?.trim() && !r.isLabelable).length;
     const skipped = rows.length - printable.length;
 
     if (printable.length === 0) {
+      const sebab =
+        tanpaKode > 0 && takLabelable > 0
+          ? "belum punya Kode Barang dan sebagian ditandai tidak bisa dilabeli"
+          : takLabelable > 0
+            ? "ditandai tidak bisa dilabeli"
+            : "belum punya Kode Barang";
       return NextResponse.json(
-        { error: "Barang yang dipilih belum punya Kode Barang, jadi belum bisa dilabeli." },
+        { error: `Barang yang dipilih ${sebab}, jadi belum bisa dilabeli.` },
         { status: 400 }
       );
     }
@@ -62,6 +74,8 @@ export async function POST(req: NextRequest) {
         "Content-Disposition": 'inline; filename="label-barang.pdf"',
         "X-Label-Count": String(printable.length),
         "X-Label-Skipped": String(skipped),
+        "X-Label-NoCode": String(tanpaKode),
+        "X-Label-NotLabelable": String(takLabelable),
         "Cache-Control": "no-store",
       },
     });
