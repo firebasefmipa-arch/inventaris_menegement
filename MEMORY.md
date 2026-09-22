@@ -725,6 +725,14 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
 
 13. **`toBool()` untuk flag boolean dari JSON** — `Boolean("0")` bernilai `true` di JS. Semua flag `can_borrow`/`can_handover` wajib lewat `toBool()` (`src/lib/to-bool.ts`), jangan `Boolean()`.
 
+14. **Mode gelap: kelas ber-opasitas TIDAK ikut ter-remap** — proyek ini menggelapkan tampilan lewat pemetaan di `src/app/globals.css` (`.dark .bg-gray-50 { ... !important }`), mencocokkan **nama kelas Tailwind**. Masalahnya `bg-indigo-50/50` menghasilkan token CSS yang BERBEDA dari `bg-indigo-50`, jadi `.dark .bg-indigo-50` tidak cocok — kotaknya tetap terang dengan tulisan gelap dan nyaris tak terbaca.
+
+    Aturan: setiap kali memakai kelas berwarna **ber-opasitas** (`bg-x-50/50`, `border-x-100/50`, `text-x-700/80`), tambahkan pasangannya di blok "Varian ber-opasitas" `globals.css`. Blok itu juga menangani `shadow-xl` (hanya `sm/md/lg` yang di-remap) dan `bg-black/40` (hanya `/50`).
+
+    **Cara memeriksa:** sisir `src/` untuk `\b(bg|border|text)-[a-z]+-[0-9]+/[0-9]+` lalu bandingkan dengan daftar di `globals.css`; yang tak punya pasangan akan salah warna di mode gelap. Warna gelap yang memang sengaja gelap (`bg-indigo-900/30`) tidak perlu dipasangkan.
+
+    Termudah dicek langsung: buka modal di mode gelap — kotak berwarna terang = kelasnya belum dipasangkan.
+
 ---
 
 ## 11. Fitur yang Belum Diimplementasi (Backlog)
