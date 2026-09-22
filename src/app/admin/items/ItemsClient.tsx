@@ -60,6 +60,7 @@ export function ItemsClient({ items, categories }: Props) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
@@ -231,6 +232,23 @@ export function ItemsClient({ items, categories }: Props) {
     }
   };
 
+  // Hapus satu barang dari dropdown kartu (tanpa lewat mode pilih).
+  const handleDeleteOne = async (item: Item) => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Gagal menghapus barang");
+      toast(`"${item.name}" berhasil dihapus`, "success");
+      setDeleteTarget(null);
+      setActiveDropdownId(null);
+      router.refresh();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Gagal menghapus barang", "error");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredItems.length && filteredItems.length > 0) {
       setSelectedIds(new Set());
@@ -259,13 +277,13 @@ export function ItemsClient({ items, categories }: Props) {
   const availabilityBadge = (label: string, ok: boolean) => (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border",
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border",
         ok
           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-          : "bg-gray-100 text-gray-500 border-gray-200"
+          : "bg-red-50 text-red-600 border-red-200"
       )}
     >
-      {label}: {ok ? "Tersedia" : "Tidak"}
+      {label}: {ok ? "Tersedia" : "Tidak Tersedia"}
     </span>
   );
 
@@ -507,13 +525,15 @@ export function ItemsClient({ items, categories }: Props) {
           )}
         </div>
 
-        {/* Select All bar */}        {selectMode && (
+        {/* Select All bar */}
+        {selectMode && (
           <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
             <button
               type="button"
               onClick={toggleSelectAll}
-              className="text-sm font-medium text-indigo-700 hover:text-indigo-900 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm"
             >
+              <CheckSquare className="w-3.5 h-3.5" />
               {selectedIds.size === filteredItems.length && filteredItems.length > 0 ? 'Batal Pilih Semua' : 'Pilih Semua'}
             </button>
             <span className="text-xs text-indigo-500">{selectedIds.size} dari {filteredItems.length} dipilih</span>
@@ -554,7 +574,7 @@ export function ItemsClient({ items, categories }: Props) {
                 return (
                   <div
                     key={item.id}
-                    className={`group rounded-2xl shadow-sm border overflow-hidden hover:shadow-lg transition-all flex flex-col relative h-full ${selectedIds.has(item.id) ? 'bg-indigo-50/50 border-indigo-300 ring-1 ring-indigo-300' : 'bg-white border-gray-100 hover:border-indigo-200'}`}
+                    className={`group rounded-2xl shadow-sm border-2 overflow-hidden hover:shadow-lg transition-all flex flex-col relative h-full ${selectedIds.has(item.id) ? 'border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-200'}`}
                   >
                     {/* Checkbox Overlay */}
                     {selectMode && (
@@ -616,6 +636,14 @@ export function ItemsClient({ items, categories }: Props) {
                                   <Edit2 className="w-4 h-4" />
                                   Edit
                                 </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTarget(item)}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Hapus
+                                </button>
                               </div>
                             )}
                           </div>
@@ -687,7 +715,7 @@ export function ItemsClient({ items, categories }: Props) {
                 const percentage = Math.min(100, Math.max(0, (item.availableQuantity / item.quantity) * 100));
 
                 return (
-                  <div key={item.id} className={`group rounded-2xl border hover:shadow-md transition-all relative ${selectedIds.has(item.id) ? 'bg-indigo-50/50 border-indigo-300 ring-1 ring-indigo-300' : 'bg-white border-gray-100 hover:border-indigo-100'}`}>
+                  <div key={item.id} className={`group rounded-2xl border-2 hover:shadow-md transition-all relative ${selectedIds.has(item.id) ? 'border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-100'}`}>
                     {/* ── Mobile: baris ringkas horizontal ── */}
                     <div className="flex md:hidden items-center gap-3 p-3">
                       {selectMode && (
@@ -714,6 +742,13 @@ export function ItemsClient({ items, categories }: Props) {
                                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                                 <Edit2 className="w-4 h-4" /> Edit
                               </Link>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(item)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Hapus
+                              </button>
                             </div>
                           )}
                         </div>
@@ -780,6 +815,13 @@ export function ItemsClient({ items, categories }: Props) {
                                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                                 <Edit2 className="w-4 h-4" /> Edit
                               </Link>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(item)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Hapus
+                              </button>
                             </div>
                           )}
                         </div>
@@ -827,6 +869,41 @@ export function ItemsClient({ items, categories }: Props) {
               <Trash2 className="w-4 h-4" />
               {isDeleting ? "Menghapus..." : "Hapus"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Konfirmasi hapus satu barang (dari dropdown kartu) */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Hapus Barang</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Yakin ingin menghapus <strong>&quot;{deleteTarget.name}&quot;</strong>? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            {deleteTarget.status === "borrowed" && (
+              <div className="mb-6 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2">
+                <p className="text-xs text-amber-800">
+                  Barang ini <strong>sedang dipinjam</strong>. Riwayat peminjamannya tetap ada,
+                  tapi nama barangnya tidak akan muncul lagi.
+                </p>
+              </div>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => handleDeleteOne(deleteTarget)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? "Menghapus..." : "Hapus"}
+              </button>
+            </div>
           </div>
         </div>
       )}
