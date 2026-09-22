@@ -16,6 +16,12 @@ async function requireAdmin() {
   return null;
 }
 
+/** `id` route bisa bukan angka — tanpa cek ini query jadi `WHERE id = NaN`. */
+function idValid(id: string): number | null {
+  const n = parseInt(id, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -25,10 +31,13 @@ export async function GET(
     if (denied) return denied;
 
     const { id } = await params;
+    const itemId = idValid(id);
+    if (itemId === null)
+      return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
     const [item] = await db
       .select()
       .from(items)
-      .where(eq(items.id, parseInt(id)));
+      .where(eq(items.id, itemId));
     if (!item) {
       return NextResponse.json(
         { error: "Item tidak ditemukan" },
@@ -54,7 +63,9 @@ export async function PUT(
     if (denied) return denied;
 
     const { id } = await params;
-    const itemId = parseInt(id);
+    const itemId = idValid(id);
+    if (itemId === null)
+      return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
     const body = await request.json();
     const { name, category, description, quantity, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover } =
       body;
@@ -119,7 +130,9 @@ export async function DELETE(
     if (denied) return denied;
 
     const { id } = await params;
-    const itemId = parseInt(id);
+    const itemId = idValid(id);
+    if (itemId === null)
+      return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
 
     const [existing] = await db
       .select()
