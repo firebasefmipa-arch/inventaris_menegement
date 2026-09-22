@@ -4,9 +4,10 @@ import { readdir, stat } from "fs/promises";
 import path from "path";
 import archiver from "archiver";
 import { PassThrough } from "stream";
+import { uploadPath } from "@/lib/upload-dir";
 
 async function getFilesInFolder(folderName: string): Promise<string[]> {
-  const folderPath = path.join(process.cwd(), "public", "uploads", folderName);
+  const folderPath = uploadPath(folderName);
   try {
     const files = await readdir(folderPath);
     const result: string[] = [];

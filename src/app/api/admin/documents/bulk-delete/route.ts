@@ -5,6 +5,7 @@ import { transactions, handovers } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { unlink } from "fs/promises";
 import path from "path";
+import { uploadPath } from "@/lib/upload-dir";
 
 function isSafePath(folder: string, filename: string): boolean {
   const allowedFolders = ["signed_forms", "handovers"];
@@ -35,7 +36,7 @@ export async function DELETE(req: NextRequest) {
         continue;
       }
 
-      const filePath = path.join(process.cwd(), "public", "uploads", folder, filename);
+      const filePath = uploadPath(folder, filename);
       try {
         await unlink(filePath);
         // Tandai di DB: set signedDocumentUrl = 'deleted'

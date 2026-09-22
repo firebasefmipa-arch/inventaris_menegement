@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
+import { uploadPathFromUrl } from '@/lib/upload-dir';
 
 export interface HandoverData {
   receiverName: string;
@@ -348,7 +349,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   // TTD penerima digambar di ATAS nama (bottom TTD = nama + 12)
   if (data.receiverName && data.signatureUrl) {
     try {
-      const sigPath = path.join(process.cwd(), 'public', data.signatureUrl);
+      const sigPath = uploadPathFromUrl(data.signatureUrl);
       const sigBytes = await fs.readFile(sigPath);
       const ext = path.extname(data.signatureUrl).toLowerCase();
       let sigImg;

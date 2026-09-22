@@ -1,6 +1,6 @@
 import { unlink } from "fs/promises";
 import { existsSync } from "fs";
-import path from "path";
+import { uploadPathFromUrl } from "@/lib/upload-dir";
 
 /**
  * Hapus file upload dari disk berdasarkan URL publik (/uploads/...).
@@ -9,7 +9,7 @@ import path from "path";
  */
 export async function deleteUploadByUrl(url: string | null | undefined): Promise<boolean> {
   if (!url || url === "deleted" || !url.startsWith("/uploads/")) return false;
-  const filePath = path.join(process.cwd(), "public", url);
+  const filePath = uploadPathFromUrl(url);
   if (!existsSync(filePath)) return false;
   try {
     await unlink(filePath);

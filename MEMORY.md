@@ -535,20 +535,25 @@ utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
 ### Dokumen PDF (peminjaman & serah terima)
 - Generator PDF ada 2: `src/lib/pdf-generator.ts` (peminjaman, prefix file `PB_`)
   dan `src/lib/handover-pdf-generator.ts` (serah terima, prefix `ST_`).
-- Folder upload: `public/uploads/{pending,signed_forms,handovers,signatures}/`
-  → URL publik `/uploads/<folder>/<file>` (klien wajib `bp()`/fetch ber-prefix).
-- **Folder fisik upload DI LUAR repo:** `/var/www/inventaris_uploads`,
-  di-bind-mount ke `public/uploads` (entri di `/etc/fstab`). Tujuannya supaya
-  tanda tangan & dokumen bertanda tangan tak mungkin ikut ter-commit.
-  Diperiksa: `mountpoint -q public/uploads && echo ADA`.
-  **JANGAN diganti symlink** — Turbopack (build Next 16) gagal dengan
-  "Symlink ... points out of the filesystem root". Harus bind mount.
-  Kode tidak berubah (`process.cwd()/public/uploads/...` tetap jalan).
-- **`public/uploads/` DILARANG masuk git** (`.gitignore` barisnya ada). Isinya
-  tanda tangan asli + dokumen bertanda tangan peminjam = data pribadi.
-  File tetap di disk server, aplikasi tetap melayaninya lewat nginx `/uploads/`.
-  Jangan pernah `git add -f public/uploads`, dan jangan pakai `git add -A`
-  kalau `.gitignore` ini sampai hilang.
+- Folder upload: `{pending,signed_forms,handovers,signatures}/` → URL publik
+  `/uploads/<folder>/<file>` (klien wajib `bp()`/fetch ber-prefix).
+- **Folder fisik upload DI LUAR repo:** default `<root>/uploads`, di server
+  diarahkan lewat `UPLOAD_DIR=/var/www/inventaris_uploads` (`.env.local`).
+  Tujuannya supaya tanda tangan & dokumen bertanda tangan tak mungkin
+  ikut ter-commit. **Semua path lewat `src/lib/upload-dir.ts`**
+  (`uploadPath(...)` untuk menulis, `uploadPathFromUrl(url)` untuk URL dari DB,
+  `isInsideUploadRoot()` untuk cegah `../`). Jangan lagi menulis
+  `path.join(process.cwd(), "public", ...)` untuk berkas unggahan.
+- **Berkas unggahan TIDAK BOLEH dilayani sebagai berkas statis.** Aturan:
+  folder upload jangan pernah ada di dalam `public/`, dan nginx jangan
+  `alias` `/uploads/` — dulu keduanya membuat PDF bertanda tangan bisa
+  diunduh siapa saja tanpa login. Sekarang penyajiannya lewat
+  `src/app/uploads/[...path]/route.ts`: wajib login, admin boleh semua,
+  pemilik berkas boleh berkasnya sendiri, selain itu 403.
+  (Tidak perlu bind mount lagi; symlink tetap dilarang Turbopack.)
+- **`uploads/` DILARANG masuk git.** Isinya tanda tangan asli + dokumen
+  bertanda tangan peminjam = data pribadi.
+  Jangan pernah `git add -f` ke sana, dan jangan pakai `git add -A`.
   (Riwayat: 3 PNG TTD sempat ter-commit; sudah dibersihkan dari seluruh
   riwayat dengan `git filter-repo --path public/uploads --invert-paths`
   + force-push pada 2026-09-18 — semua hash commit berubah di titik itu.)
@@ -688,4 +693,5 @@ di menu data barang, dan riwayat ikut benar sendiri. Lihat bagian
 - [ ] Jika mengubah alur auth: cek 5 lapis basePath tetap sinkron (bagian 6)
 - [ ] Semua migrasi DB sudah dijalankan (lihat bagian 8)
 - [ ] `npm run check:snapshot` → setiap pemakaian `namaSql*` punya tabel sumbernya (WAJIB jika menyentuh query riwayat/dokumen)
-- [ ] `public/uploads` sudah ter-bind-mount ke `/var/www/inventaris_uploads` (cek: `mountpoint -q public/uploads`) — urusan server, DEPLOY.md
+- [ ] Tidak ada berkas unggahan di dalam `public/` (cek: `ls public/uploads` harus kosong) — urusan server, DEPLOY.md
+- [ ] Kalau menyentuh berkas unggahan: pakai helper `src/lib/upload-dir.ts`, jangan `path.join(process.cwd(), "public", ...)`

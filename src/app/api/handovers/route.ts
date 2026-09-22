@@ -4,6 +4,7 @@ import { handovers, handoverItems, items, users } from "@/db/schema";
 import { eq, desc, inArray, and } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
+import { uploadPath } from "@/lib/upload-dir";
 
 // GET /api/handovers — daftar serah terima milik user yang login
 export async function GET(req: NextRequest) {
@@ -212,7 +213,7 @@ export async function POST(req: NextRequest) {
       const dateStr = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
       const filename = `ST_${receiverSafe}_${dateStr}_${hvId}.pdf`;
 
-      const uploadDir = nodePath.default.join(process.cwd(), "public", "uploads", "pending");
+      const uploadDir = uploadPath("pending");
       await mkdir(uploadDir, { recursive: true });
       await writeFile(nodePath.default.join(uploadDir, filename), pdfBuffer);
 

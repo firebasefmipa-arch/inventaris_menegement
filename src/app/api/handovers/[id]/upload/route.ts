@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { uploadPath } from "@/lib/upload-dir";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -53,7 +54,7 @@ export async function POST(
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "handovers");
+    const uploadDir = uploadPath("handovers");
     await mkdir(uploadDir, { recursive: true });
 
     // Nama file: NamaPenerima_DDMMYYYY (format konsisten dengan peminjaman)
@@ -63,7 +64,7 @@ export async function POST(
       .slice(0, 40);
     const d = hv.handoverDate;
     const dateStr = `${String(new Date(d).getDate()).padStart(2,"0")}${String(new Date(d).getMonth()+1).padStart(2,"0")}${new Date(d).getFullYear()}`;
-    const safeFilename = `ST_${receiverSafe}_${dateStr}${originalExt}`;
+    const safeFilename = `ST_${receiverSafe}_${dateStr}_${hv.id}${originalExt}`;
     const filePath = path.join(uploadDir, safeFilename);
     await writeFile(filePath, buffer);
 

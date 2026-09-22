@@ -202,7 +202,7 @@ login di `/admin/login`.
 
 ---
 
-## Langkah 6 — Buat Folder Upload (DI LUAR repo, lewat bind mount)
+## Langkah 6 — Buat Folder Upload (DI LUAR repo)
 
 ```bash
 # Folder fisik upload SENGAJA di luar folder project, supaya tanda tangan
@@ -210,23 +210,21 @@ login di `/admin/login`.
 mkdir -p /var/www/inventaris_uploads/{pending,signed_forms,handovers,signatures}
 chmod -R 755 /var/www/inventaris_uploads
 
-# public/uploads di-bind-mount ke folder itu (bukan symlink!)
-mkdir -p /var/www/inventaris_menegement/public/uploads
-echo '/var/www/inventaris_uploads /var/www/inventaris_menegement/public/uploads none bind,defaults 0 0' >> /etc/fstab
-mount -a
-mountpoint -q /var/www/inventaris_menegement/public/uploads && echo "OK ter-mount"
+# Arahkan aplikasi ke folder itu lewat .env.local:
+#   UPLOAD_DIR=/var/www/inventaris_uploads
+# Kalau tidak diisi, default-nya <root project>/uploads (juga di luar public/).
 
-# PENTING — jangan pakai symlink:
-#   Turbopack (build Next 16) GAGAL dengan
-#   "Symlink [...] is invalid, it points out of the filesystem root"
-# Bind mount tidak masalah karena terlihat sebagai direktori biasa.
+# PENTING — folder upload TIDAK BOLEH berada di dalam public/.
+# Sampai 22 Sep 2026 folder ini di-bind-mount ke public/uploads sehingga
+# Next.js (dan nginx `alias`) melayaninya sebagai berkas statis: siapa pun
+# yang tahu URL-nya bisa mengunduh PDF bertanda tangan TANPA login.
+# Sekarang dilayani src/app/uploads/[...path]/route.ts yang memeriksa sesi +
+# kepemilikan, jadi TIDAK ADA lagi bind mount maupun alias nginx.
 
 # PENTING: folder uploads tidak pernah ikut git (.gitignore).
 # Kalau pindah/restore server: isinya dipindah manual (rsync/scp), bukan git.
-# JANGAN pakai `git add -f` untuk apa pun di dalam public/uploads.
 
-# Verifikasi setelah deploy:
-#   mountpoint -q public/uploads
+# Verifikasi setelah deploy (semua harus 401 tanpa login):
 #   curl -o /dev/null -w '%{http_code}\n' https://<domain>/<basePath>/uploads/signatures/<file>
 ```
 
@@ -243,7 +241,7 @@ tar czf /root/uploads-$(date +%F).tar.gz -C /var/www inventaris_uploads
 mkdir -p /var/www/inventaris_uploads
 tar xzf /root/uploads-<tanggal>.tar.gz -C /var/www
 
-# lalu pasang bind mount-nya (lihat Langkah 6)
+# lalu pastikan UPLOAD_DIR di .env.local menunjuk ke folder itu
 ```
 
 ---
@@ -290,24 +288,11 @@ server {
     client_max_body_size 10M;
     merge_slashes off;
 
-    # File upload dilayani langsung Nginx — NO-CACHE (pernah tersaji lama dari
-    # cache Cloudflare setelah file ditimpa/regenerate; uploads wajib fresh):
-    location /uploads/ {
-        alias /var/www/inventaris_uploads/;
-        expires -1;
-        add_header Cache-Control "no-store, no-cache, must-revalidate";
-        add_header Pragma "no-cache";
-        etag off;
-    }
-
-    # Gateway kadang meneruskan //uploads/... (dobel slash) — tetap layani:
-    location ~ ^//uploads/ {
-        alias /var/www/inventaris_uploads/;
-        expires -1;
-        add_header Cache-Control "no-store, no-cache, must-revalidate";
-        add_header Pragma "no-cache";
-        etag off;
-    }
+    # Dokumen unggahan TIDAK lagi dilayani langsung Nginx sebagai berkas statis:
+    # dulu siapa pun yang tahu URL bisa mengunduh PDF bertanda tangan tanpa
+    # login. Sekarang semuanya lewat Next.js (src/app/uploads/[...path]/route.ts)
+    # yang memeriksa sesi + kepemilikan. Rewrite di blok `location /` membawa
+    # basePath agar /uploads/... (dan //uploads/... dari gateway) cocok route itu.
 
     # Semua request: tambahkan prefix [BASE_PATH] kembali, lalu proxy ke Next
     location / {
@@ -340,13 +325,8 @@ server {
 
     client_max_body_size 10M;
 
-    location /uploads/ {
-        alias /var/www/inventaris_uploads/;
-        expires -1;
-        add_header Cache-Control "no-store, no-cache, must-revalidate";
-        add_header Pragma "no-cache";
-        etag off;
-    }
+    # Tidak ada blok /uploads/ — lihat catatan skenario A: berkas unggahan
+    # dilayani Next.js lewat route ber-pemeriksa sesi, bukan alias statis.
 
     location / {
         proxy_pass http://localhost:3000;

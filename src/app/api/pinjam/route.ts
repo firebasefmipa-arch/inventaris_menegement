@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { generateBorrowingPDF } from "@/lib/pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { uploadPath } from "@/lib/upload-dir";
 
 type CartItem = { itemId: number; quantity: number; notes?: string };
 
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
       const dateStr = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
       const filename = `PB_${borrowerSafe}_${dateStr}_${txId}.pdf`;
 
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "pending");
+      const uploadDir = uploadPath("pending");
       await mkdir(uploadDir, { recursive: true });
       await writeFile(path.join(uploadDir, filename), pdfBuffer);
 

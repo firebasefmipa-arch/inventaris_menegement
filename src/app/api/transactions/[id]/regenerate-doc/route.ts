@@ -8,6 +8,7 @@ import { generateBorrowingPDF } from "@/lib/pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 
 export async function POST(
   request: NextRequest,
@@ -35,7 +36,7 @@ export async function POST(
       tx.signedDocumentUrl &&
       tx.signedDocumentUrl !== "deleted" &&
       tx.signedDocumentUrl.startsWith("/uploads/") &&
-      !existsSync(path.join(process.cwd(), "public", tx.signedDocumentUrl));
+      !existsSync(uploadPathFromUrl(tx.signedDocumentUrl));
     if (tx.signedDocumentUrl !== "deleted" && !fileMissing) {
       return NextResponse.json({ error: "Dokumen belum dihapus atau sudah ada" }, { status: 400 });
     }
@@ -106,7 +107,7 @@ export async function POST(
     const dateStr = `${String(new Date(d).getDate()).padStart(2, "0")}${String(new Date(d).getMonth() + 1).padStart(2, "0")}${new Date(d).getFullYear()}`;
     const filename = `PB_${borrowerSafe}_${dateStr}_${txId}_regen.pdf`;
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "signed_forms");
+    const uploadDir = uploadPath("signed_forms");
     await mkdir(uploadDir, { recursive: true });
     await writeFile(path.join(uploadDir, filename), pdfBuffer);
 

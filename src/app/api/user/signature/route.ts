@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Ekstensi file tidak valid" }, { status: 400 });
     }
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "signatures");
+    const uploadDir = uploadPath("signatures");
     await mkdir(uploadDir, { recursive: true });
 
     // Hapus TTD lama jika ada
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     if (existing?.signatureUrl) {
-      const oldPath = path.join(process.cwd(), "public", existing.signatureUrl);
+      const oldPath = uploadPathFromUrl(existing.signatureUrl);
       if (existsSync(oldPath)) {
         await unlink(oldPath).catch(() => {});
       }
@@ -97,7 +98,7 @@ export async function DELETE() {
       .limit(1);
 
     if (user?.signatureUrl) {
-      const filePath = path.join(process.cwd(), "public", user.signatureUrl);
+      const filePath = uploadPathFromUrl(user.signatureUrl);
       if (existsSync(filePath)) await unlink(filePath).catch(() => {});
     }
 

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/Toaster";
 import { onlyDigits } from "@/lib/digits";
+import { withBase } from "@/lib/basepath";
 import clsx from "clsx";
 import { DEPARTMENT_GROUPS, ALL_DEPARTMENT_OPTIONS } from "@/lib/departments";
 
@@ -243,7 +244,7 @@ export default function ProfilPage() {
             <p className="text-xs text-gray-500 dark:text-slate-400 mb-2 font-medium">Tanda tangan tersimpan:</p>
             <div className="relative inline-block border-2 border-dashed border-gray-200 dark:border-[#1c2e48] rounded-xl overflow-hidden bg-white">
               <img
-                src={profile!.signatureUrl!}
+                src={withBase(profile!.signatureUrl!)}
                 alt="Tanda tangan"
                 className="h-24 w-auto max-w-xs object-contain p-2"
               />

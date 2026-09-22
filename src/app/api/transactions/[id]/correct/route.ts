@@ -7,6 +7,7 @@ import { generateBorrowingPDF } from "@/lib/pdf-generator";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 
 /**
  * PATCH /api/transactions/[id]/correct
@@ -135,12 +136,12 @@ export async function PATCH(
       const d = txData.borrowDate;
       const dateStr = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
       const filename = `PB_${borrowerSafe}_${dateStr}_${txId}_corrected.pdf`;
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "pending");
+      const uploadDir = uploadPath("pending");
       await mkdir(uploadDir, { recursive: true });
 
       // Hapus PDF lama jika ada
       if (tx.signedDocumentUrl?.startsWith("/uploads/pending/")) {
-        const oldPath = path.join(process.cwd(), "public", tx.signedDocumentUrl);
+        const oldPath = uploadPathFromUrl(tx.signedDocumentUrl);
         if (existsSync(oldPath)) await unlink(oldPath).catch(() => {});
       }
 

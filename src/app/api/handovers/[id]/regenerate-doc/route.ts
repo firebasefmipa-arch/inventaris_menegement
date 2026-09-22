@@ -8,6 +8,7 @@ import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 
 export async function POST(
   request: NextRequest,
@@ -34,7 +35,7 @@ export async function POST(
       hv.signedDocumentUrl &&
       hv.signedDocumentUrl !== "deleted" &&
       hv.signedDocumentUrl.startsWith("/uploads/") &&
-      !existsSync(path.join(process.cwd(), "public", hv.signedDocumentUrl));
+      !existsSync(uploadPathFromUrl(hv.signedDocumentUrl));
     if (hv.signedDocumentUrl !== "deleted" && !fileMissing) {
       return NextResponse.json({ error: "Dokumen belum dihapus atau sudah ada" }, { status: 400 });
     }
@@ -97,7 +98,7 @@ export async function POST(
     const dateStr = `${String(new Date(d).getDate()).padStart(2, "0")}${String(new Date(d).getMonth() + 1).padStart(2, "0")}${new Date(d).getFullYear()}`;
     const filename = `ST_${receiverSafe}_${dateStr}_${hvId}_regen.pdf`;
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "handovers");
+    const uploadDir = uploadPath("handovers");
     await mkdir(uploadDir, { recursive: true });
     await writeFile(path.join(uploadDir, filename), pdfBuffer);
 

@@ -7,6 +7,7 @@ import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { deleteUploadByUrl } from "@/lib/delete-upload";
+import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 
 export async function POST(
   request: NextRequest,
@@ -43,8 +44,8 @@ export async function POST(
       if (tx.signedDocumentUrl?.startsWith("/uploads/pending/")) {
         try {
           const filename = path.basename(tx.signedDocumentUrl);
-          const srcPath  = path.join(process.cwd(), "public", tx.signedDocumentUrl);
-          const destDir  = path.join(process.cwd(), "public", "uploads", "signed_forms");
+          const srcPath  = uploadPathFromUrl(tx.signedDocumentUrl);
+          const destDir  = uploadPath("signed_forms");
           const destPath = path.join(destDir, filename);
 
           await mkdir(destDir, { recursive: true });

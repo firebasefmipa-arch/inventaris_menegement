@@ -5,6 +5,7 @@ import path from "path";
 import { db } from "@/db";
 import { handovers, transactions } from "@/db/schema";
 import { ne } from "drizzle-orm";
+import { uploadPath } from "@/lib/upload-dir";
 
 export interface DocumentFile {
   name: string;
@@ -33,12 +34,7 @@ function extractNameFromFilename(filename: string): string {
 async function getFilesFromFolder(
   folderName: "signed_forms" | "handovers"
 ): Promise<DocumentFile[]> {
-  const folderPath = path.join(
-    process.cwd(),
-    "public",
-    "uploads",
-    folderName
-  );
+  const folderPath = uploadPath(folderName);
 
   try {
     const files = await readdir(folderPath);

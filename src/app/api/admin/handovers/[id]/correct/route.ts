@@ -7,6 +7,7 @@ import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 
 /**
  * PATCH /api/admin/handovers/[id]/correct
@@ -119,11 +120,11 @@ export async function PATCH(
       const d = hv.handoverDate;
       const dateStr = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
       const filename = `ST_${receiverSafe}_${dateStr}_${hvId}_corrected.pdf`;
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "pending");
+      const uploadDir = uploadPath("pending");
       await mkdir(uploadDir, { recursive: true });
 
       if (hv.signedDocumentUrl?.startsWith("/uploads/pending/")) {
-        const oldPath = path.join(process.cwd(), "public", hv.signedDocumentUrl);
+        const oldPath = uploadPathFromUrl(hv.signedDocumentUrl);
         if (existsSync(oldPath)) await unlink(oldPath).catch(() => {});
       }
 

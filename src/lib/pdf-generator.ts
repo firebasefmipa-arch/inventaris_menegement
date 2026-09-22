@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
+import { uploadPathFromUrl } from '@/lib/upload-dir';
 
 interface TransactionData {
   borrowerName: string;
@@ -173,7 +174,7 @@ async function drawFooter(
   // Embed TTD gambar jika ada
   if (signatureUrl) {
     try {
-      const sigPath = path.join(process.cwd(), 'public', signatureUrl);
+      const sigPath = uploadPathFromUrl(signatureUrl);
       const sigBytes = await fs.readFile(sigPath);
       const ext = path.extname(signatureUrl).toLowerCase();
       let sigImg;

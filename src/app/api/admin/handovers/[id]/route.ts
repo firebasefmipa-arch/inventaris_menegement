@@ -7,6 +7,7 @@ import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { deleteUploadByUrl } from "@/lib/delete-upload";
+import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 
 // PUT /api/admin/handovers/[id] — approve atau reject
 export async function PUT(
@@ -40,8 +41,8 @@ export async function PUT(
       if (hv.signedDocumentUrl?.startsWith("/uploads/pending/")) {
         try {
           const filename = path.basename(hv.signedDocumentUrl);
-          const srcPath  = path.join(process.cwd(), "public", hv.signedDocumentUrl);
-          const destDir  = path.join(process.cwd(), "public", "uploads", "handovers");
+          const srcPath  = uploadPathFromUrl(hv.signedDocumentUrl);
+          const destDir  = uploadPath("handovers");
           const destPath = path.join(destDir, filename);
           await mkdir(destDir, { recursive: true });
           if (existsSync(srcPath)) {

@@ -5,6 +5,7 @@ import { transactions, handovers } from "@/db/schema";
 import { like } from "drizzle-orm";
 import { readdir, rename } from "fs/promises";
 import path from "path";
+import { uploadPath } from "@/lib/upload-dir";
 
 /**
  * POST /api/admin/documents/rename-legacy
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     const results: { old: string; new: string; status: string }[] = [];
 
     // ── Rename signed_forms ──
-    const signedDir = path.join(process.cwd(), "public", "uploads", "signed_forms");
+    const signedDir = uploadPath("signed_forms");
     try {
       const files = await readdir(signedDir);
       for (const file of files) {
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Rename handovers ──
-    const handoverDir = path.join(process.cwd(), "public", "uploads", "handovers");
+    const handoverDir = uploadPath("handovers");
     try {
       const files = await readdir(handoverDir);
       for (const file of files) {
