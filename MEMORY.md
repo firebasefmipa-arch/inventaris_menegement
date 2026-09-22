@@ -620,8 +620,9 @@ Pakai helper `toBool()` dari `src/lib/to-bool.ts`.
 11. **Logo mode gelap** — pakai komponen klien `src/components/Logo.tsx`: mode terang `fmipa-logo.png`, mode gelap `fmipa-logo-kuning.png`. Wrapper-nya WAJIB `dark:bg-transparent` (kalau tetap putih, logo kuning tak terbaca di atas putih). Halaman server-component tak bisa pakai hook tema — pakai komponen ini.
     - Katalog publik (`(public)/katalog`) tidak punya dark mode → logo statis di sana aman.
 
-12. **Item `quantity = 0` disembunyikan, bukan dihapus** — hanya dihasilkan serah terima permanen (barang tak kembali). Barang yang sedang dipinjam punya `availableQuantity = 0` tapi `quantity > 0` → TETAP tampil. Jangan DELETE item: `handover_items.item_id` CASCADE → riwayat serah terima ikut terhapus.
+12. **Item `quantity = 0` disembunyikan, bukan dihapus** — hanya dihasilkan serah terima permanen (barang tak kembali). Barang yang sedang dipinjam punya `availableQuantity = 0` tapi `quantity > 0` → TETAP tampil. Jangan hapus barang hanya karena stok 0.
     - Filter `gt(items.quantity, 0)` ada di: `admin/items/page.tsx`, `/api/items`, katalog, statistik dashboard, `/api/stats`.
+    - Menghapus barang dari menu admin **diperbolehkan** (tombol Hapus di kartu). FK CASCADE di `schema.ts` TIDAK ADA di MySQL produksi, jadi baris riwayat tidak ikut terhapus; nama barangnya diamankan snapshot (`snapshotSebelumHapus()`). Lihat bagian "Riwayat ↔ Data Barang".
 
 13. **`toBool()` untuk flag boolean dari JSON** — `Boolean("0")` bernilai `true` di JS. Semua flag `can_borrow`/`can_handover` wajib lewat `toBool()` (`src/lib/to-bool.ts`), jangan `Boolean()`.
 
@@ -636,6 +637,30 @@ Pakai helper `toBool()` dari `src/lib/to-bool.ts`.
 - [ ] Cron job otomatis ubah status `active` yang melewati deadline ke `overdue`
 - [ ] Push notification (PWA) untuk reminder pengembalian barang
 - [ ] QR code pada formulir PDF untuk verifikasi
+
+### DITUNDA — Ganti barang di transaksi yang sudah disetujui
+**Keputusan user (22 Sep 2026): dibiarkan dulu, tidak perlu sekarang.**
+
+Kasusnya: admin salah **memilih barang** (bukan salah ketik nama) — mis. sistem
+mencatat Laptop #10 padahal fisik yang diserahkan Laptop #11.
+
+Kesimpulan user: **sudah cukup terantisipasi** oleh fitur koreksi yang ada,
+karena `correct` (`/api/transactions/[id]/correct`) bisa mengganti barang
+selama status masih `pending_approval` — yaitu saat kesalahan masih bisa
+disadari, sebelum dokumen berjalan. Kesalahan yang baru ketahuan SETELAH
+disetujui dianggap jarang dan tidak sepadan biaya fiturnya.
+
+Jadi: **jangan tambahkan fitur "edit barang" untuk transaksi aktif/selesai
+tanpa persetujuan user dulu.** Kalau nanti diminta, yang perlu dikerjakan:
+- Pindahkan stok: barang lama `+qty`, barang baru `-qty` (tolak kalau stok
+  barang baru tidak cukup, jangan sampai minus)
+- Kalau transaksi sudah `returned`, stok sudah normal sendiri → cukup
+  perbaiki catatannya, jangan sentuh stok
+- Snapshot baris riwayat ikut diperbarui (sudah ditangani `correct` yang ada)
+
+Bedakan dari kasus **salah ketik NAMA** barang: itu cukup lewat edit barang
+di menu data barang, dan riwayat ikut benar sendiri. Lihat bagian
+"Riwayat ↔ Data Barang" di Konvensi Kode.
 
 ---
 
