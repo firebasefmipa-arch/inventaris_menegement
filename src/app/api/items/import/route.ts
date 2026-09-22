@@ -5,7 +5,37 @@ import { db } from "@/db";
 import { items } from "@/db/schema";
 import { auth } from "@/auth";
 import { resolvePrefix, nextSequence, formatCode } from "@/lib/item-code";
+import { IMPORT_COLUMNS, normalizeHeader, pickColumn } from "@/lib/item-import";
 
+/**
+ * Kunci identitas barang untuk mendeteksi duplikat.
+ *
+ * Urutan prioritas: No. Inv DTI (paling unik) → SN → Nama + Lokasi.
+ * Dinormalisasi huruf kecil & spasi berlebih supaya " Laptop 10 " dan
+ * "laptop 10" dianggap sama.
+ */
+function kunciBarang(nama: string, inventoryNumber: string | null, sn: string | null, lokasi: string | null): string {
+  const bersih = (v: string | null) => (v || "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (inventoryNumber) return `inv:${bersih(inventoryNumber)}`;
+  if (sn) return `sn:${bersih(sn)}`;
+  return `nama:${bersih(nama)}|${bersih(lokasi)}`;
+}
+
+/**
+ * Impor barang dari Excel/CSV.
+ *
+ * Nama kolom yang diterima ada di `src/lib/item-import.ts` (sumber yang sama
+ * dengan template unduhan). Kode barang dari file SELALU diabaikan — dibuat
+ * ulang di server.
+ *
+ * Barang yang sudah ada di database (atau kembar di dalam file yang sama)
+ * DILEWATI, tidak diimpor ulang.
+ *
+ * Balasan:
+ *   { importedCount, skippedRows, duplicateRows, duplicates[], warnings[] }
+ * `skippedRows` = baris tanpa nama (tidak bisa dibuatkan barang).
+ * `warnings[]`  = baris yang tetap masuk tapi ada kolom bermasalah.
+ */
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -28,10 +58,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Sheet pertama tidak ditemukan" }, { status: 400 });
     }
 
-    const parsed = utils.sheet_to_json<Record<string, string | number | null>>(sheet, {
+    const parsed = utils.sheet_to_json<Record<string, unknown>>(sheet, {
       defval: null,
       raw: false,
     });
+
+    const col = (nama: string) =>
+      IMPORT_COLUMNS.find((c) => c.header === nama)!.aliases;
 
     const newItems: Array<{
       name: string;
@@ -48,39 +81,76 @@ export async function POST(request: NextRequest) {
       imageUrl?: string | null;
     }> = [];
 
+    const warnings: string[] = [];
+    let skippedRows = 0;
+    let barisKe = 1; // baris 1 = header
+
+    // Kunci identitas barang yang SUDAH ada di database.
+    const existing = await db
+      .select({
+        name: items.name,
+        inventoryNumber: items.inventoryNumber,
+        sn: items.sn,
+        location: items.location,
+      })
+      .from(items);
+    const kunciAda = new Set(
+      existing.map((e) => kunciBarang(e.name, e.inventoryNumber, e.sn, e.location))
+    );
+
+    // Kunci yang sudah dipakai baris sebelumnya DI FILE INI, supaya file
+    // dengan baris kembar tak menggandakan barang.
+    const kunciFile = new Set<string>();
+    const duplicates: string[] = [];
+
     // Penomoran per lokasi, dihitung sekali lalu ditambah di memori
     // supaya barang dalam satu file tidak berebut nomor yang sama.
     const seqCache = new Map<string, number>();
     const year = new Date().getFullYear();
 
     for (const row of parsed) {
-      // normalize keys to make matching robust for headers like "Nama Barang", "Spesifikasi", "No. Inv DTI"
-      const norm: Record<string, any> = {};
-      for (const k in row) {
-        const nk = String(k).toLowerCase().replace(/\s+|\.|\-/g, "").replace(/_/g, "");
-        norm[nk] = row[k];
+      barisKe++;
+
+      // Normalisasi nama kolom: "No. Inv DTI" -> "noinvdti"
+      const norm: Record<string, unknown> = {};
+      for (const k in row) norm[normalizeHeader(k)] = row[k];
+
+      const teks = (nama: string) => {
+        const v = pickColumn(norm, col(nama));
+        return v === null ? null : String(v).trim() || null;
+      };
+
+      const name = teks("Nama Barang");
+      if (!name) {
+        skippedRows++;
+        continue;
       }
 
-      const name = (norm["namabarang"] || norm["nama"] || norm["name"] || "").toString().trim();
-      const categoryGuess = (norm["kategori"] || norm["category"] || null);
-      const spesifikasi = (norm["spesifikasi"] || norm["deskripsi"] || norm["description"] || null)
-        ? String(norm["spesifikasi"] || norm["deskripsi"] || norm["description"]).trim()
-        : null;
-      const sn = norm["sn"] ? String(norm["sn"]).trim() : null;
-      const noInv = norm["noinvdti"] ? String(norm["noinvdti"]).trim() : null;
-      const noAsset = norm["noasset"] ? String(norm["noasset"]).trim() : null;
-      const tanggalCek = norm["tanggalcek"] ? String(norm["tanggalcek"]).trim() : null;
-      const kondisi = norm["kondisi"] ? String(norm["kondisi"]).trim() : null;
-      const quantityRaw = norm["jumlah"] ?? norm["quantity"] ?? 1;
-      const location = norm["lokasi"] ? String(norm["lokasi"]).trim() : null;
+      const category = teks("Kategori") || name.split(" ")[0] || "Umum";
 
-      const quantity = Number(quantityRaw) || 1;
+      const inventoryNumber = teks("No. Inv DTI");
+      const sn = teks("SN");
+      const location = teks("Lokasi");
 
-      if (!name) continue;
+      // Duplikat: sudah ada di database, atau kembar di file ini.
+      const kunci = kunciBarang(name, inventoryNumber, sn, location);
+      if (kunciAda.has(kunci) || kunciFile.has(kunci)) {
+        duplicates.push(`Baris ${barisKe}: "${name}" sudah ada — dilewati.`);
+        continue;
+      }
+      kunciFile.add(kunci);
 
-      const category = categoryGuess ? String(categoryGuess).trim() : (name.split(" ")[0] || "Umum");
-
-      const description = spesifikasi;
+      // Jumlah harus bilangan bulat >= 1; kalau tidak, kembali ke 1 + peringatan
+      const jumlahRaw = teks("Jumlah");
+      let quantity = 1;
+      if (jumlahRaw !== null) {
+        const n = Number(jumlahRaw);
+        if (Number.isInteger(n) && n > 0) {
+          quantity = n;
+        } else {
+          warnings.push(`Baris ${barisKe} ("${name}"): Jumlah "${jumlahRaw}" bukan bilangan bulat positif — dipakai 1.`);
+        }
+      }
 
       // Kode dari file Excel DIABAIKAN — selalu di-generate ulang.
       const { prefix, location: normalizedLocation } = await resolvePrefix(location);
@@ -91,13 +161,13 @@ export async function POST(request: NextRequest) {
       newItems.push({
         name,
         category,
-        description,
+        description: teks("Spesifikasi"),
         sn,
         itemCode: formatCode(prefix, year, seq),
-        inventoryNumber: noInv,
-        assetNumber: noAsset,
-        lastCheckDate: tanggalCek,
-        condition: kondisi,
+        inventoryNumber,
+        assetNumber: teks("No. Asset"),
+        lastCheckDate: teks("Tanggal Cek"),
+        condition: teks("Kondisi"),
         quantity,
         location: normalizedLocation,
         imageUrl: null,
@@ -105,7 +175,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (!newItems.length) {
-      return NextResponse.json({ error: "Tidak ada data yang valid dalam file" }, { status: 400 });
+      const sebab = [
+        skippedRows ? `${skippedRows} baris dilewati karena kolom "Nama Barang" kosong` : "",
+        duplicates.length ? `${duplicates.length} baris duplikat` : "",
+      ].filter(Boolean).join(", ");
+      return NextResponse.json(
+        {
+          error: sebab
+            ? `Tidak ada barang baru untuk diimpor: ${sebab}. Pastikan nama kolom di baris pertama file sama dengan template.`
+            : "Tidak ada data yang valid dalam file",
+          skippedRows,
+          duplicateRows: duplicates.length,
+          duplicates,
+        },
+        { status: 400 }
+      );
     }
 
     await db.insert(items).values(
@@ -127,7 +211,13 @@ export async function POST(request: NextRequest) {
       }))
     );
 
-    return NextResponse.json({ importedCount: newItems.length });
+    return NextResponse.json({
+      importedCount: newItems.length,
+      skippedRows,
+      duplicateRows: duplicates.length,
+      duplicates,
+      warnings,
+    });
   } catch (error) {
     console.error("POST /api/items/import error:", error);
     return NextResponse.json({ error: "Gagal mengimpor file" }, { status: 500 });
