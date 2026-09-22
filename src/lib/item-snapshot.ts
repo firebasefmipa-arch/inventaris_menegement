@@ -72,6 +72,16 @@ export async function snapshotSebelumHapus(itemIds: number[]): Promise<number> {
 }
 
 /**
+ * Versi untuk query yang hanya punya tabel `transactions` (baris lama/single-item
+ * dengan kolom `item_id`), bukan dari pivot. Ambil nama dari data master; kalau
+ * barang sudah dihapus, pakai snapshot milik baris riwayat mana pun yang menunjuk
+ * barang itu (subquery, jadi tidak butuh join tambahan).
+ */
+export function namaSqlLegacy(itemIdCol: unknown) {
+  return sql<string>`COALESCE(${items.name}, (SELECT ti.item_name FROM transaction_items ti WHERE ti.item_id = ${itemIdCol} LIMIT 1))`;
+}
+
+/**
  * Versi SQL dari {@link namaBarang} untuk dipakai langsung di dalam select:
  * COALESCE(data master, snapshot). Data master menang; snapshot dipakai kalau
  * barangnya sudah dihapus.

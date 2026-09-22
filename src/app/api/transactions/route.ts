@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
-import { namaSql } from "@/lib/item-snapshot";
+import { namaSql, namaSqlLegacy } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 
 export async function GET(request: NextRequest) {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         actualReturnDate: transactions.actualReturnDate,
         notes: transactions.notes,
         createdAt: transactions.createdAt,
-        itemName: namaSql(items.name, transactionItems.itemName),
+        itemName: namaSqlLegacy(transactions.itemId),
         itemCategory: items.category,
         borrowerName: transactions.borrowerName,
         borrowerDepartment: transactions.borrowerDepartment,
