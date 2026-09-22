@@ -150,6 +150,8 @@ notes          TEXT
 -- items (flag ketersediaan manual, ditambah September 2026)
 can_borrow   TINYINT(1) NOT NULL DEFAULT 1  -- boleh dipinjam?
 can_handover TINYINT(1) NOT NULL DEFAULT 1  -- boleh diserahterimakan?
+is_labelable TINYINT(1) NOT NULL DEFAULT 1  -- boleh dicetak labelnya?
+                                            -- 0 untuk kabel/dongle wifi dsb
 
 -- items (kode barang otomatis, ditambah 11 September 2026)
 item_code VARCHAR(255) NULL UNIQUE  -- FMIPA-<KODE LOKASI>-<TAHUN>-<URUT>
@@ -606,6 +608,36 @@ Titik filter (jangan lupa bila menambah daftar barang baru):
 
 **Jangan pakai `Boolean(nilai)` untuk flag ini** — `Boolean("0")` = `true`.
 Pakai helper `toBool()` dari `src/lib/to-bool.ts`.
+
+### Bisa Dilabeli (`is_labelable`)
+
+Flag manual per barang, sejajar `can_borrow`/`can_handover` (dropdown "Label" di
+form tambah/edit). Bawaan `1`. Diset `0` untuk barang yang **secara fisik tidak
+mungkin ditempeli label** — kabel, dongle wifi, adaptor: permukaannya kecil atau
+tidak rata sehingga label lepas/hilang.
+
+Syarat cetak label (DUA-duanya, dicek di `src/app/api/items/labels/route.ts`):
+1. punya `item_code` (barang lama bisa NULL), dan
+2. `is_labelable = 1`.
+
+Baris yang gagal syarat **DILEWATI**, bukan memblokir seluruh permintaan. Header
+balasan merinci sebabnya: `X-Label-Count` (jumlah label jadi), `X-Label-Skipped`
+(total dilewati), `X-Label-NoCode`, `X-Label-NotLabelable` — UI memakainya untuk
+pesan toast yang tepat.
+
+Di `ItemsClient.tsx`, mode pilih dipisah dua (`selectMode`: `"label"` | `"hapus"`)
+supaya "bisa dilabeli" tak ikut membatasi hapus massal:
+
+- Mode **Cetak Label**: bar "Pilih Semua" hanya memilih baris yang lolos syarat
+  label. Tombol Cetak Label disabled bila 0 baris terpilih yang lolos.
+- Mode **Hapus**: "Pilih Semua" memilih seluruh baris hasil filter, tanpa syarat.
+- Baris dengan `is_labelable = 0` diberi badge kuning "Tidak bisa dilabeli"
+  (3 titik render: kartu grid, baris mobile, baris desktop). Checkbox-nya TETAP
+  aktif supaya tetap bisa dihapus massal.
+
+`quantity > 1` **BUKAN** penghalang — generator mencetak 1 label per baris
+(label mewakili lot), dan kode barang memang per baris, bukan per unit.
+
 
 ---
 

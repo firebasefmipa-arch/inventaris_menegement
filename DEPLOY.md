@@ -133,6 +133,12 @@ mysql -u inventaris -p modern_lending < database/schema_only.sql
 >   ADD COLUMN can_borrow   TINYINT(1) NOT NULL DEFAULT 1,
 >   ADD COLUMN can_handover TINYINT(1) NOT NULL DEFAULT 1;
 >
+> -- Flag "bisa dilabeli" (22 September 2026) — barang lama otomatis = 1.
+> -- Barang kecil/permukaannya tidak rata (kabel, dongle wifi) diset 0 oleh
+> -- admin lewat halaman Tambah/Edit barang supaya tidak ikut tercetak.
+> ALTER TABLE items
+>   ADD COLUMN is_labelable TINYINT(1) NOT NULL DEFAULT 1 AFTER can_handover;
+>
 > -- Kode barang otomatis (11 September 2026) — barang lama dibiarkan NULL
 > ALTER TABLE items
 >   ADD COLUMN item_code VARCHAR(255) NULL AFTER sn,
