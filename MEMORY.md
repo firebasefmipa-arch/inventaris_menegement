@@ -403,6 +403,15 @@ JANGAN menulis `itemName: items.name` langsung — barang yang sudah dihapus
 akan tampil "Barang". Sudah diterapkan di 20 tempat (riwayat user/admin,
 PDF generate & regenerate, statistik).
 
+**Penting saat memakai `namaSql()`:** query WAJIB sudah menyertakan tabel
+pivot-nya (`transactionItems`/`handoverItems`) lewat `.from()` atau
+`.leftJoin()`. Kalau tidak, MySQL menolak dengan
+`ER_BAD_FIELD_ERROR: Unknown column 'transaction_items.item_name'` dan halaman
+gagal render — pernah terjadi di `/admin/transactions`.
+- Query dari tabel `transactions` (baris single-item lama) → pakai
+  `namaSqlLegacy(transactions.itemId)` (subquery, tanpa join).
+- Verifikasi: `npm run check:snapshot` (memeriksa 18 pemakaian).
+
 ### Status Transaksi
 ```
 pending_signature → pending_approval → active → returned
@@ -678,4 +687,5 @@ di menu data barang, dan riwayat ikut benar sendiri. Lihat bagian
 - [ ] Jika mengubah schema DB: tambahkan migrasi SQL manual di `database/` — JANGAN `drizzle-kit push` di produksi (bisa gagal pada index FK)
 - [ ] Jika mengubah alur auth: cek 5 lapis basePath tetap sinkron (bagian 6)
 - [ ] Semua migrasi DB sudah dijalankan (lihat bagian 8)
+- [ ] `npm run check:snapshot` → setiap pemakaian `namaSql*` punya tabel sumbernya (WAJIB jika menyentuh query riwayat/dokumen)
 - [ ] `public/uploads` sudah ter-bind-mount ke `/var/www/inventaris_uploads` (cek: `mountpoint -q public/uploads`) — urusan server, DEPLOY.md
