@@ -8,6 +8,11 @@
 > alur, env). **Urusan server (nginx, PM2, MySQL, gateway/domain, deploy)
 > BUKAN di sini** — semua ada di `DEPLOY.md` (baca itu untuk hal server).
 > Jika mengubah kode, file ini memberi konteks apa yang sedang dikerjakan.
+>
+> **Riwayat audit ada di `AUDIT.md`** — catatan waktu: temuan, bukti, commit
+> penutupnya. Sebelum mengubah sesuatu yang menyangkut keamanan/stok, baca
+> bagian "Temuan yang SENGAJA DIBIARKAN" di sana supaya tidak mengulang
+> pemeriksaan atau menghidupkan lagi masalah yang sudah sengaja ditunda.
 
 ---
 
