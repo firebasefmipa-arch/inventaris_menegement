@@ -1,5 +1,7 @@
 import { db } from "@/db";
-import { sql } from "drizzle-orm";
+import { items } from "@/db/schema";
+import { sql, and, eq, inArray } from "drizzle-orm";
+import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 
 /**
  * Cek apakah barang sedang "dipegang" — dirujuk transaksi peminjaman yang belum
@@ -48,6 +50,49 @@ export async function barangSedangDipakai(itemIds: number[]): Promise<BarangDipa
 
   const data = Array.isArray(rows) ? (rows[0] as unknown as BarangDipakai[]) : [];
   return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Hapus barang yang stok FISIKNYA habis — dipanggil otomatis setelah serah
+ * terima selesai.
+ *
+ * Kenapa pakai `quantity` dan bukan `availableQuantity`: barang yang sedang
+ * DIPINJAM juga bisa punya `availableQuantity` 0, padahal barangnya bakal
+ * kembali. Yang benar-benar habis cuma karena diserahkan, dan itu terlihat dari
+ * `quantity` (stok fisik) yang jadi 0.
+ *
+ * Hanya menerima id yang memang sudah bernilai 0 di database, jadi pemanggil
+ * boleh menyodorkan seluruh isi keranjang serah terima tanpa menyaring dulu.
+ *
+ * Pengaman: kalau ada pinjaman yang belum selesai, penghapusan DITAHAN —
+ * barangnya hilang berarti pengembaliannya mustahil. Secara normal ini tidak
+ * pernah terjadi (menyerahkan seluruh stok tidak mungkin selagi ada unit di
+ * tangan peminjam), tapi penjagaan ini gratis karena memakai jalur hapus yang
+ * sama dengan tombol hapus manual.
+ *
+ * Urutan penting: salin identitas ke baris riwayat DULU, baru hapus — kalau
+ * kebalik, nama barang di riwayat jadi kosong.
+ *
+ * @returns id barang yang benar-benar terhapus.
+ */
+export async function hapusBarangHabis(itemIds: number[]): Promise<number[]> {
+  const unik = [...new Set(itemIds)].filter((n) => Number.isInteger(n) && n > 0);
+  if (unik.length === 0) return [];
+
+  const habis = await db
+    .select({ id: items.id })
+    .from(items)
+    .where(and(inArray(items.id, unik), eq(items.quantity, 0)));
+  if (habis.length === 0) return [];
+
+  const ids = habis.map((h) => h.id);
+
+  const dipakai = await barangSedangDipakai(ids);
+  if (dipakai.length > 0) return [];
+
+  await snapshotSebelumHapus(ids);
+  await db.delete(items).where(inArray(items.id, ids));
+  return ids;
 }
 
 /** Susun pesan penolakan yang menyebut barang + nomor transaksinya. */
