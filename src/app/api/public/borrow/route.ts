@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transactions, items, users } from "@/db/schema";
+import { transactions, transactionItems, items, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
 
-// Endpoint lama untuk katalog publik (tanpa login). Katalog publik sudah
-// dihapus dari UI dan peminjaman sekarang wajib login lewat /api/pinjam.
-// Endpoint ini ditutup: wajib login + aturan yang sama dengan /api/pinjam
-// (NIM & tanda tangan elektronik wajib ada) supaya tidak jadi jalur bypass.
+// Endpoint lama untuk katalog publik. Katalog publik sudah tidak dipakai (tidak
+// ada menu/link ke sana), tapi alamatnya masih bisa dibuka langsung — jadi
+// aturannya DISAMAKAN dengan /api/pinjam supaya tidak jadi jalur bypass:
+//
+//   - status `pending_approval`: admin tetap harus menyetujui.
+//   - identitas peminjam diambil dari SESI, bukan dari body. Body hanya dipakai
+//     untuk data yang memang bukan identitas (keperluan, catatan, lokasi).
+//   - wajib NIM + tanda tangan elektronik.
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -18,9 +22,9 @@ export async function POST(request: NextRequest) {
 
     const body = await jsonBody(request);
     if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
-    const { itemId, name, department, email, phone, quantity, returnDate, notes } = body;
+    const { itemId, quantity, returnDate, notes, purpose, location } = body;
 
-    if (!itemId || !name || !department || !quantity || !returnDate || !phone) {
+    if (!itemId || !quantity || !returnDate) {
       return NextResponse.json(
         { error: "Data peminjaman tidak lengkap" },
         { status: 400 }
@@ -48,9 +52,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Wajib NIM + tanda tangan elektronik (sama seperti /api/pinjam)
+    // 2. Identitas dari SESI + wajib NIM & tanda tangan elektronik.
     const [userRow] = await db
-      .select({ nim: users.nim, signatureUrl: users.signatureUrl })
+      .select({
+        name: users.name,
+        email: users.email,
+        phone: users.phone,
+        nim: users.nim,
+        department: users.department,
+        signatureUrl: users.signatureUrl,
+      })
       .from(users)
       .where(eq(users.id, session.user.id))
       .limit(1);
@@ -61,38 +72,70 @@ export async function POST(request: NextRequest) {
     if (!userRow?.signatureUrl) {
       return NextResponse.json({ error: "SIGNATURE_REQUIRED" }, { status: 422 });
     }
+    if (!purpose?.trim()) {
+      return NextResponse.json({ error: "Keperluan peminjaman wajib diisi." }, { status: 400 });
+    }
 
-    // 3. Create transaction
-    const [transaction] = await db
+    const nama = (userRow.name || session.user.name || "").trim();
+    const phone = (userRow.phone || "").trim();
+    if (!nama || !phone) {
+      return NextResponse.json(
+        { error: "Nama dan nomor HP wajib ada di profil Anda." },
+        { status: 400 }
+      );
+    }
+
+    const returnDateObj = new Date(returnDate);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (isNaN(returnDateObj.getTime()) || returnDateObj < today) {
+      return NextResponse.json({ error: "Tanggal kembali tidak valid." }, { status: 400 });
+    }
+
+    // 3. Create transaction — pending_approval, sama seperti /api/pinjam.
+    const [{ id: txId }] = await db
       .insert(transactions)
       .values({
         userId: session.user.id,
-        itemId,
-        borrowerName: name,
-        borrowerDepartment: department,
-        borrowerEmail: email || null,
+        itemId: null,
+        borrowerName: nama,
+        borrowerDepartment: (userRow.department || "").trim() || null,
+        borrowerEmail: userRow.email || null,
         borrowerPhone: phone,
+        borrowerNim: userRow.nim,
+        borrowerLocation: location?.trim() || null,
         quantity,
-        expectedReturnDate: new Date(returnDate),
-        notes: notes || null,
-        status: "active",
+        expectedReturnDate: returnDateObj,
+        purpose: purpose.trim(),
+        notes: notes?.trim() || null,
+        status: "pending_approval",
       })
       .$returningId();
 
-    // 4. Update item availability
-    const newAvailable = item.availableQuantity - quantity;
-    const newStatus = newAvailable === 0 ? "borrowed" : "available";
+    await db.insert(transactionItems).values({
+      transactionId: txId,
+      itemId,
+      quantity,
+      notes: notes?.trim() || null,
+      itemName: item.name,
+      itemCode: item.itemCode ?? null,
+      itemInventoryNumber: item.inventoryNumber ?? null,
+    });
 
+    // 4. Tahan stok
+    const newAvailable = item.availableQuantity - quantity;
     await db
       .update(items)
       .set({
         availableQuantity: newAvailable,
-        status: newStatus,
+        status: newAvailable === 0 ? "borrowed" : "available",
         updatedAt: new Date(),
       })
       .where(eq(items.id, itemId));
 
-    return NextResponse.json({ success: true, transaction }, { status: 201 });
+    return NextResponse.json(
+      { success: true, transactionId: txId, code: `PB-${String(txId).padStart(4, "0")}`, status: "pending_approval" },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("POST /api/public/borrow error:", error);
     return NextResponse.json(

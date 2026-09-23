@@ -5,6 +5,7 @@ import { inArray } from "drizzle-orm";
 import { auth } from "@/auth";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 import { jsonBody } from "@/lib/json-body";
+import { barangSedangDipakai, pesanBarangDipakai } from "@/lib/item-in-use";
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,10 +25,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── F1: tolak seluruh permintaan kalau ADA barang yang masih dipegang ──
+    // Sebagian-lalu-berhenti bikin admin bingung barang mana yang jadi terhapus.
+    const angka = ids.map((n: any) => Number(n)).filter((n: number) => Number.isInteger(n) && n > 0);
+    if (angka.length === 0) {
+      return NextResponse.json({ error: "Invalid or empty IDs array" }, { status: 400 });
+    }
+    const dipakai = await barangSedangDipakai(angka);
+    if (dipakai.length > 0) {
+      return NextResponse.json({ error: pesanBarangDipakai(dipakai) }, { status: 400 });
+    }
+
     // Salin identitas barang terakhir ke baris riwayat SEBELUM barang dihapus,
     // supaya riwayat yang terdampak tetap menampilkan nama & data barangnya.
-    await snapshotSebelumHapus(ids);
-    await db.delete(items).where(inArray(items.id, ids));
+    await snapshotSebelumHapus(angka);
+    await db.delete(items).where(inArray(items.id, angka));
 
     return NextResponse.json({ message: "Items deleted successfully" });
   } catch (error) {

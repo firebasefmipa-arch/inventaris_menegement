@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
 import { normalizeLocation } from "@/lib/locations";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
+import { barangSedangDipakai, pesanBarangDipakai } from "@/lib/item-in-use";
 
 // Panel admin saja — halaman user membaca DB langsung (server component).
 async function requireAdmin() {
@@ -84,6 +85,22 @@ export async function PUT(
       );
     }
 
+    // ── E1: unit yang sedang dipegang peminjam tidak boleh "hilang" ──
+    // quantity - availableQuantity = jumlah unit yang keluar (dipinjam/diserahkan
+    // tapi belum dikembalikan). Menurunkan quantity di bawah angka itu membuat
+    // unit tersebut lenyap dari pembukuan.
+    const unitDipegang = existing.quantity - existing.availableQuantity;
+    if (quantity !== undefined && Number(quantity) < unitDipegang) {
+      return NextResponse.json(
+        {
+          error:
+            `Jumlah tidak boleh kurang dari ${unitDipegang} unit — sebanyak itu sedang ` +
+            `dipinjam/di luar. Kembalikan atau selesaikan transaksinya dulu.`,
+        },
+        { status: 400 }
+      );
+    }
+
     await db
       .update(items)
       .set({
@@ -148,6 +165,13 @@ export async function DELETE(
         { error: "Item tidak ditemukan" },
         { status: 404 }
       );
+    }
+
+    // ── F1: jangan hapus barang yang unitnya masih di tangan orang ──
+    // Menghapusnya membuat transaksinya menggantung dan pengembalian mustahil.
+    const dipakai = await barangSedangDipakai([itemId]);
+    if (dipakai.length > 0) {
+      return NextResponse.json({ error: pesanBarangDipakai(dipakai) }, { status: 400 });
     }
 
     // Salin identitas barang terakhir ke baris riwayat SEBELUM barang dihapus,

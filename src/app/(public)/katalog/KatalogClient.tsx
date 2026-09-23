@@ -31,14 +31,12 @@ export function KatalogClient({ items, categories, currentSearch, currentCategor
   
   // Borrow form state
   const [loading, setLoading] = useState(false);
+  // Identitas peminjam TIDAK lagi diisi di sini — diambil server dari akun yang
+  // login. Form hanya menanyakan hal yang memang bukan identitas.
   const [form, setForm] = useState({
-    name: "",
-    department: "",
-    email: "",
-    phone: "",
     quantity: "1",
     returnDate: "",
-    notes: "",
+    purpose: "",
   });
 
   const applyFilter = (key: string, value: string) => {
@@ -57,18 +55,14 @@ export function KatalogClient({ items, categories, currentSearch, currentCategor
     
     setLoading(true);
     try {
-      // Create borrower or get existing one by name/email logic inside the API
-      // Since our POST /api/borrowers creates one, we'll call that first, then create the transaction.
-      // Alternatively, we could create a specialized endpoint for public borrow requests.
-      // Let's create a specialized endpoint or just make two calls.
-      
       const res = await fetch("/api/public/borrow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           itemId: selectedItem.id,
-          ...form,
-          quantity: parseInt(form.quantity)
+          purpose: form.purpose,
+          quantity: parseInt(form.quantity),
+          returnDate: form.returnDate,
         }),
       });
 
@@ -81,7 +75,7 @@ export function KatalogClient({ items, categories, currentSearch, currentCategor
       setSelectedItem(null);
       
       // Reset form but keep user details for convenience
-      setForm(f => ({ ...f, quantity: "1", returnDate: "", notes: "" }));
+      setForm(f => ({ ...f, quantity: "1", returnDate: "", purpose: "" }));
       router.refresh();
       
     } catch (err) {
@@ -215,50 +209,10 @@ export function KatalogClient({ items, categories, currentSearch, currentCategor
               </div>
 
               <form onSubmit={handleBorrow} className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap *</label>
-                    <input
-                      type="text"
-                      required
-                      value={form.name}
-                      onChange={e => setForm({...form, name: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Departemen/Divisi *</label>
-                    <input
-                      type="text"
-                      required
-                      value={form.department}
-                      onChange={e => setForm({...form, department: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={e => setForm({...form, email: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp *</label>
-                    <input
-                      type="text"
-                      required
-                      value={form.phone}
-                      onChange={e => setForm({...form, phone: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                </div>
+                <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                  Data peminjam otomatis diambil dari akun yang Anda pakai. Pastikan NIM dan
+                  tanda tangan elektronik sudah diisi di halaman <strong>Profil</strong>.
+                </p>
 
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
@@ -290,11 +244,12 @@ export function KatalogClient({ items, categories, currentSearch, currentCategor
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tujuan Peminjaman</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Keperluan Peminjaman *</label>
                   <textarea
                     rows={2}
-                    value={form.notes}
-                    onChange={e => setForm({...form, notes: e.target.value})}
+                    required
+                    value={form.purpose}
+                    onChange={e => setForm({...form, purpose: e.target.value})}
                     placeholder="Deskripsikan keperluan peminjaman barang ini..."
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all resize-none"
                   />
