@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { toBool } from "@/lib/to-bool";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
-import { normalizeLocation } from "@/lib/locations";
+import { normalizeLocation, lokasiMirip } from "@/lib/locations";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 import { barangSedangDipakai, pesanBarangDipakai } from "@/lib/item-in-use";
 
@@ -122,7 +122,9 @@ export async function PUT(
             existing.availableQuantity + (quantity - existing.quantity)
           ),
         }),
-        ...(location !== undefined && { location: normalizeLocation(location) || null }),
+        ...(location !== undefined && {
+          location: normalizeLocation(lokasiMirip(location) || location) || null,
+        }),
         ...(imageUrl !== undefined && { imageUrl }),
         ...(status !== undefined && { status }),
         ...(canBorrow !== undefined && { canBorrow: toBool(canBorrow) }),

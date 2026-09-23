@@ -4,8 +4,10 @@ import { read, utils } from "xlsx";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { auth } from "@/auth";
+import { LOCATION_CODES, normalizeLocation, lokasiMirip } from "@/lib/locations";
 import { resolvePrefix, nextSequence, formatCode } from "@/lib/item-code";
 import { IMPORT_COLUMNS, normalizeHeader, pickColumn } from "@/lib/item-import";
+import { formDataAman } from "@/lib/json-body";
 
 /**
  * Kunci identitas barang untuk mendeteksi duplikat.
@@ -43,7 +45,10 @@ export async function POST(request: NextRequest) {
     if (!session?.user || (role !== "admin" && role !== "super_admin"))
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const formData = await request.formData();
+    const formData = await formDataAman(request);
+    if (!formData) {
+      return NextResponse.json({ error: "Berkas tidak ditemukan" }, { status: 400 });
+    }
     const file = formData.get("file");
 
     if (!file || typeof file === "string") {
@@ -58,10 +63,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Sheet pertama tidak ditemukan" }, { status: 400 });
     }
 
+    // raw: true → ambil NILAI selnya, bukan tampilan di layar.
+    // Nomor inventaris UII 12 digit (409010025366) ditampilkan Excel sebagai
+    // "4.0901E+11" kalau dibaca sebagai teks — angkanya rusak. Nilai mentah
+    // tetap utuh karena selnya bertipe angka.
     const parsed = utils.sheet_to_json<Record<string, unknown>>(sheet, {
       defval: null,
-      raw: false,
+      raw: true,
     });
+
+    // Ambil teks tanpa merusak angka panjang: 409010025366 → "409010025366",
+    // bukan "4.0901E+11". Number() dikembalikan ke String() utuh.
+    const keTeks = (v: unknown): string | null => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === "number") return Number.isFinite(v) ? String(v) : null;
+      const s = String(v).trim();
+      return s || null;
+    };
 
     const col = (nama: string) =>
       IMPORT_COLUMNS.find((c) => c.header === nama)!.aliases;
@@ -115,10 +133,7 @@ export async function POST(request: NextRequest) {
       const norm: Record<string, unknown> = {};
       for (const k in row) norm[normalizeHeader(k)] = row[k];
 
-      const teks = (nama: string) => {
-        const v = pickColumn(norm, col(nama));
-        return v === null ? null : String(v).trim() || null;
-      };
+      const teks = (nama: string) => keTeks(pickColumn(norm, col(nama)));
 
       const name = teks("Nama Barang");
       if (!name) {
@@ -130,7 +145,21 @@ export async function POST(request: NextRequest) {
 
       const inventoryNumber = teks("No. Inv DTI");
       const sn = teks("SN");
-      const location = teks("Lokasi");
+      let location = teks("Lokasi");
+
+      // Salah ketik nama lokasi ("Devisi" vs "Divisi") → pakai yang resmi,
+      // supaya kode barang tidak bercabang (FMIPA-DTI vs FMIPA-TI).
+      const mirip = location ? lokasiMirip(location) : null;
+      if (mirip) {
+        warnings.push(
+          `Baris ${barisKe} ("${name}"): lokasi "${location}" tidak ada di daftar resmi — dipakai "${mirip}".`
+        );
+        location = mirip;
+      } else if (location && !LOCATION_CODES[normalizeLocation(location)]) {
+        warnings.push(
+          `Baris ${barisKe} ("${name}"): lokasi "${location}" tidak ada di daftar resmi — dianggap lokasi baru.`
+        );
+      }
 
       // Duplikat: sudah ada di database, atau kembar di file ini.
       const kunci = kunciBarang(name, inventoryNumber, sn, location);

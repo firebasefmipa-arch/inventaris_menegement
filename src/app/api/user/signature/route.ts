@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { formDataAman } from "@/lib/json-body";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
@@ -32,7 +33,8 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const formData = await req.formData();
+    const formData = await formDataAman(req);
+    if (!formData) return NextResponse.json({ error: "Berkas tidak ditemukan" }, { status: 400 });
     const file = formData.get("file") as File | null;
 
     if (!file) return NextResponse.json({ error: "File tidak ditemukan" }, { status: 400 });

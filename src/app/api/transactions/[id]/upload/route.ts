@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { formDataAman } from "@/lib/json-body";
 import { auth } from "@/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
@@ -27,7 +28,8 @@ export async function POST(
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    const formData = await request.formData();
+    const formData = await formDataAman(request);
+    if (!formData) return NextResponse.json({ error: "Berkas tidak ditemukan" }, { status: 400 });
     const file = formData.get("file") as File | null;
 
     if (!file) {

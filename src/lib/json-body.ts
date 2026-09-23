@@ -20,3 +20,23 @@ export async function jsonBody<T = any>(request: Request): Promise<T | null> {
     return null;
   }
 }
+
+/**
+ * Sama seperti jsonBody(), untuk unggahan berkas.
+ *
+ * `await request.formData()` melempar TypeError kalau Content-Type bukan
+ * multipart/form-data — dan di dalam try/catch route itu jadi 500 "server
+ * rusak", padahal berkasnya cuma tidak terkirim. Ini yang terjadi kalau
+ * middleware/proxy membuang body, atau klien mengirim tanpa berkas.
+ *
+ * Pakai:
+ *   const form = await formDataAman(request);
+ *   if (!form) return NextResponse.json({ error: "Berkas tidak ditemukan" }, { status: 400 });
+ */
+export async function formDataAman(request: Request): Promise<FormData | null> {
+  try {
+    return await request.formData();
+  } catch {
+    return null;
+  }
+}

@@ -99,3 +99,51 @@ export function buildItemCode(location: string, year: number, seq: number, taken
   const code = locationCode(location, taken);
   return `FMIPA-${code}-${year}-${String(seq).padStart(3, "0")}`;
 }
+
+/** Jarak edit (Levenshtein) dua teks — untuk mendeteksi salah ketik. */
+function jarakEdit(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,               // hapus
+        cur[j - 1] + 1,            // sisip
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1) // ganti
+      );
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+/**
+ * Cari lokasi resmi yang paling mirip dengan yang diketik (salah ketik).
+ *
+ * "Devisi Teknologi Informasi" → "Divisi Teknologi Informasi" (beda 1 huruf).
+ * Ambang 15% panjang: cukup longgar untuk typo, cukup ketat supaya dua lokasi
+ * yang memang berbeda tidak tertukar. Kalau hasilnya seri, tidak menebak.
+ */
+export function lokasiMirip(raw: string): string | null {
+  const input = normalizeLocation(raw);
+  if (!input) return null;
+  if (LOCATION_CODES[input]) return null; // sudah resmi, tidak perlu ditebak
+
+  const a = input.toLowerCase();
+
+  // Cari kandidat terdekat. Kalau ada dua yang sama dekatnya, jangan menebak.
+  let kandidat: string[] = [];
+  let minimum = Infinity;
+  for (const opsi of LOCATION_OPTIONS) {
+    const jarak = jarakEdit(a, opsi.toLowerCase());
+    if (jarak / Math.max(opsi.length, 1) <= 0.15) {
+      if (jarak < minimum) { minimum = jarak; kandidat = [opsi]; }
+      else if (jarak === minimum) kandidat.push(opsi);
+    }
+  }
+
+  return kandidat.length === 1 ? kandidat[0] : null;
+}
