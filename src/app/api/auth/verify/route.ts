@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, verificationTokens } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { jsonBody } from "@/lib/json-body";
 
 export async function POST(req: Request) {
   try {
-    const { email, token } = await req.json();
+    const body = await jsonBody<{ email?: string; token?: string }>(req);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
+    const { email, token } = body;
 
     if (!email || !token) {
       return NextResponse.json(

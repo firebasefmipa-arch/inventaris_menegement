@@ -4,6 +4,7 @@ import { handovers, handoverItems, items, users } from "@/db/schema";
 import { eq, desc, inArray, and } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
@@ -103,7 +104,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
+    const body = await jsonBody(req);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const { cart, receiverName, receiverNim, unitName, department, phone, location, purpose, notes } = body;
 
     if (!receiverName?.trim() || !department?.trim()) {

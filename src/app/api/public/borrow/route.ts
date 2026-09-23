@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { transactions, items, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 
 // Endpoint lama untuk katalog publik (tanpa login). Katalog publik sudah
 // dihapus dari UI dan peminjaman sekarang wajib login lewat /api/pinjam.
@@ -15,7 +16,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const { itemId, name, department, email, phone, quantity, returnDate, notes } = body;
 
     if (!itemId || !name || !department || !quantity || !returnDate || !phone) {

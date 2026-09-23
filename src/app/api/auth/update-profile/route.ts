@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { jsonBody } from "@/lib/json-body";
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +16,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const { phone, department } = await req.json();
+    const body = await jsonBody<{ phone?: string; department?: string }>(req);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
+    const { phone, department } = body;
 
     if (!phone || !department) {
       return NextResponse.json(

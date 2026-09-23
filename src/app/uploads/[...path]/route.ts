@@ -53,7 +53,13 @@ export async function GET(
     const [folder] = segmen;
     let milikSendiri = false;
 
-    if (folder === "signed_forms" || folder === "pending") {
+    // Folder dokumen (bukan TTD). Ada TIGA: `pending` sebelum disetujui,
+    // `signed_forms` setelah pinjam disetujui, dan `handovers` setelah serah
+    // terima disetujui. Lupa mendaftarkan salah satunya membuat pemiliknya
+    // sendiri kena 403 saat membuka dokumennya.
+    const FOLDER_DOKUMEN = ["signed_forms", "pending", "handovers"];
+
+    if (FOLDER_DOKUMEN.includes(folder)) {
       // Dokumen bisa milik transaksi peminjaman atau serah terima.
       const [tx] = await db
         .select({ userId: transactions.userId })

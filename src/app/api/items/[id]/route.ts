@@ -4,6 +4,7 @@ import { items } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { toBool } from "@/lib/to-bool";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 import { normalizeLocation } from "@/lib/locations";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 
@@ -66,7 +67,10 @@ export async function PUT(
     const itemId = idValid(id);
     if (itemId === null)
       return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) {
+      return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
+    }
     const { name, category, description, quantity, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } =
       body;
     const [existing] = await db

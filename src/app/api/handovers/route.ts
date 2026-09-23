@@ -5,6 +5,7 @@ import { eq, desc, inArray, and } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { uploadPath } from "@/lib/upload-dir";
+import { jsonBody } from "@/lib/json-body";
 
 // GET /api/handovers — daftar serah terima milik user yang login
 export async function GET(req: NextRequest) {
@@ -84,7 +85,8 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = await req.json();
+    const body = await jsonBody(req);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const { cart, purpose, notes } = body;
     const user = session.user as any;
 

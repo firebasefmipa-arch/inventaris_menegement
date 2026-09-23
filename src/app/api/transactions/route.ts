@@ -4,6 +4,7 @@ import { transactions, transactionItems, items } from "@/db/schema";
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { namaSql, namaSqlLegacy } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,7 +100,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const {
       cart,
       borrowerName,

@@ -8,6 +8,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { deleteUploadByUrl } from "@/lib/delete-upload";
 import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
+import { jsonBody } from "@/lib/json-body";
 
 export async function POST(
   request: NextRequest,
@@ -23,7 +24,8 @@ export async function POST(
     const txId = parseInt(id, 10);
     if (isNaN(txId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
 
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const { action, rejectionReason } = body;
 
     if (action !== "approve" && action !== "reject")

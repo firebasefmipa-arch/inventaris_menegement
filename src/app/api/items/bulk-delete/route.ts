@@ -4,6 +4,7 @@ import { items } from "@/db/schema";
 import { inArray } from "drizzle-orm";
 import { auth } from "@/auth";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
+import { jsonBody } from "@/lib/json-body";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +13,8 @@ export async function POST(request: NextRequest) {
     if (!session?.user || (role !== "admin" && role !== "super_admin"))
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const { ids } = body;
 
     if (!Array.isArray(ids) || ids.length === 0) {

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { handovers, handoverItems, items, users } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
@@ -27,8 +28,9 @@ export async function PATCH(
     const hvId = parseInt(id, 10);
     if (isNaN(hvId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
 
-    const body = await req.json();
-    const newItems: { itemId: number; quantity: number; notes?: string }[] = body.items;
+    const body = await jsonBody<{ items?: { itemId: number; quantity: number; notes?: string }[] }>(req);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
+    const newItems = body.items;
 
     if (!Array.isArray(newItems) || newItems.length === 0)
       return NextResponse.json({ error: "Minimal satu barang wajib ada" }, { status: 400 });

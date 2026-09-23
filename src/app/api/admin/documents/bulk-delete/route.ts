@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { unlink } from "fs/promises";
 import path from "path";
 import { uploadPath } from "@/lib/upload-dir";
+import { jsonBody } from "@/lib/json-body";
 
 function isSafePath(folder: string, filename: string): boolean {
   const allowedFolders = ["signed_forms", "handovers"];
@@ -22,7 +23,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { files } = await req.json();
+    const body = await jsonBody<{ files?: { folder: string; filename: string }[] }>(req);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
+    const { files } = body;
 
     if (!Array.isArray(files) || files.length === 0) {
       return NextResponse.json({ error: "Tidak ada file yang dipilih" }, { status: 400 });

@@ -6,6 +6,7 @@ import { like } from "drizzle-orm";
 import { readdir, rename } from "fs/promises";
 import path from "path";
 import { uploadPath } from "@/lib/upload-dir";
+import { jsonBody } from "@/lib/json-body";
 
 /**
  * POST /api/admin/documents/rename-legacy

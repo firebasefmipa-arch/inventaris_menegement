@@ -4,6 +4,7 @@ import { items } from "@/db/schema";
 import { eq, like, or, and, gt } from "drizzle-orm";
 import { toBool } from "@/lib/to-bool";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 import { generateItemCode } from "@/lib/item-code";
 
 // Semua endpoint /api/items adalah panel admin. Halaman user membaca DB
@@ -82,7 +83,10 @@ export async function POST(request: NextRequest) {
     const denied = await requireAdmin();
     if (denied) return denied;
 
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) {
+      return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
+    }
     const { name, category, description, quantity, location, imageUrl, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } = body;
 
     if (!name || !category) {

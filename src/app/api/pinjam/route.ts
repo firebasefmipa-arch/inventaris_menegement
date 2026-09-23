@@ -7,6 +7,7 @@ import { generateBorrowingPDF } from "@/lib/pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { uploadPath } from "@/lib/upload-dir";
+import { jsonBody } from "@/lib/json-body";
 
 type CartItem = { itemId: number; quantity: number; notes?: string };
 
@@ -15,7 +16,8 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const borrowerInput = body.borrower || {};
 
     // ── Aturan data diri (double role) ──

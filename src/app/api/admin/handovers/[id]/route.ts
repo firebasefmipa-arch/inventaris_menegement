@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { handovers, handoverItems, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
@@ -24,7 +25,8 @@ export async function PUT(
     const hvId = parseInt(id, 10);
     if (isNaN(hvId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
 
-    const body = await req.json();
+    const body = await jsonBody(req);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const { action, rejectionReason } = body;
 
     if (!action || !["approve", "reject"].includes(action))

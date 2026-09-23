@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { jsonBody } from "@/lib/json-body";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,9 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, phone, nim, department } = await req.json();
+    const body = await jsonBody<{ name?: string; phone?: string; nim?: string; department?: string }>(req);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
+    const { name, phone, nim, department } = body;
 
     if (!name?.trim() || !phone?.trim() || !nim?.trim() || !department?.trim()) {
       return NextResponse.json(

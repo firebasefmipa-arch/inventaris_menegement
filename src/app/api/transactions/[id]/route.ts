@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq, and, count } from "drizzle-orm";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 
 export async function PUT(
   request: NextRequest,
@@ -22,7 +23,8 @@ export async function PUT(
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const { status, notes } = body;
 
     const [transaction] = await db

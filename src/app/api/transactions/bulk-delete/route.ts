@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { inArray, eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { jsonBody } from "@/lib/json-body";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +13,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await jsonBody(request);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     const { ids } = body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
