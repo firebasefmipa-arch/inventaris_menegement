@@ -733,6 +733,32 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
 
     Termudah dicek langsung: buka modal di mode gelap — kotak berwarna terang = kelasnya belum dipasangkan.
 
+15. **Semua route mutasi WAJIB pakai `jsonBody()` untuk baca body** — `src/lib/json-body.ts`. `await request.json()` melempar `SyntaxError` kalau body kosong / JSON rusak; karena hampir semua route membungkus isinya dengan `try/catch`, error itu berubah jadi **500 "Terjadi kesalahan"** yang menyesatkan (harusnya 400). Dulu 20 route kena. Pola yang benar:
+
+    ```ts
+    const body = await jsonBody(request);
+    if (!body) return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
+    ```
+
+    Jangan pakai `request.json()` telanjang lagi. Satu-satunya pengecualian: route yang memang butuh `formData()` (upload TTD/berkas).
+
+16. **Barang yang "sedang dipegang" tidak boleh dihapus / diramping** — `src/lib/item-in-use.ts` (`barangSedangDipakai()` + `pesanBarangDipakai()`).
+
+    Definisi "dipegang": dirujuk transaksi berstatus `pending_signature`/`pending_approval`/`active`/`overdue`, ATAU serah terima `pending_signature`/`pending_approval`.
+
+    - `DELETE /api/items/[id]` dan `POST /api/items/bulk-delete` → **400** + nomor transaksinya. Hapus massal ditolak SELURUHNYA kalau ada satu saja yang dipegang (tidak sebagian-lalu-berhenti).
+    - `PUT /api/items/[id]` → `quantity` tidak boleh lebih kecil dari `quantity - availableQuantity` (= unit yang sedang keluar) → **400** + angkanya.
+
+    **Penting:** barang `quantity = 0` karena habis diserahterimakan (transaksinya sudah `completed`/`returned`) TETAP bisa dihapus seperti biasa — nomor 12 tidak dilanggar.
+
+17. **`/api/public/borrow` = endpoint lama katalog, aturannya disamakan dengan `/api/pinjam`** — halaman `/katalog` sudah tidak punya menu/link ke sana, tapi alamatnya masih bisa dibuka langsung, jadi tetap dijaga:
+
+    - status `pending_approval` (BUKAN `active`) — admin tetap menyetujui
+    - identitas peminjam dari **SESI**, bukan body (body hanya `itemId`, `quantity`, `returnDate`, `purpose`, `location`)
+    - wajib NIM + TTD
+
+    Kalau menambah field identitas di body endpoint ini, itu regresi keamanan. Form di `KatalogClient.tsx` sengaja tidak lagi menanyakan nama/divisi/email/HP.
+
 ---
 
 ## 11. Fitur yang Belum Diimplementasi (Backlog)
