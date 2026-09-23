@@ -205,13 +205,13 @@ Ditutup: `42629fd` — validasi `Number.isInteger()` lebih dulu → 400
 "Jumlah harus berupa bilangan bulat 0 atau lebih." Jalur `/api/pinjam` sudah
 aman (`Math.max(1, ...)`).
 
-### #5.6 — Endpoint hapus peminjaman massal: yatim & tanpa pemakai — SEDANG
+### #5.6 — Endpoint hapus peminjaman massal: tanpa pemakai & meninggalkan sisa — SELESAI
 
 Bukti:
 
 ```
 pemanggil dari UI (seluruh src, termasuk superadmin) : 0
-menghapus 1 transaksi -> baris transaction_items TETAP ADA (yatim)
+menghapus 1 transaksi -> baris transaction_items TETAP ADA (baris sisa)
 informasi_schema: FK hanya untuk tabel account & session
 schema.ts mendeklarasikan references(... onDelete:"cascade")  <- deklarasi saja
 komentar bulk-delete/route.ts:85 "cascade ke transaction_items" <- tidak ada
