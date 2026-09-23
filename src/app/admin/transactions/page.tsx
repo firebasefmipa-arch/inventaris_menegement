@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { transactions, items, transactionItems } from "@/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { namaSql, namaSqlLegacy } from "@/lib/item-snapshot";
+import { sqlTerlambat } from "@/lib/tanggal";
 import { TransactionsClient } from "./TransactionsClient";
 
 export const dynamic = "force-dynamic";
@@ -16,18 +17,8 @@ export default async function TransactionsPage({
 
   const conditions = [];
   if (statusFilter === "overdue") {
-    // "Terlambat" dihitung dari TANGGAL — status "overdue" tak pernah ditulis
-    // kode. Mencakup yang belum kembali & lewat tenggat, PLUS yang sudah
-    // kembali tapi dulu lewat tenggat (dibandingkan di zona WIB).
-    conditions.push(sql`
-      (
-        (${transactions.status} = 'active' AND ${transactions.expectedReturnDate} < NOW())
-        OR
-        (${transactions.status} = 'returned'
-          AND DATE(CONVERT_TZ(${transactions.expectedReturnDate}, '+00:00', '+07:00'))
-            < DATE(CONVERT_TZ(${transactions.actualReturnDate}, '+00:00', '+07:00')))
-      )
-    `);
+    // SATU definisi: lihat sqlTerlambat() di src/lib/tanggal.ts.
+    conditions.push(sqlTerlambat());
   } else if (statusFilter) {
     conditions.push(
       eq(transactions.status, statusFilter as any)

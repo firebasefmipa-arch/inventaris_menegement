@@ -85,12 +85,27 @@ export async function PUT(
       );
     }
 
+    // ── Jumlah harus bilangan bulat ──
+    // "abc" → Number() = NaN, dan NaN < apa pun = false sehingga lolos
+    // penjagaan di bawah, lalu diteruskan ke database dan meledak jadi 500.
+    let quantityNum: number | undefined;
+    if (quantity !== undefined) {
+      const n = Number(quantity);
+      if (!Number.isInteger(n) || n < 0) {
+        return NextResponse.json(
+          { error: "Jumlah harus berupa bilangan bulat 0 atau lebih." },
+          { status: 400 }
+        );
+      }
+      quantityNum = n;
+    }
+
     // ── E1: unit yang sedang dipegang peminjam tidak boleh "hilang" ──
     // quantity - availableQuantity = jumlah unit yang keluar (dipinjam/diserahkan
     // tapi belum dikembalikan). Menurunkan quantity di bawah angka itu membuat
     // unit tersebut lenyap dari pembukuan.
     const unitDipegang = existing.quantity - existing.availableQuantity;
-    if (quantity !== undefined && Number(quantity) < unitDipegang) {
+    if (quantityNum !== undefined && quantityNum < unitDipegang) {
       return NextResponse.json(
         {
           error:
@@ -112,14 +127,14 @@ export async function PUT(
         ...(assetNumber !== undefined && { assetNumber }),
         ...(lastCheckDate !== undefined && { lastCheckDate }),
         ...(condition !== undefined && { condition }),
-        ...(quantity !== undefined && {
-          quantity,
+        ...(quantityNum !== undefined && {
+          quantity: quantityNum,
           // availableQuantity ikut bertambah/berkurang sebesar selisih perubahan quantity
           // Contoh: quantity lama 5, baru 8 → availableQuantity +3
           // Contoh: quantity lama 5, baru 3 → availableQuantity -2 (tidak boleh < 0)
           availableQuantity: Math.max(
             0,
-            existing.availableQuantity + (quantity - existing.quantity)
+            existing.availableQuantity + (quantityNum - existing.quantity)
           ),
         }),
         ...(location !== undefined && {

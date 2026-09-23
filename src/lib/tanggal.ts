@@ -5,10 +5,12 @@
  * dilihat user bisa geser sehari (klik "Kembalikan" jam 07:00 WIB = 00:00 UTC).
  * Semua tampilan tanggal pakai helper ini supaya konsisten.
  *
- * Catatan: ini hanya untuk TAMPILAN. Nilai di DB tetap apa adanya (mysql2
- * menulis waktu UTC), dan perhitungan "terlambat" masih pakai NOW() server —
- * lihat catatan di MEMORY.md.
+ * Perhitungan "terlambat" JUGA pakai kalender WIB — SATU definisi di
+ * `sqlTerlambat()` di bawah. Jangan tulis ulang predikatnya di route/halaman
+ * lain: dulu ada tiga definisi berbeda dan ketiganya tidak sepakat.
  */
+
+import { sql } from "drizzle-orm";
 
 const TZ = "Asia/Jakarta";
 
@@ -71,4 +73,23 @@ export function hariTerlambat(
   const b = ke(dikembalikan);
   if (a === null || b === null) return 0;
   return Math.max(0, Math.round((b - a) / 86400000));
+}
+
+/**
+ * SATU-SATUNYA definisi "terlambat" untuk query database.
+ *
+ * Aturannya sama dengan hariTerlambat(): bandingkan TANGGAL kalender WIB,
+ * bukan jam. Wajib dipakai di semua query yang menyaring/menghitung terlambat
+ * supaya angka kartu, daftar, dan riwayat tidak berbeda pendapat.
+ *
+ * "Kapan dikembalikan": actual_return_date kalau ada, kalau belum ada ya
+ * SEKARANG (masih dipinjam). Jadi satu rumus menangani dua keadaan sekaligus —
+ * belum kembali & lewat tenggat, atau sudah kembali tapi dulu telat.
+ *
+ * Tanggal dikonversi ke WIB dulu (+07:00). Tanpa itu, transaksi yang kembali
+ * jam 04:00 WIB (= 21:00 UTC hari sebelumnya) terbaca telat sehari.
+ */
+export function sqlTerlambat() {
+  const wib = (kolom: string) => sql.raw(`DATE(CONVERT_TZ(${kolom}, '+00:00', '+07:00'))`);
+  return sql`${wib("expected_return_date")} < ${wib("COALESCE(actual_return_date, NOW())")}`;
 }

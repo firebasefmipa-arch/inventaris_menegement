@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { items, transactions } from "@/db/schema";
 import { eq, and, sql, count, gt } from "drizzle-orm";
 import { auth } from "@/auth";
+import { sqlTerlambat } from "@/lib/tanggal";
 
 export async function GET() {
   try {
@@ -35,9 +36,7 @@ export async function GET() {
     const [overdueTransactions] = await db
       .select({ count: count() })
       .from(transactions)
-      .where(
-        sql`${transactions.status} = 'active' AND ${transactions.expectedReturnDate} < NOW()`
-      );
+      .where(sqlTerlambat());
 
     const categoriesResult = await db
       .select({

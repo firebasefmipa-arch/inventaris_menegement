@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
 import { eq, and, count, inArray, sql } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
+import { sqlTerlambat } from "@/lib/tanggal";
 
 export const dynamic = "force-dynamic";
 
@@ -44,13 +45,7 @@ export async function GET() {
     const [{ overdue }] = await db
       .select({ overdue: count() })
       .from(transactions)
-      .where(
-        and(
-          eq(transactions.userId, userId),
-          eq(transactions.status, "active"),
-          sql`${transactions.expectedReturnDate} < NOW()`
-        )
-      );
+      .where(and(eq(transactions.userId, userId), sqlTerlambat()));
 
     // ── Segera dikembalikan: aktif yang sudah lewat tenggat ATAU <= 24 jam. ──
     const dueSoonRaw = await db

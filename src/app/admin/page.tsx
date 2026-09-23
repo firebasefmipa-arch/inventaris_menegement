@@ -14,6 +14,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { DueSoonCard } from "@/components/DueSoonCard";
+import { sqlTerlambat } from "@/lib/tanggal";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ async function getStats() {
     // ditulis oleh kode mana pun, jadi menghitungnya dari status selalu 0.
     db.select({
       active:  count(sql`CASE WHEN ${transactions.status} = 'active' THEN 1 END`),
-      overdue: count(sql`CASE WHEN ${transactions.status} = 'active' AND ${transactions.expectedReturnDate} < NOW() THEN 1 END`),
+      overdue: count(sql`CASE WHEN ${sqlTerlambat()} THEN 1 END`),
     })
     .from(transactions),
 

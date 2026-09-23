@@ -5,6 +5,7 @@ import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { namaSql, namaSqlLegacy } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
+import { sqlTerlambat } from "@/lib/tanggal";
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,9 +21,8 @@ export async function GET(request: NextRequest) {
 
     const conditions = [];
     if (status === "overdue") {
-      // "Terlambat" dihitung dari tanggal — kolom status "overdue" tidak pernah ditulis.
-      conditions.push(eq(transactions.status, "active"));
-      conditions.push(sql`${transactions.expectedReturnDate} < NOW()`);
+      // SATU definisi: lihat sqlTerlambat() di src/lib/tanggal.ts.
+      conditions.push(sqlTerlambat());
     } else if (status) {
       conditions.push(eq(transactions.status, status as any));
     }
