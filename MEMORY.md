@@ -427,12 +427,23 @@ pending_signature → pending_approval → active → returned
 ```
 
 **Penting — status `overdue` TIDAK PERNAH ditulis** ke DB oleh kode mana pun
-(tidak ada cron). "Terlambat" dihitung saat query:
-`status = 'active' AND expected_return_date < NOW()`. Jangan cari penulis
-status `overdue`; kalau ada kode yang memfilter `status = 'overdue'`, itu bug.
-Titik yang sudah benar: `/api/user/transactions?status=overdue`,
-`/api/user/transactions/summary`, `/api/transactions?status=overdue`,
-`/api/stats`, dashboard admin & user, `DueSoonCard`.
+(tidak ada cron). "Terlambat" dihitung saat query lewat
+**`sqlTerlambat()`** (`src/lib/tanggal.ts`) — SATU-SATUNYA rumusnya:
+
+```ts
+sqlTerlambat()  =  DATE(expected_return_date WIB) < DATE(COALESCE(actual_return_date, NOW()) WIB)
+```
+
+Satu rumus menangani dua keadaan: belum kembali & lewat tenggat, ATAU sudah
+kembali tapi dulu telat. **Jangan tulis ulang predikat ini di tempat lain** —
+dulu ada tiga rumus berbeda (kartu pakai `NOW()` UTC + `status='active'`,
+daftar pakai WIB, klien pakai `hariTerlambat`) dan ketiganya tidak sepakat
+(kartu=0 vs daftar=1 pada data nyata — Audit #5.4).
+
+Pemakai: kartu dashboard admin, `/api/stats`, `admin/transactions/page.tsx`,
+`/api/transactions`, `/api/user/transactions`, `/api/user/transactions/summary`.
+Jangan cari penulis status `overdue`; kalau ada kode yang memfilter
+`status = 'overdue'`, itu bug.
 
 ### Tanggal dikembalikan (actualReturnDate)
 
@@ -455,9 +466,9 @@ langsung untuk tanggal yang dilihat user: bisa geser sehari (klik jam 07:00 WIB
 = 00:00 UTC). Pakai `formatTanggalWIB()` / `formatTanggalJamWIB()`
 (Intl + `timeZone: "Asia/Jakarta"`, format `18 Sep 2026, 10:09`).
 
-Catatan: ini HANYA untuk tampilan. Nilai DB tetap UTC, dan perhitungan
-"Terlambat"/"Segera Dikembalikan" untuk **kartu statistik** masih pakai `NOW()`
-server (UTC) — belum diseragamkan (pilihan B, bukan C).
+Catatan: ini HANYA untuk tampilan. Nilai DB tetap UTC. Perhitungan
+"Terlambat" juga sudah diseragamkan ke kalender WIB lewat `sqlTerlambat()`
+(lihat bagian status di atas) — pilihan B (satu definisi), sudah dikerjakan.
 
 ### "Terlambat" pada transaksi yang SUDAH dikembalikan
 
@@ -477,13 +488,11 @@ TANGGAL kalender (helper pakai `fmtISO`; jangan pakai `fmtTanggal` yang bulannya
 Titik yang memakainya:
 - admin: `TransactionsClient.tsx` (badge kedua + filter "Terlambat")
 - user: `dashboard/riwayat/page.tsx` (badge kedua + tab "Terlambat")
-- query: `admin/transactions/page.tsx` + `api/user/transactions/route.ts`
-  → `overdue` = `(active AND expected < NOW()) OR (returned AND
-  DATE(CONVERT_TZ(expected,'+00:00','+07:00')) < DATE(CONVERT_TZ(actual,...)))`
+- query: pakai `sqlTerlambat()` dari `src/lib/tanggal.ts` — jangan tulis ulang
 
 Bentuk tampilan: **dua badge** ("Dikembalikan" + "Terlambat"), tanpa jumlah hari.
-Kartu statistik "Terlambat" di dashboard admin **sengaja tidak diubah** — tetap
-hanya menghitung yang belum dikembalikan (perlu ditindaklanjuti).
+Kartu statistik "Terlambat" kini memakai definisi yang SAMA (`sqlTerlambat()`),
+jadi angka kartu dan daftar selalu cocok. Penjaga: `scripts/check-terlambat.ts`.
 
 ### PDF — tata letak tabel
 Tabel barang di kedua generator PDF sekarang punya kolom **Kode Barang**:
@@ -548,7 +557,24 @@ dipadatkan. Barang yang sudah ada di DB, ATAU kembar di dalam file yang sama,
 **Balasan route** `POST /api/items/import`:
 `{ importedCount, skippedRows, duplicateRows, duplicates[], warnings[] }`.
 `skippedRows` = baris tanpa nama; `warnings` = baris yang tetap masuk tapi ada
-kolom bermasalah. Kalau semua baris dilewati → 400 dengan pesan sebabnya.
+kolom bermasalah (mis. lokasi salah ketik). Kalau semua baris dilewati → 400
+dengan pesan sebabnya.
+
+**WAJIB `raw: true` saat `sheet_to_json()`.** `raw: false` mengambil TAMPILAN
+sel, dan Excel menampilkan angka 12+ digit sebagai notasi ilmiah —
+`409010025366` jadi `"4.0901E+11"` (angka belakang HILANG). Semua nomor
+inventaris UII 12 digit, jadi ini merusak setiap impor yang nomornya diketik
+sebagai angka. Konversi ke teks lewat `keTeks()` (number → `String()` utuh),
+jangan `String(v)` telanjang. Penjaga: `scripts/check-import-fix.ts`.
+
+**Salah ketik lokasi dirapikan otomatis.** `lokasiMirip()` di
+`src/lib/locations.ts` (jarak edit / Levenshtein, ambang 15% panjang nama)
+mencocokkan lokasi yang beda 1–2 huruf ke nama resmi — "Devisi Teknologi
+Informasi" → "Divisi Teknologi Informasi" (kode DTI → TI). Kalau hasilnya SERI
+(dua kandidat sama dekat) helper mengembalikan `null` dan sistem TIDAK
+menebak, cuma memberi peringatan. Dipakai di impor dan `PUT /api/items/[id]`.
+Lokasi yang benar-benar jauh tetap diterima sebagai lokasi baru (custom) —
+keputusan user: boleh custom, tapi harus diberi tahu.
 
 **Template** di-generate route `GET /api/items/import/template` (bukan berkas
 biner di `public/`) memakai `xlsx` yang sudah jadi dependency. Isi: baris header
@@ -564,6 +590,14 @@ selesai. Impor jalan otomatis begitu file dipilih.
 lingkungan `tsx` — hasilnya sampah, tapi tidak error. Selalu baca lewat
 `read(fs.readFileSync(path), { type: "buffer" })`. Di dalam Next.js (route) hal
 ini tidak terjadi.
+
+**PITFALL formData:** `await request.formData()` MELEMPAR kalau Content-Type
+bukan multipart/form-data, dan di dalam try/catch route berubah jadi 500
+"server rusak" padahal berkasnya cuma tidak terkirim. Pakai
+**`formDataAman()`** dari `src/lib/json-body.ts` → balas 400. Dua helper ini
+satu keluarga: `jsonBody()` untuk body JSON, `formDataAman()` untuk unggahan
+berkas. Jangan pakai `request.formData()` telanjang di route mana pun.
+Pemakai: impor barang, TTD user, unggah transaksi, unggah serah terima.
 
 - Kode lokasi custom = inisial kata (2–3 huruf); bentrok → tambah huruf kata
   berikutnya, lalu angka (`locations.ts` → `locationCode()`).

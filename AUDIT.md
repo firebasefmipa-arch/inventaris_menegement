@@ -16,6 +16,197 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #5 — 23 Sep 2026 — Audit menyeluruh + simulasi 3 peran (lanjutan #4)
+
+**Metode:** sama seperti #4 — login sungguhan 3 peran, 41 endpoint diserang
+curl dengan cookie per peran, setiap perubahan stok diverifikasi ke MySQL.
+Tujuan: memeriksa ULANG temuan lama masih terpasang, DAN menyapu bidang yang
+belum pernah diaudit (formData, impor, pemisahan status, jalur non-angka).
+
+Baseline: items 7 · transactions 6 · transaction_items 7 · handovers 4 · users 8.
+
+### #5.1 — Nomor inventaris panjang rusak saat impor — TINGGI
+
+Bukti:
+
+```
+barang impor user, No. Inv DTI ditulis sbg ANGKA di Excel:
+  tersimpan : 4.0901E+11        <-- rusak
+  seharusnya: 409010025366
+file uji dibaca dua mode:
+  raw:false -> "4.0901E+11"  (string, angka belakang hilang)
+  raw:true  -> 409010025366  (number, utuh)
+```
+
+Sebab: `POST /api/items/import` memanggil `sheet_to_json(..., { raw: false })`
+— mengambil TAMPILAN sel, bukan nilainya. Excel menampilkan angka 12+ digit
+sebagai notasi ilmiah. Semua nomor inventaris UII 12 digit, jadi kerusakan ini
+pasti terjadi setiap kali nomor diimpor sebagai angka.
+
+Dampak berlipat: nomor inventaris dipakai sebagai kunci pendeteksi duplikat
+(`No. Inv DTI` → `SN` → `Nama+Lokasi`). Nomor yang tersimpan rusak membuat
+file yang sama bisa lolos jadi barang kembar.
+
+Ditutup: `e5f419a` — `raw: true` + `keTeks()` (number → `String()` utuh).
+
+### #5.2 — Lokasi salah ketik 1 huruf bikin kode barang bercabang — SEDANG
+
+Bukti:
+
+```
+user menulis : "Devisi Teknologi Informasi"   ("Devisi")
+daftar resmi : "Divisi Teknologi Informasi"   ("Divisi")
+selisih      : 1 huruf
+
+kode jadi    : FMIPA-DTI-2026-001
+seharusnya   : FMIPA-TI-2026-001
+
+di DB sekarang ada DUA lokasi untuk tempat yang sama:
+  "Divisi Teknologi Informasi" -> 2 barang -> FMIPA-TI-2026-001
+  "Devisi Teknologi Informasi" -> 1 barang -> FMIPA-DTI-2026-001
+```
+
+Sebab: `normalizeLocation()` hanya mencocokkan nama resmi kalau SAMA PERSIS
+(beda besar-kecil huruf saja). Salah ketik dianggap lokasi baru, lalu
+`locationCode()` mengambil inisial katanya (D-T-I). Lokasi palsu tersimpan
+permanen di kolom `items.location`.
+
+Dampak: barang di lokasi yang sama punya dua seri kode berbeda; pembukuan
+jadi bercabang dan sulit direkap.
+
+Ditutup: `e5f419a` — `lokasiMirip()` di `src/lib/locations.ts` (jarak edit /
+Levenshtein, ambang 15% panjang nama, TIDAK menebak kalau hasilnya seri).
+Dipakai di impor DAN `PUT /api/items/[id]`. Impor membetulkan otomatis
+SEKALIGUS melaporkannya di `warnings[]`; lokasi yang benar-benar jauh hanya
+diberi peringatan "dianggap lokasi baru".
+
+### #5.3 — `formData()` yang melempar berubah jadi 500 "server rusak" — SEDANG
+
+Bukti:
+
+```
+POST /api/items/import          tanpa body -> 500
+POST /api/user/signature        tanpa body -> 500
+POST /api/transactions/<id>/upload tanpa body -> 500
+POST /api/handovers/<id>/upload tanpa body -> 500
+multipart TANPA file -> 400 (penjagaan ada, tapi terlambat)
+```
+
+Sebab: `await request.formData()` melempar `TypeError` kalau Content-Type
+bukan multipart/form-data, dan di dalam `try/catch` route berubah jadi 500.
+Ini kelas yang SAMA dengan temuan #4.5 (`request.json()` → 500), tapi
+`jsonBody()` hanya menutup jalur JSON — 4 route `formData` ini tidak pernah
+ikut diperbaiki.
+
+Ditutup: `e5f419a` — `formDataAman()` di `src/lib/json-body.ts`, dipakai 4
+route → 400 "Berkas tidak ditemukan".
+
+### #5.4 — Tiga definisi "Terlambat" tidak sepakat — SEDANG–TINGGI
+
+Bukti (data nyata, sebelum perbaikan):
+
+```
+kartu dashboard : 0
+daftar admin    : 1      <-- beda
+__ uji kasus tenggat HARI INI __
+  API (NOW() UTC + status active) : telat
+  badge UI (hariTerlambat, WIB)   : belum telat
+```
+
+Sebab: tiga rumus berbeda —
+
+```
+kartu   : status='active' AND expected_return_date < NOW()   (UTC)
+daftar  : kalender WIB, termasuk yang sudah dikembalikan
+klien   : hariTerlambat() — kalender WIB
+```
+
+Tenggat disimpan `00:00` sedangkan `NOW()` di server UTC, jadi transaksi yang
+tenggatnya HARI INI terbaca telat oleh kartu tapi tidak oleh daftar. Dan
+transaksi yang sudah dikembalikan tapi dulu telat tidak dihitung kartu.
+
+Dampak: admin melihat "Terlambat: 1", mengeklik, dan tidak menemukan barisnya
+— atau sebaliknya, peminjaman yang harus dikejar tidak muncul di kartu.
+
+Ditutup: `42629fd` — SATU definisi `sqlTerlambat()` di `src/lib/tanggal.ts`
+(bandingkan `DATE()` di zona WIB; "dikembalikan" = `actual_return_date` ATAU
+sekarang, sehingga satu rumus menangani dua keadaan). Dipakai 6 tempat:
+kartu admin, `/api/stats`, daftar admin, `/api/transactions`, daftar user,
+ringkasan user. Aturan: **jangan tulis ulang predikat ini** — pakai helper.
+
+### #5.5 — `PUT /api/items/<id>` jumlah non-angka → 500 — RENDAH
+
+Bukti: `PUT /api/items/11 {"quantity":"abc"}` → 500 "Gagal memperbarui item".
+
+Sebab: `Number("abc")` = `NaN`, dan `NaN < angka` = `false` sehingga lolos
+penjagaan E1, lalu `NaN` diteruskan ke driver dan meledak. Tidak ada data
+rusak (UPDATE gagal seluruhnya), tapi pesannya menyesatkan.
+
+Ditutup: `42629fd` — validasi `Number.isInteger()` lebih dulu → 400
+"Jumlah harus berupa bilangan bulat 0 atau lebih." Jalur `/api/pinjam` sudah
+aman (`Math.max(1, ...)`).
+
+### #5.6 — Endpoint hapus peminjaman massal: yatim & tanpa pemakai — SEDANG
+
+Bukti:
+
+```
+pemanggil dari UI (seluruh src, termasuk superadmin) : 0
+menghapus 1 transaksi -> baris transaction_items TETAP ADA (yatim)
+informasi_schema: FK hanya untuk tabel account & session
+schema.ts mendeklarasikan references(... onDelete:"cascade")  <- deklarasi saja
+komentar bulk-delete/route.ts:85 "cascade ke transaction_items" <- tidak ada
+```
+
+Dampak: baris pivot menumpuk tiap kali dipakai. Belum merusak angka karena
+semua query pivot memakai `JOIN transactions` — tapi satu query tanpa JOIN
+langsung salah.
+
+Keputusan user: **endpoint dihapus** (Cara A), bukan ditambal — memperbaiki
+sesuatu tanpa pemakai itu sia-sia, dan menghapusnya menutup masalah sampai
+akar tanpa menyentuh struktur DB sama sekali.
+
+Ditutup: `f8a53f5` — `src/app/api/transactions/bulk-delete/` dihapus (96
+baris). Sekarang `POST/GET/DELETE` ke path itu → 405 (tak ada handler).
+
+**Catatan penting:** alasan TIDAK memilih FK cascade — schema mendeklarasikan
+cascade untuk `items.id` juga, yang berarti menghapus barang akan IKUT
+menghapus riwayatnya. Itu membatalkan fitur snapshot identitas barang
+("hapus barang tidak menghapus riwayat"). Ada 3 baris nyata yang menunjuk
+barang yang sudah dihapus (`item_id` 1 & 5) — bukti fitur itu dipakai.
+
+### #5.7 — Diverifikasi BENAR (tidak ada temuan)
+
+```
+anon 401 di semua endpoint
+IDOR user<->user 403 (cancel, generate-pdf, regenerate-doc, upload)
+admin -> /api/admin/documents 401 ; super_admin 200
+role escalation GAGAL (user & admin kirim role=super_admin -> tak berubah)
+DELETE tanda tangan hanya milik sendiri
+path traversal hapus dokumen ditolak (/etc/passwd utuh)
+15 route ber-[id] balas 400 untuk id "abc"
+dobel-proses approve / kembalikan / hapus -> yang kedua 400, stok tak gandakan
+invariant quantity >= availableQuantity benar untuk semua barang
+impor duplikat dilewati
+impor TANPA berkas -> 400 (setelah #5.3)
+jumlah 0 / negatif saat pinjam aman (Math.max di pinjam/route.ts:70)
+stats konsisten (pending_approval memang bukan active)
+/register hanya tombol Google (bukan pendaftaran bebas)
+```
+
+### #5.8 — Catatan pengujian
+
+- `POST /api/items/import` user jam 03:29:36 UTC → **200** (berhasil, 2 barang
+  jadi). Pesan "berkas tidak ada" TIDAK berasal dari impor itu — berasal dari
+  permintaan yang memang tidak melampirkan berkas. Log nginx membuktikan:
+  satu-satunya `POST //api/items/import` di hari itu berstatus 200, 95 byte.
+- Tiga definisi "Terlambat" sebelum perbaikan: kartu=0, daftar=1 — bukti
+  ketidaksepakatan pada data nyata (bukan cuma potensi).
+- Penjaga baru yang ditinggalkan: `scripts/check-import-fix.ts` (7 periksa)
+  dan `scripts/check-terlambat.ts` (7 periksa — ketiga sumber harus sama).
+
+---
+
 ## Audit #4 — 23 Sep 2026 — Audit total + simulasi 3 peran
 
 **Metode:** login sungguhan 3 peran (user / admin / super_admin) lewat
