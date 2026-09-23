@@ -16,6 +16,65 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #6 — 23 Sep 2026 — Barang habis diserahkan: label salah & baris mati
+
+**Pemicu:** user menghitung 6 barang di halaman daftar barang, sementara
+database punya 8. Bukan bug hitung — daftar menyaring `quantity > 0` — tapi
+menyingkap dua cacat di belakangnya.
+
+**Temuan N — status barang habis-serah-terima ditulis "borrowed"** (label salah)
+
+Saat serah terima disetujui, kode menulis `status = availableQuantity === 0 ?
+"borrowed" : "available"` (`admin/handovers/[id]/route.ts:68`). Untuk barang yang
+habis diserahkan, `availableQuantity` memang 0, jadi labelnya jadi `borrowed`
+alias "Dipinjam" — padahal barangnya tidak dipinjam dan tidak akan kembali.
+Tidak terlihat di layar (barang `quantity = 0` tidak pernah ditampilkan), tapi
+salah di laporan mentah.
+
+**Temuan O — barang habis diserahkan tetap tinggal di database**
+
+Barang yang `quantity = 0` karena diserahkan tidak akan kembali, tapi barisnya
+masih ada. Efeknya: daftar menyaring dia, tapi query mentah tetap menghitungnya —
+persis sumber kebingungan "database 8, layar 6".
+
+**Perbaikan — pilihan user: HAPUS OTOMATIS, bukan label baru**
+
+User menolak menambah jenis label (`handed_over`): lebih hemat menghapus barangnya
+sekalian, karena barisnya memang tak berguna lagi. Dua-duanya tutup sekaligus —
+label yang salah ikut lenyap bersama barisnya.
+
+- Helper baru `hapusBarangHabis()` di `src/lib/item-in-use.ts`.
+- **Patokan `quantity`, BUKAN `availableQuantity`** — koreksi penting dari user:
+  "stock 0 itu maksudnya stock fisik bukan stock yang available untuk di pinjam".
+  Barang yang dipinjam juga bisa `availableQuantity = 0` padahal bakal kembali.
+- Dipasang di dua pintu serah terima: approve pengajuan + admin buat langsung.
+  Peminjaman tidak disentuh.
+- Urutan dijaga: `snapshotSebelumHapus()` dulu, baru `delete` — kebalik = nama
+  riwayat kosong.
+- Pengaman `barangSedangDipakai()` tetap dipasang (gratis, jalur yang sama dengan
+  tombol hapus manual). Secara normal mustahil terjadi: menyerahkan seluruh stok
+  tak mungkin selagi ada unit di tangan peminjam.
+- Penjaga `scripts/check-hapus-habis.ts` (11 pemeriksaan).
+
+**Bersih-bersih data:** #3 (Mouse Logitech) & #4 (Laptop Macbook Pro) —
+`quantity = 0` sisa serah terima lama (#9930 sudah dihapus lebih dulu atas
+permintaan user). Dihapus lewat pintu resmi (`DELETE /api/items/[id]`) supaya
+pengaman + salinan identitas tetap bekerja. Daftar barang: **8 → 6**, cocok
+dengan yang tampil di layar. 8 baris riwayat yang menunjuk keduanya tetap
+menampilkan nama barang dengan benar.
+
+**Bukti:** uji end-to-end dua pintu — habis total → hilang + riwayat bersalinan;
+sebagian (2 dari 5) → tetap ada; user ajukan → admin setujui → hilang; `quantity = 0`
+tapi ada pinjaman berjalan → ditahan. Commit `457a245`.
+
+**Sisa yang dibiarkan (keputusan user):** 3 riwayat lama (tx #4, #5, #6) yang nama
+barangnya kosong. Sebabnya barang #1 & #5 dihapus SEBELUM kolom snapshot ada,
+dan namanya tidak ada di cadangan mana pun (dump lama, binlog, riwayat git sudah
+disisir) — surat pinjam aslinya masih tersimpan sebagai PDF bertanda tangan dan
+perlu dibaca manual. User memilih membiarkannya.
+
+---
+
 ## Audit #5 — 23 Sep 2026 — Audit menyeluruh + simulasi 3 peran (lanjutan #4)
 
 **Metode:** sama seperti #4 — login sungguhan 3 peran, 41 endpoint diserang

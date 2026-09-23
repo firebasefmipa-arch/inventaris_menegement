@@ -758,8 +758,18 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
 11. **Logo mode gelap** — pakai komponen klien `src/components/Logo.tsx`: mode terang `fmipa-logo.png`, mode gelap `fmipa-logo-kuning.png`. Wrapper-nya WAJIB `dark:bg-transparent` (kalau tetap putih, logo kuning tak terbaca di atas putih). Halaman server-component tak bisa pakai hook tema — pakai komponen ini.
     - Katalog publik (`(public)/katalog`) tidak punya dark mode → logo statis di sana aman.
 
-12. **Item `quantity = 0` disembunyikan, bukan dihapus** — hanya dihasilkan serah terima permanen (barang tak kembali). Barang yang sedang dipinjam punya `availableQuantity = 0` tapi `quantity > 0` → TETAP tampil. Jangan hapus barang hanya karena stok 0.
-    - Filter `gt(items.quantity, 0)` ada di: `admin/items/page.tsx`, `/api/items`, katalog, statistik dashboard, `/api/stats`.
+12. **Barang habis karena DISERAHKAN otomatis terhapus** — begitu stok FISIK (`quantity`) jadi 0 lewat serah terima, barangnya langsung dihapus dari daftar barang. Barang tak akan kembali, jadi menyisakannya cuma meninggalkan baris mati yang tak pernah tampil (daftar menyaring `quantity > 0`) tapi tetap terhitung di query mentah — pernah bikin bingung "database 8, layar 6".
+
+    **Patokannya `quantity`, BUKAN `availableQuantity`.** Barang yang sedang DIPINJAM juga bisa punya `availableQuantity = 0` padahal barangnya bakal kembali; yang habis sungguhan hanya yang `quantity`-nya 0. Jangan tertukar.
+
+    Pelaksananya `hapusBarangHabis()` (`src/lib/item-in-use.ts`), dipanggil di DUA pintu serah terima: admin menyetujui pengajuan (`admin/handovers/[id]` PUT) dan admin membuat serah terima langsung selesai (`admin/handovers` POST). **Peminjaman TIDAK ikut** — hanya serah terima.
+
+    - Helper hanya menerima id yang memang sudah 0 di database, jadi pemanggil boleh menyodorkan seluruh isi keranjang tanpa menyaring.
+    - Menahan penghapusan kalau ada pinjaman belum selesai (pengaman sama seperti tombol hapus manual; normalnya mustahil terjadi — menyerahkan seluruh stok tak mungkin selagi ada unit di tangan peminjam).
+    - **Urutan penting:** salin identitas ke baris riwayat DULU (`snapshotSebelumHapus()`), baru hapus. Kalau kebalik, nama barang di riwayat jadi kosong.
+    - Penjaga: `scripts/check-hapus-habis.ts` (11 pemeriksaan) — pakai `npx tsx`.
+
+    Filter `gt(items.quantity, 0)` tetap ada di: `admin/items/page.tsx`, `/api/items`, katalog, statistik dashboard, `/api/stats`.
     - Menghapus barang dari menu admin **diperbolehkan** (tombol Hapus di kartu). FK CASCADE di `schema.ts` TIDAK ADA di MySQL produksi, jadi baris riwayat tidak ikut terhapus; nama barangnya diamankan snapshot (`snapshotSebelumHapus()`). Lihat bagian "Riwayat ↔ Data Barang".
 
 13. **`toBool()` untuk flag boolean dari JSON** — `Boolean("0")` bernilai `true` di JS. Semua flag `can_borrow`/`can_handover` wajib lewat `toBool()` (`src/lib/to-bool.ts`), jangan `Boolean()`.
@@ -788,7 +798,7 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - `DELETE /api/items/[id]` dan `POST /api/items/bulk-delete` → **400** + nomor transaksinya. Hapus massal ditolak SELURUHNYA kalau ada satu saja yang dipegang (tidak sebagian-lalu-berhenti).
     - `PUT /api/items/[id]` → `quantity` tidak boleh lebih kecil dari `quantity - availableQuantity` (= unit yang sedang keluar) → **400** + angkanya.
 
-    **Penting:** barang `quantity = 0` karena habis diserahterimakan (transaksinya sudah `completed`/`returned`) TETAP bisa dihapus seperti biasa — nomor 12 tidak dilanggar.
+    **Penting:** penghapusan otomatis (`hapusBarangHabis()`, nomor 12) memakai penjagaan yang sama — kalau ada pinjaman belum selesai, penghapusan DITAHAN, bukan dipaksa.
 
 17. **`/api/public/borrow` = endpoint lama katalog, aturannya disamakan dengan `/api/pinjam`** — halaman `/katalog` sudah tidak punya menu/link ke sana, tapi alamatnya masih bisa dibuka langsung, jadi tetap dijaga:
 
