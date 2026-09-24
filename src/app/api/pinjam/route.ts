@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems, items, users } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, gte, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { generateBorrowingPDF } from "@/lib/pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
@@ -115,15 +115,31 @@ export async function POST(request: NextRequest) {
       }))
     );
 
-    // ── Kurangi stok ──
+    // ── Kurangi stok — ATOMIK. Syarat "stok cukup" ada di WHERE, jadi dua
+    // permintaan bersamaan tak bisa sama-sama lolos: yang kalah dapat 0 baris
+    // terpengaruh dan transaksinya dibatalkan.
     for (const c of cartItems) {
-      const dbItem = itemMap.get(c.itemId)!;
-      const newAvailable = dbItem.availableQuantity - c.quantity;
-      await db.update(items).set({
-        availableQuantity: newAvailable,
-        status: newAvailable === 0 ? "borrowed" : "available",
-        updatedAt: new Date(),
-      }).where(eq(items.id, dbItem.id));
+      const hasil = await db
+        .update(items)
+        .set({
+          availableQuantity: sql`${items.availableQuantity} - ${c.quantity}`,
+          status: sql`CASE WHEN ${items.availableQuantity} - ${c.quantity} <= 0 THEN 'borrowed' ELSE 'available' END`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(items.id, c.itemId), gte(items.availableQuantity, c.quantity)));
+
+      const data = (Array.isArray(hasil) ? hasil[0] : hasil) as unknown as { affectedRows?: number };
+      if (Number(data?.affectedRows ?? 0) === 0) {
+        // Kalah balapan → batalkan transaksi yang baru dibuat.
+        await db.delete(transactionItems).where(eq(transactionItems.transactionId, txId));
+        await db.delete(transactions).where(eq(transactions.id, txId));
+        return NextResponse.json(
+          {
+            error: `Stok "${itemMap.get(c.itemId)?.name}" tidak lagi mencukupi — mungkin baru dipinjam orang lain. Coba lagi.`,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     // ── Generate PDF dengan TTD ──
