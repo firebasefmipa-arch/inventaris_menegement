@@ -250,6 +250,34 @@ tar xzf /root/uploads-<tanggal>.tar.gz -C /var/www
 # lalu pastikan UPLOAD_DIR di .env.local menunjuk ke folder itu
 ```
 
+### Rumah berkas dihapus — JANGAN hapus baris DB langsung
+
+Ada dua penanda khusus yang **sengaja** dibiarkan, jangan disapu sebagai sampah:
+
+- `signed_document_url = "deleted"` — admin menghapus dokumennya. Berkas fisik
+  dibuang, **barisnya tetap**. Baris inilah yang memunculkan tombol
+  "Buat Ulang Dokumen". Kalau barisnya dihapus, jejak dokumennya hilang.
+- `signed_document_url = NULL` pada pengajuan `rejected` — ditolak/dibatalkan.
+  Dokumen batal memang tidak disimpan; kalau perlu, dibuat ulang dari riwayat.
+
+**Aturan:** hapus baris database SELALU lewat aplikasi, jangan lewat `DELETE`
+langsung. Aplikasi membuang berkas fisiknya (`deleteUploadByUrl`) di keempat
+jalur pembatalan: user batalkan serah terima, admin tolak serah terima, user
+batalkan peminjaman, admin tolak peminjaman.
+
+Kalau sampai ada baris yang dihapus manual (perbaikan darurat, impor, skrip),
+berkas fisiknya akan **ketinggalan menumpuk** tanpa pemilik. Periksa & bersihkan:
+
+```bash
+cd /var/www/inventaris_menegement
+npx tsx scripts/check-berkas-tak-terpakai.ts            # lihat saja
+npx tsx scripts/check-berkas-tak-terpakai.ts --hapus    # lihat + buang
+```
+
+Skrip ini membandingkan isi folder unggahan dengan rujukan di
+`transactions.signed_document_url`, `handovers.signed_document_url`, dan
+`user.signature_url` — jadi berkas yang masih dirujuk tidak akan tersentuh.
+
 ---
 
 ## Langkah 7 — Build & Jalankan Aplikasi
@@ -577,11 +605,36 @@ cd /var/www/inventaris_menegement
 git pull
 npm install        # hanya jika package.json berubah
 npm run build
-pm2 restart pinjam-app
+unset DATABASE_URL          # ← JANGAN DILEWATI, lihat peringatan di bawah
+pm2 restart pinjam-app --update-env
 ```
+
+> **PENTING — `--update-env` menyalin variabel shell ke proses PM2.**
+> Kalau di shell sesi ini ada `DATABASE_URL` (mis. dari ekspor manual, skrip,
+> atau placeholder), nilainya **menimpa** `.env.local` dan aplikasi langsung
+> error 500 "Unknown database". Selalu `unset DATABASE_URL` (atau buka shell
+> baru) sebelum restart. Kalau sudah kejadian: `unset DATABASE_URL`, lalu
+> `pm2 restart pinjam-app --update-env` sekali lagi — `.env.local` akan dibaca
+> ulang. Tanpa `--update-env` pun aman kalau env tidak berubah.
 
 Perubahan schema DB → tambahkan kolom manual (Langkah 2), jangan
 `drizzle-kit push`.
+
+### Uji sebelum & sesudah deploy
+
+```bash
+npx tsc --noEmit                      # harus 0 error
+npm run check:pdf                     # tata letak tabel PDF
+npm run check:label                   # label barang
+npm run check:snapshot                # pemakaian snapshot identitas barang
+npx tsx scripts/check-import-fix.ts   # impor Excel (7 pemeriksaan)
+npx tsx scripts/check-terlambat.ts    # satu definisi "Terlambat" (7 pemeriksaan)
+npx tsx scripts/check-hapus-habis.ts  # auto-hapus barang habis diserahkan (11)
+npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
+```
+
+Semua harus lulus sebelum & sesudah deploy. Yang `npx tsx` memang belum punya
+alias `npm run` — jalankan langsung.
 
 ---
 
@@ -630,6 +683,26 @@ pm2 logs pinjam-app --lines 100
 pm2 startup   # jalankan sekali, ikuti output-nya
 pm2 save
 ```
+
+### Rumah berkas unggahan tidak ikut terbaca setelah reboot
+
+Folder upload **tidak** lagi dipasang lewat `mount --bind` di `/etc/fstab`.
+Dulu pernah begitu (bind mount `public/uploads` → `/var/www/inventaris_uploads`),
+sudah dilepas 22 Sep 2026: aplikasi sekarang membaca `UPLOAD_DIR` dari
+`.env.local` dan melayani berkasnya lewat route ber-pemeriksa sesi.
+
+Kalau suatu saat berkas unggahan tak terbaca padahal ada di disk, periksa
+jangan-jangan ada sisa baris fstab lama:
+
+```bash
+grep -i 'uploads\|inventaris' /etc/fstab     # harus KOSONG
+findmnt /var/www/inventaris_menegement/public/uploads   # harus kosong juga
+```
+
+Kalau ada barisnya, hapus (backup dulu: `cp /etc/fstab /etc/fstab.bak`), lalu
+`sudo systemctl daemon-reload`. Mount yang menempel di `public/uploads` membuat
+Next.js/nginx melayani berkas itu sebagai **statis** — artinya PDF bertanda
+tangan bisa diunduh siapa pun tanpa login.
 
 ### Tombol "Lihat Dokumen" malah mengunduh file
 Bukan bug server. Route `generate-pdf` mengirim header

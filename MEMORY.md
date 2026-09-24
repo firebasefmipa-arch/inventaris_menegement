@@ -88,6 +88,19 @@ database/
 └── app_db_full.sql               # Backup schema lengkap
 ```
 
+Skrip penjaga lain (jalankan `npx tsx scripts/<nama>.ts`; semuanya wajib lulus
+sebelum & sesudah deploy, dan menulis data ujinya sendiri lalu membersihkannya
+sehingga aman diulang di database produksi):
+
+| Skrip | Yang dijaga |
+|---|---|
+| `check-label-layout.ts` | geometri + isi label barang (`npm run check:label`) |
+| `check-item-snapshot.ts` | tiap pemakaian `namaSql*` punya tabel sumber (`npm run check:snapshot`) |
+| `check-import-fix.ts` | impor Excel: nomor inv 12 digit, lokasi salah ketik, formData |
+| `check-terlambat.ts` | satu definisi "Terlambat" — SQL == klien |
+| `check-hapus-habis.ts` | auto-hapus barang habis diserahkan |
+| `check-berkas-tak-terpakai.ts` | berkas unggahan tanpa rujukan DB (`--hapus` = buang) |
+
 ---
 
 ## 3. Sistem Role
@@ -266,6 +279,15 @@ npm run check:pdf              # Harus "SEMUA LOLOS" setelah mengubah kolom PDF
 
 # Uji label barang (geometri + isi PDF nyata)
 npm run check:label            # Harus "SEMUA LOLOS" setelah mengubah label
+
+# Uji snapshot identitas barang di riwayat/dokumen
+npm run check:snapshot         # Harus "SEMUA LOLOS"
+
+# Uji lain (belum ber-alias npm run):
+npx tsx scripts/check-import-fix.ts            # impor Excel
+npx tsx scripts/check-terlambat.ts             # definisi "Terlambat"
+npx tsx scripts/check-hapus-habis.ts           # auto-hapus barang habis diserahkan
+npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 
 # Database
 npm run db:studio              # Buka Drizzle Studio (GUI database)
@@ -670,6 +692,18 @@ Pemakai: impor barang, TTD user, unggah transaksi, unggah serah terima.
   sejajar underline nama peminjam; jarak ke "Ketentuan Peminjaman:" jaga ≥ 8pt.
 - UI admin: "Generate Ulang" tampil saat URL="deleted" ATAU file fisik hilang
   (`documentMissing` — `existsSync` di route admin).
+- **Penanda `"deleted"` JANGAN disapu sebagai sampah.** Admin menghapus dokumen
+  → berkas fisiknya dibuang, tapi `signed_document_url` diisi `'deleted'`
+  (bukan `NULL`) supaya jejaknya tetap ada dan tombol "Buat Ulang Dokumen"
+  muncul. `deleteUploadByUrl()` sengaja no-op untuk nilai ini
+  (`src/lib/delete-upload.ts`). Penyebabnya: `admin/documents/delete` &
+  `bulk-delete`.
+- **Hapus baris DB selalu lewat APLIKASI, jangan `DELETE` langsung.**
+  Aplikasi membuang berkas fisiknya di empat jalur pembatalan: user batalkan
+  serah terima, admin tolak serah terima, user batalkan peminjaman, admin tolak
+  peminjaman (`deleteUploadByUrl`). Lewat `DELETE` manual, berkasnya
+  **ketinggalan** di disk tanpa rujukan. Pembersihnya:
+  `npx tsx scripts/check-berkas-tak-terpakai.ts` (`--hapus` untuk membuang).
 
 ### Ketersediaan Barang (`can_borrow` / `can_handover`)
 
@@ -861,5 +895,9 @@ di menu data barang, dan riwayat ikut benar sendiri. Lihat bagian
 - [ ] Jika mengubah alur auth: cek 5 lapis basePath tetap sinkron (bagian 6)
 - [ ] Semua migrasi DB sudah dijalankan (lihat bagian 8)
 - [ ] `npm run check:snapshot` → setiap pemakaian `namaSql*` punya tabel sumbernya (WAJIB jika menyentuh query riwayat/dokumen)
+- [ ] Kalau menyentuh jalur hapus barang: `npx tsx scripts/check-hapus-habis.ts` (WAJIB — pastikan barang habis diserahkan terhapus & riwayat tetap bernama)
+- [ ] Kalau menyentuh riwayat/tanggal: `npx tsx scripts/check-terlambat.ts`
+- [ ] Kalau menyentuh impor: `npx tsx scripts/check-import-fix.ts`
 - [ ] Tidak ada berkas unggahan di dalam `public/` (cek: `ls public/uploads` harus kosong) — urusan server, DEPLOY.md
 - [ ] Kalau menyentuh berkas unggahan: pakai helper `src/lib/upload-dir.ts`, jangan `path.join(process.cwd(), "public", ...)`
+- [ ] Kalau menghapus baris DB yang punya dokumen: buang berkasnya lewat `deleteUploadByUrl()`, lalu cek `npx tsx scripts/check-berkas-tak-terpakai.ts`
