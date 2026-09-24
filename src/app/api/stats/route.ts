@@ -54,9 +54,10 @@ export async function GET() {
         status: transactions.status,
         borrowDate: transactions.borrowDate,
         expectedReturnDate: transactions.expectedReturnDate,
-        // Snapshot ada di transaction_items (transactions tidak punya kolomnya),
-        // jadi pakai subquery: data master menang, snapshot cadangan.
-        itemName: sql<string>`COALESCE(${items.name}, (SELECT ti.item_name FROM transaction_items ti WHERE ti.item_id = ${transactions.itemId} LIMIT 1))`,
+        // Snapshot ada di transaction_items (transactions tidak punya kolomnya).
+        // Tautan barang ada di PIVOT, bukan di transactions.item_id (yang selalu
+        // NULL) — jadi pasangkan lewat transaction_id, bukan item_id.
+        itemName: sql<string>`COALESCE(${items.name}, (SELECT ti.item_name FROM transaction_items ti WHERE ti.transaction_id = ${transactions.id} LIMIT 1))`,
         borrowerName: transactions.borrowerName,
       })
       .from(transactions)
