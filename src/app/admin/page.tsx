@@ -46,16 +46,17 @@ async function getStats() {
     .from(transactions),
 
     // Query 3: 5 transaksi terbaru
+    // Nama diambil SETELAH barisnya terbaca, lewat pivot transaction_items —
+    // `transactions.item_id` selalu NULL (tautan barang ada di pivot), jadi
+    // join langsung ke `items` tak pernah menghasilkan nama.
     db.select({
       id:           transactions.id,
       status:       transactions.status,
       borrowDate:   transactions.borrowDate,
       quantity:     transactions.quantity,
-      itemName:     items.name,
       borrowerName: transactions.borrowerName,
     })
     .from(transactions)
-    .leftJoin(items, eq(transactions.itemId, items.id))
     .orderBy(sql`${transactions.createdAt} DESC`)
     .limit(5),
 
@@ -108,6 +109,33 @@ async function getStats() {
     itemNames: dueNamesByTx.get(t.id) ?? (t.itemName ? [t.itemName] : []),
   }));
 
+  // Nama barang untuk "Transaksi Terbaru" — jalur yang sama dengan dueSoon:
+  // baca pivot transaction_items, jangan join dari transactions.item_id.
+  const recentItemRows = recentTransactions.length > 0
+    ? await db
+        .select({
+          transactionId: transactionItems.transactionId,
+          itemName: namaSql(items.name, transactionItems.itemName),
+        })
+        .from(transactionItems)
+        .leftJoin(items, eq(transactionItems.itemId, items.id))
+        .where(inArray(transactionItems.transactionId, recentTransactions.map((t) => t.id)))
+    : [];
+
+  const recentNamesByTx = new Map<number, string[]>();
+  for (const r of recentItemRows) {
+    const list = recentNamesByTx.get(r.transactionId) ?? [];
+    if (r.itemName) list.push(r.itemName);
+    recentNamesByTx.set(r.transactionId, list);
+  }
+
+  const recentWithNames = recentTransactions.map((t) => ({
+    ...t,
+    // Baris lama (dibuat sebelum kolom snapshot ada) memang tak punya salinan
+    // nama — tampilkan "Barang" seperti jalur lain, jangan kosong.
+    itemName: recentNamesByTx.get(t.id)?.join(", ") || "Barang",
+  }));
+
   // Agregasi hasil query 1
   const totalItems     = itemStats.reduce((s, r) => s + Number(r.total),     0);
   const availableItems = itemStats.reduce((s, r) => s + Number(r.available), 0);
@@ -122,7 +150,7 @@ async function getStats() {
     borrowedItems,
     activeTransactions,
     overdueTransactions,
-    recentTransactions,
+    recentTransactions: recentWithNames,
     dueSoon,
   };
 }
