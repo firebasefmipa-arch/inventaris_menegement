@@ -16,6 +16,113 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #8 — 24 Sep 2026 — Barang habis diserahkan dihapus permanen + kode barang dipakai ulang
+
+**Pemicu:** dua hal dari user. (1) Ralat aturan: barang yang habis karena
+diserahterimakan **tidak boleh** hilang dari database — cuma disembunyikan,
+karena ada kemungkinan unitnya kembali ke inventaris. (2) Laporan mis-logic:
+kode barang yang sudah pernah dipakai tidak boleh diberikan ke barang lain.
+
+### Temuan P — kode barang dipakai ulang setelah barang dihapus
+
+**Bukti dari log produksi (nginx, 24 Sep 2026):**
+
+```
+03:04:58  DELETE /api/items/8   → Proyektor Epson EB-E01 dihapus
+                                kode FMIPA-TI-2026-001
+03:05:37  POST   /api/items     → Leptop No. 15 dibuat
+                                kode FMIPA-TI-2026-001  ← KODE SAMA
+          (39 detik kemudian)
+```
+
+Terbukti terulang lewat uji terkendali: barang A dapat `FMIPA-TI-2026-002`,
+A dihapus, barang B **juga** dapat `-002`.
+
+**Akar masalah:** `nextSequence()` (`src/lib/item-code.ts`) menghitung nomor
+berikutnya dari **barang yang masih ada** (`MAX` baris hidup) + 1. Barang
+dihapus → barisnya hilang → nomornya dianggap bebas.
+
+Catatan: kolom `item_code` di `transaction_items`/`handover_items` **ada tapi
+kosong** (0 dari 11 baris), jadi riwayat tak bisa dipakai sebagai daftar nomor
+terpakai apa adanya.
+
+**Status: BELUM DIPERBAIKI** — rancangan sudah disusun (tabel buku register
+nomor + perintah pembebas superadmin). Direncanakan sebagai "Bagian B".
+
+### Temuan Q — barang habis diserahkan dihapus permanen (PERILAKU LAMA)
+
+Fitur "hapus otomatis" (`hapusBarangHabis()`) membuang barang begitu stok fisik
+jadi 0 lewat serah terima. Akibatnya barang yang unitnya **bisa kembali** sudah
+tak bisa ditemukan lagi — apalagi pengembalian dirancang lewat pencarian kode
+barang.
+
+**Perbaikan (SELESAI): barang disembunyikan, bukan dihapus.**
+
+```
+hapusBarangHabis()                    → DIHAPUS dari src/lib/item-in-use.ts
+2 pemanggil di jalur serah terima     → dicabut
+export function hapusBarangHabis      → hilang; src/lib/item-in-use.ts tinggal 73 baris
+scripts/check-hapus-habis.ts          → diganti scripts/check-barang-habis.ts
+```
+
+**Tampilan menurut peran** (`admin/items/page.tsx` + `ItemsClient.tsx`):
+`page.tsx` mengirim semua barang tanpa saringan + prop `canSeeHidden`;
+penyaringan di klien karena bergantung peran.
+
+- admin → tersembunyi, tombol `Tampilkan yang habis (N)`
+- super_admin → tampil langsung, bertanda `Habis`, tanpa tombol
+- badge "Habis" menggantikan "Dipinjam" untuk `quantity === 0` (pinjaman tak
+  pernah menurunkan stok fisik) — dipasang di grid, list desktop, dan mobile
+
+**Penjaga baru di jalur hapus manual:** F2 — barang `quantity = 0` terkunci
+("unitnya mungkin kembali"). Barang `quantity > 0` tetap bisa dihapus supaya
+admin masih bisa membuang barang salah input.
+
+**Penutup celah:** `PUT /api/items/[id]` menolak menurunkan stok ke 0; barang
+yang sudah 0 tetap boleh disimpan apa adanya (betulkan nama). Jadi stok 0
+**hanya** lahir dari serah terima → selalu ada unit di luar → tak ada barang
+tersembunyi yang nyangkut tanpa jalan keluar.
+
+**Bukti (salinan uji :3001, browser sungguhan + jalur serah terima resmi):**
+
+```
+serah terima 3 unit → stok 0
+  barang di database     : ADA       (dulu: terhapus)
+  tampil di daftar admin : TIDAK
+
+ADMIN       stok-0 tersembunyi · tombol ada · label Habis 0
+            setelah diklik → tampil · label Habis 1
+SUPERADMIN  stok-0 tampil langsung · label Habis 1 · tanpa tombol
+
+hapus barang stok 0            → DITOLAK
+hapus borongan berisi stok 0   → DITOLAK
+PUT stok jadi 0 dari >0        → DITOLAK
+hapus barang stok >0           → BOLEH
+simpan barang stok 0 (nama)    → BOLEH
+```
+
+Penjaga `npm run check:habis` = 15 pemeriksaan lulus. Tujuh penjaga lain lulus.
+`npx tsc --noEmit` bersih. Data uji dibersihkan, kembali ke baseline
+6/6/7/4/4/9.
+
+**Tidak dipulihkan:** barang yang sudah telanjur terhapus aturan lama
+(Mouse Logitech, Laptop Macbook Pro, Proyektor Epson EB-E01) — keputusan user,
+"mulai sekarang begini saja".
+
+### Insiden saat uji — .env.local salinan berbagi inode
+
+`cp -al` membuat hardlink, jadi `.env.local` di salinan uji berbagi inode
+dengan aslinya. Menulis `UPLOAD_DIR` di salinan **ikut mengubah produksi**
+(menunjuk folder uji beberapa menit). Dipulihkan dengan menulis lewat berkas
+sementara lalu `mv` (memutus hardlink). Diverifikasi sesudahnya: katalog 200,
+login 200, API anon 401, csrf keluar, 6 barang terbaca dari DB, folder unggahan
+utuh (6/2/4/0), berkas produksi anon 401.
+
+**Pelajaran: `cp -al` TIDAK cukup untuk mengisolasi berkas konfigurasi —
+putus hardlink `.env.local` (dan berkas rahasia lain) SEBELUM menulis apa pun.**
+
+---
+
 ## Audit #7 — 24 Sep 2026 — Nama barang kosong di kartu dashboard admin
 
 **Pemicu:** audit menyeluruh + simulasi atas permintaan user. Bukan dari

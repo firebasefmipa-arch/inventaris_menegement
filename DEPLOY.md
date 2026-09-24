@@ -629,7 +629,7 @@ npm run check:label                   # label barang
 npm run check:snapshot                # pemakaian snapshot identitas barang
 npx tsx scripts/check-import-fix.ts   # impor Excel (7 pemeriksaan)
 npx tsx scripts/check-terlambat.ts    # satu definisi "Terlambat" (7 pemeriksaan)
-npx tsx scripts/check-hapus-habis.ts  # auto-hapus barang habis diserahkan (11)
+npm run check:habis                   # barang habis diserahkan: tetap ada, tersembunyi (15)
 npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 ```
 

@@ -98,7 +98,7 @@ sehingga aman diulang di database produksi):
 | `check-item-snapshot.ts` | tiap pemakaian `namaSql*` punya tabel sumber (`npm run check:snapshot`) |
 | `check-import-fix.ts` | impor Excel: nomor inv 12 digit, lokasi salah ketik, formData |
 | `check-terlambat.ts` | satu definisi "Terlambat" — SQL == klien |
-| `check-hapus-habis.ts` | auto-hapus barang habis diserahkan |
+| `check-barang-habis.ts` | barang habis diserahkan: tetap ada, tersembunyi, terkunci (`npm run check:habis`) |
 | `check-berkas-tak-terpakai.ts` | berkas unggahan tanpa rujukan DB (`--hapus` = buang) |
 
 ---
@@ -286,7 +286,7 @@ npm run check:snapshot         # Harus "SEMUA LOLOS"
 # Uji lain (belum ber-alias npm run):
 npx tsx scripts/check-import-fix.ts            # impor Excel
 npx tsx scripts/check-terlambat.ts             # definisi "Terlambat"
-npx tsx scripts/check-hapus-habis.ts           # auto-hapus barang habis diserahkan
+npx tsx scripts/check-barang-habis.ts          # barang habis diserahkan (tetap ada & tersembunyi)
 npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 
 # Database
@@ -801,19 +801,33 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
 11. **Logo mode gelap** — pakai komponen klien `src/components/Logo.tsx`: mode terang `fmipa-logo.png`, mode gelap `fmipa-logo-kuning.png`. Wrapper-nya WAJIB `dark:bg-transparent` (kalau tetap putih, logo kuning tak terbaca di atas putih). Halaman server-component tak bisa pakai hook tema — pakai komponen ini.
     - Katalog publik (`(public)/katalog`) tidak punya dark mode → logo statis di sana aman.
 
-12. **Barang habis karena DISERAHKAN otomatis terhapus** — begitu stok FISIK (`quantity`) jadi 0 lewat serah terima, barangnya langsung dihapus dari daftar barang. Barang tak akan kembali, jadi menyisakannya cuma meninggalkan baris mati yang tak pernah tampil (daftar menyaring `quantity > 0`) tapi tetap terhitung di query mentah — pernah bikin bingung "database 8, layar 6".
+12. **Barang habis karena DISERAHKAN: DISEMBUNYIKAN, BUKAN DIHAPUS** *(berubah 24 Sep 2026 — dulu otomatis dihapus)* — begitu stok FISIK (`quantity`) jadi 0 lewat serah terima, barangnya **TETAP ADA di tabel `items`**, hanya tak tampil di daftar. Alasannya: unitnya **bisa kembali** ke inventaris, dan saat dikembalikan admin mencarinya **lewat kode barang** — barang yang sudah dihapus tak bisa ditemukan.
 
-    **Patokannya `quantity`, BUKAN `availableQuantity`.** Barang yang sedang DIPINJAM juga bisa punya `availableQuantity = 0` padahal barangnya bakal kembali; yang habis sungguhan hanya yang `quantity`-nya 0. Jangan tertukar.
+    **Patokannya `quantity`, BUKAN `availableQuantity`.** Barang yang sedang DIPINJAM juga bisa punya `availableQuantity = 0` padahal barangnya bakal kembali; yang habis sungguhan hanya yang `quantity`-nya 0. Jangan tertukar. **Alur PEMINJAMAN tidak disentuh sama sekali** oleh aturan ini.
 
-    Pelaksananya `hapusBarangHabis()` (`src/lib/item-in-use.ts`), dipanggil di DUA pintu serah terima: admin menyetujui pengajuan (`admin/handovers/[id]` PUT) dan admin membuat serah terima langsung selesai (`admin/handovers` POST). **Peminjaman TIDAK ikut** — hanya serah terima.
+    Penyaringan `quantity > 0` sudah ada di 7 tempat (daftar admin, katalog publik, kotak pilih pinjam, kotak pilih serah terima, kartu dashboard) — itulah yang "menyembunyikan". **Tidak ada penghapusan otomatis di jalur mana pun.**
 
-    - Helper hanya menerima id yang memang sudah 0 di database, jadi pemanggil boleh menyodorkan seluruh isi keranjang tanpa menyaring.
-    - Menahan penghapusan kalau ada pinjaman belum selesai (pengaman sama seperti tombol hapus manual; normalnya mustahil terjadi — menyerahkan seluruh stok tak mungkin selagi ada unit di tangan peminjam).
-    - **Urutan penting:** salin identitas ke baris riwayat DULU (`snapshotSebelumHapus()`), baru hapus. Kalau kebalik, nama barang di riwayat jadi kosong.
-    - Penjaga: `scripts/check-hapus-habis.ts` (11 pemeriksaan) — pakai `npx tsx`.
+    Tampilan daftar barang (`src/app/admin/items/`):
+    - `page.tsx` mengirim **SEMUA** barang (tanpa saringan) + prop `canSeeHidden`.
+    - **admin** → tersembunyi, ada tombol `Tampilkan yang habis (N)` yang membuka/menutup.
+    - **super_admin** → tampil langsung, bertanda `Habis`, tanpa tombol.
+    - Penyaringan dilakukan di klien (`showHidden`), BUKAN di server — karena bergantung peran.
+    - Badge status: `quantity === 0` → **"Habis"** (bukan "Dipinjam" — pinjaman tak pernah menurunkan stok fisik). Dipasang di TIGA tempat render (kartu grid, baris list desktop, baris mobile).
 
-    Filter `gt(items.quantity, 0)` tetap ada di: `admin/items/page.tsx`, `/api/items`, katalog, statistik dashboard, `/api/stats`.
-    - Menghapus barang dari menu admin **diperbolehkan** (tombol Hapus di kartu). FK CASCADE di `schema.ts` TIDAK ADA di MySQL produksi, jadi baris riwayat tidak ikut terhapus; nama barangnya diamankan snapshot (`snapshotSebelumHapus()`). Lihat bagian "Riwayat ↔ Data Barang".
+    **Penjaga di jalur hapus manual** (`src/app/api/items/[id]/route.ts` + `bulk-delete/route.ts`):
+    - **F1** — barang yang masih dipegang (pinjaman/serah terima belum selesai) tidak boleh dihapus (`barangSedangDipakai`).
+    - **F2** — **barang `quantity = 0` TERKUNCI**, tidak bisa dihapus, pesannya "unitnya mungkin kembali".
+    - Barang `quantity > 0` **tetap bisa dihapus** seperti biasa (jangan over-kunci — admin perlu membuang barang salah input/rusak).
+
+    **Stok 0 hanya boleh lahir dari serah terima.** `PUT /api/items/[id]` menolak **menurunkan** stok ke 0 (`berkurangKeNol`); barang yang SUDAH 0 tetap boleh disimpan apa adanya supaya admin bisa membetulkan nama/lokasinya. Form edit (`min`) ikut menyesuaikan agar tak terkunci sendiri. Ini yang menutup celah "barang tersembunyi tapi tak punya unit di luar → nyangkut".
+
+    - Penjaga: `scripts/check-barang-habis.ts` (15 pemeriksaan) — `npm run check:habis`.
+    - **Perilaku lama yang dibatalkan:** `hapusBarangHabis()` sudah DIHAPUS dari `src/lib/item-in-use.ts` beserta pemanggilannya di DUA pintu serah terima, dan `snapshotSebelumHapus()` **tidak lagi** dipanggil di jalur serah terima (karena tak ada yang dihapus). Snapshot tetap dipakai di jalur hapus manual.
+    - **Konsekuensi data:** barang yang sudah telanjur terhapus oleh aturan lama **tidak dipulihkan** (keputusan user). Mulai 24 Sep 2026 perilaku barunya berlaku.
+
+
+    Filter `gt(items.quantity, 0)` tetap ada di: `/api/items`, katalog, statistik dashboard, `/api/stats`. **`admin/items/page.tsx` TIDAK lagi menyaring** — semua barang dikirim, penyaringan di klien per peran (lihat di atas).
+    - Menghapus barang dari menu admin **diperbolehkan** untuk stok >0 (tombol Hapus di kartu). FK CASCADE di `schema.ts` TIDAK ADA di MySQL produksi, jadi baris riwayat tidak ikut terhapus; nama barangnya diamankan snapshot (`snapshotSebelumHapus()`). Lihat bagian "Riwayat ↔ Data Barang".
 
 13. **`toBool()` untuk flag boolean dari JSON** — `Boolean("0")` bernilai `true` di JS. Semua flag `can_borrow`/`can_handover` wajib lewat `toBool()` (`src/lib/to-bool.ts`), jangan `Boolean()`.
 
@@ -904,7 +918,7 @@ di menu data barang, dan riwayat ikut benar sendiri. Lihat bagian
 - [ ] Jika mengubah alur auth: cek 5 lapis basePath tetap sinkron (bagian 6)
 - [ ] Semua migrasi DB sudah dijalankan (lihat bagian 8)
 - [ ] `npm run check:snapshot` → setiap pemakaian `namaSql*` punya tabel sumbernya (WAJIB jika menyentuh query riwayat/dokumen)
-- [ ] Kalau menyentuh jalur hapus barang: `npx tsx scripts/check-hapus-habis.ts` (WAJIB — pastikan barang habis diserahkan terhapus & riwayat tetap bernama)
+- [ ] Kalau menyentuh jalur hapus barang atau serah terima: `npm run check:habis` (WAJIB — pastikan barang habis diserahkan TETAP ADA & tersembunyi, bukan terhapus)
 - [ ] Kalau menyentuh riwayat/tanggal: `npx tsx scripts/check-terlambat.ts`
 - [ ] Kalau menyentuh impor: `npx tsx scripts/check-import-fix.ts`
 - [ ] Tidak ada berkas unggahan di dalam `public/` (cek: `ls public/uploads` harus kosong) — urusan server, DEPLOY.md
