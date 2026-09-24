@@ -218,6 +218,28 @@ export const itemReturns = mysqlTable("item_returns", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ── Buku register nomor barang ────────────────────────────────────────────
+// SATU baris per kode yang PERNAH keluar — dan tak pernah dihapus walau
+// barangnya dihapus. Ini yang membuat nomor tak bisa dipakai ulang:
+// `nextSequence()` membaca MAX dari SINI, bukan dari baris `items` yang
+// masih hidup.
+//
+// SENGAJA TANPA foreign key ke items: kalau barangnya dihapus, catatannya
+// HARUS tetap ada. Itu justru inti fiturnya.
+export const kodeTerpakai = mysqlTable("kode_terpakai", {
+  id: int("id").autoincrement().primaryKey(),
+  kode: varchar("kode", { length: 255 }).notNull().unique(),
+  prefix: varchar("prefix", { length: 50 }).notNull(),
+  tahun: int("tahun").notNull(),
+  urut: int("urut").notNull(),
+  // Barang yang memakainya. NULL kalau barangnya sudah dihapus atau kalau
+  // nomornya disemai ulang dari data lama.
+  itemId: int("item_id"),
+  // 'barang' (tambah manual) | 'impor' (Excel) | 'awal' (semai dari data lama)
+  sumber: varchar("sumber", { length: 20 }).notNull().default("barang"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const handoverItems = mysqlTable("handover_items", {
   id: int("id").autoincrement().primaryKey(),
   handoverId: int("handover_id")
