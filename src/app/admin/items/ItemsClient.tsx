@@ -47,9 +47,11 @@ const CATEGORY_MAP: Record<string, { icon: any, color: string, bg: string }> = {
 interface Props {
   items: Item[];
   categories: string[];
+  /** Superadmin: barang stok 0 tampil langsung, tak perlu saklar. */
+  canSeeHidden: boolean;
 }
 
-export function ItemsClient({ items, categories }: Props) {
+export function ItemsClient({ items, categories, canSeeHidden }: Props) {
   const router = useRouter();
   const [showItemModal, setShowItemModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -65,6 +67,9 @@ export function ItemsClient({ items, categories }: Props) {
   const [isPrinting, setIsPrinting] = useState(false);
   const [selectMode, setSelectMode] = useState<null | "label" | "hapus">(null);
   const [activeDropdownId, setActiveDropdownId] = useState<number | null>(null);
+  // Barang stok 0 (habis diserahkan) disembunyikan dari admin; superadmin
+  // melihatnya langsung. Saklar ini membuka sembunyian itu untuk admin.
+  const [showHidden, setShowHidden] = useState(canSeeHidden);
 
   // Filter tambahan: kategori, lokasi, tanggal cek
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -90,8 +95,12 @@ export function ItemsClient({ items, categories }: Props) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const hiddenCount = useMemo(() => items.filter((i) => i.quantity === 0).length, [items]);
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
+      // Barang stok 0 = habis diserahkan, disembunyikan sampai saklar dibuka.
+      if (!showHidden && item.quantity === 0) return false;
       if (statusFilter && item.status !== statusFilter) return false;
       if (categoryFilter && item.category !== categoryFilter) return false;
       if (locationFilter && (item.location || "") !== locationFilter) return false;
@@ -117,7 +126,7 @@ export function ItemsClient({ items, categories }: Props) {
 
       return true;
     });
-  }, [items, searchQuery, statusFilter, categoryFilter, locationFilter, lastCheckFilter, borrowFilter, handoverFilter]);
+  }, [items, searchQuery, statusFilter, categoryFilter, locationFilter, lastCheckFilter, borrowFilter, handoverFilter, showHidden]);
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
@@ -277,7 +286,17 @@ export function ItemsClient({ items, categories }: Props) {
     </span>
   );
 
-  const statusBadge = (status: string) => {
+  const statusBadge = (item: { status: string; quantity: number }) => {
+    // Stok fisik 0 = habis diserahkan (barangnya sudah keluar semua, mungkin
+    // kembali lagi nanti). Jangan ditampilkan "Dipinjam" — pinjaman tidak
+    // pernah menurunkan stok fisik.
+    if (item.quantity === 0) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border bg-gray-100 text-gray-600 border-gray-200">
+          Habis
+        </span>
+      );
+    }
     const config = {
       available: "bg-emerald-100 text-emerald-700 border-emerald-200",
       borrowed: "bg-amber-100 text-amber-700 border-amber-200",
@@ -290,10 +309,10 @@ export function ItemsClient({ items, categories }: Props) {
       <span
         className={clsx(
           "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border",
-          config[status as keyof typeof config]
+          config[item.status as keyof typeof config]
         )}
       >
-        {labels[status as keyof typeof labels]}
+        {labels[item.status as keyof typeof labels]}
       </span>
     );
   };
@@ -309,6 +328,22 @@ export function ItemsClient({ items, categories }: Props) {
             <h2 className="text-2xl font-bold text-gray-900">Daftar Barang</h2>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
+            {/* Barang stok 0 ada, tapi tersembunyi. Admin perlu jalan masuk untuk
+                melihatnya — superadmin sudah melihatnya langsung. */}
+            {hiddenCount > 0 && !canSeeHidden && (
+              <button
+                type="button"
+                onClick={() => setShowHidden((v) => !v)}
+                className={clsx(
+                  "inline-flex items-center gap-1.5 px-3 py-2 rounded-xl transition-colors shadow-sm text-xs font-medium border",
+                  showHidden
+                    ? "bg-gray-100 text-gray-700 border-gray-300"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                )}
+              >
+                {showHidden ? "Sembunyikan yang habis" : `Tampilkan yang habis (${hiddenCount})`}
+              </button>
+            )}
             <div className="inline-flex items-center gap-1 bg-white border border-gray-100 rounded-xl p-1">
               <button
                 type="button"
@@ -633,6 +668,7 @@ export function ItemsClient({ items, categories }: Props) {
                             )}
                             {availabilityBadge("Pinjam", item.canBorrow)}
                             {availabilityBadge("Serah Terima", item.canHandover)}
+                            {item.quantity === 0 && statusBadge(item)}
                             {!item.isLabelable && tidakBisaDilabeliBadge}
                           </div>
                         </div>
@@ -752,7 +788,7 @@ export function ItemsClient({ items, categories }: Props) {
                         {!item.isLabelable && <div className="mt-1">{tidakBisaDilabeliBadge}</div>}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        {statusBadge(item.status)}
+                        {statusBadge(item)}
                         <div className="item-dropdown-container relative">
                           <button onClick={() => setActiveDropdownId(activeDropdownId === item.id ? null : item.id)}
                             className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
@@ -802,6 +838,7 @@ export function ItemsClient({ items, categories }: Props) {
                             <div className="flex flex-wrap items-center gap-1 mt-1.5">
                               {availabilityBadge("Pinjam", item.canBorrow)}
                               {availabilityBadge("Serah Terima", item.canHandover)}
+                              {item.quantity === 0 && statusBadge(item)}
                             </div>
                           </div>
                           <div className="col-span-4 flex flex-col gap-1 text-xs text-gray-600 font-mono">
