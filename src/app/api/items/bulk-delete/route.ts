@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { items } from "@/db/schema";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { auth } from "@/auth";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 import { jsonBody } from "@/lib/json-body";
@@ -34,6 +34,20 @@ export async function POST(request: NextRequest) {
     const dipakai = await barangSedangDipakai(angka);
     if (dipakai.length > 0) {
       return NextResponse.json({ error: pesanBarangDipakai(dipakai) }, { status: 400 });
+    }
+
+    // ── F2: barang stok 0 (habis diserahkan) TERKUNCI ──
+    // Unitnya bisa kembali sewaktu-waktu; barangnya harus tetap ada supaya bisa
+    // dicari lewat kode saat dikembalikan.
+    const adaStokNol = await db
+      .select({ id: items.id, name: items.name })
+      .from(items)
+      .where(and(inArray(items.id, angka), eq(items.quantity, 0)));
+    if (adaStokNol.length > 0) {
+      return NextResponse.json(
+        { error: `Barang stok 0 tidak bisa dihapus (unitnya mungkin kembali): ${adaStokNol.map((i) => i.name).join(", ")}.` },
+        { status: 400 }
+      );
     }
 
     // Salin identitas barang terakhir ke baris riwayat SEBELUM barang dihapus,

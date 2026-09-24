@@ -276,7 +276,7 @@ export default function EditItemPage() {
             </label>
             <input
               type="number"
-              min="1"
+              min={form.quantity === "0" ? "0" : "1"}
               value={form.quantity}
               onChange={(e) => setForm({ ...form, quantity: e.target.value })}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"

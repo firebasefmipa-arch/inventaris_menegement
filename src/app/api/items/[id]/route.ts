@@ -91,9 +91,14 @@ export async function PUT(
     let quantityNum: number | undefined;
     if (quantity !== undefined) {
       const n = Number(quantity);
-      if (!Number.isInteger(n) || n < 0) {
+      // Stok 0 hanya boleh lahir dari serah terima. Menurunkannya ke 0 lewat
+      // form edit dilarang — barang jadi tersembunyi tanpa unit di luar, dan
+      // tak bisa dikembalikan. Barang yang SUDAH 0 boleh disimpan apa adanya
+      // (mis. admin cuma membetulkan namanya).
+      const berkurangKeNol = n === 0 && existing.quantity !== 0;
+      if (!Number.isInteger(n) || n < 0 || berkurangKeNol) {
         return NextResponse.json(
-          { error: "Jumlah harus berupa bilangan bulat 0 atau lebih." },
+          { error: "Jumlah minimal 1 unit. Stok 0 hanya terjadi lewat serah terima." },
           { status: 400 }
         );
       }
@@ -189,6 +194,19 @@ export async function DELETE(
     const dipakai = await barangSedangDipakai([itemId]);
     if (dipakai.length > 0) {
       return NextResponse.json({ error: pesanBarangDipakai(dipakai) }, { status: 400 });
+    }
+
+    // ── F2: barang stok 0 (habis diserahkan) TERKUNCI ──
+    // Unitnya bisa kembali ke inventaris sewaktu-waktu, jadi barangnya harus
+    // tetap ada supaya bisa dicari lewat kode saat dikembalikan. Karena stok 0
+    // cuma bisa lahir dari serah terima (form edit tak boleh menurunkannya),
+    // tak ada barang tersembunyi yang "nyangkut" tanpa jalan keluar.
+    if (existing.quantity === 0) {
+      return NextResponse.json(
+        { error: "Barang dengan stok 0 tidak bisa dihapus — unitnya mungkin kembali. " +
+                 "Gunakan menu Pengembalian Barang kalau unitnya sudah masuk lagi." },
+        { status: 400 }
+      );
     }
 
     // Salin identitas barang terakhir ke baris riwayat SEBELUM barang dihapus,
