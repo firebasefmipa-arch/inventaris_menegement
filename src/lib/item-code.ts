@@ -74,21 +74,30 @@ export function bacaKode(kode: string): { prefix: string; tahun: number; urut: n
 }
 
 /**
- * Catat kode ke buku register — "nomor ini sudah terpakai, jangan dipakai lagi".
- * Idempoten: kode yang sudah tercatat dibiarkan apa adanya.
+ * Catat kode ke buku register. Mengembalikan `true` kalau kode ini BARU
+ * tercatat, `false` kalau sudah ada sebelumnya.
+ *
+ * Dipakai untuk MENGKLAIM nomor secara atomik: kalau `false`, artinya ada
+ * permintaan lain yang mencuri nomor itu lebih dulu — pemanggil harus coba
+ * nomor berikutnya. `INSERT IGNORE` sendirian TIDAK cukup: ia mengabaikan
+ * bentrok dengan senyap, sehingga dua barang bisa diberi nomor yang sama dan
+ * yang kedua gagal disimpan dengan error 500.
  */
 export async function catatKode(
   kode: string,
   opts: { itemId?: number | null; sumber?: "barang" | "impor" | "awal" } = {}
-) {
+): Promise<boolean> {
   const bagian = bacaKode(kode);
-  if (!bagian) return;
+  if (!bagian) return false;
 
-  await db.execute(sql`
+  const hasil = await db.execute(sql`
     INSERT IGNORE INTO kode_terpakai (kode, prefix, tahun, urut, item_id, sumber)
     VALUES (${kode}, ${bagian.prefix}, ${bagian.tahun}, ${bagian.urut},
             ${opts.itemId ?? null}, ${opts.sumber ?? "barang"})
   `);
+
+  const data = (Array.isArray(hasil) ? hasil[0] : hasil) as unknown as { affectedRows?: number };
+  return Number(data?.affectedRows ?? 0) > 0;
 }
 
 /** Catat banyak kode sekaligus (dipakai impor Excel). */
@@ -106,15 +115,25 @@ export async function catatKodeMassal(
  * Kode dari klien SELALU diabaikan (dipanggil dari server saja).
  *
  * Nomornya LANGSUNG dicatat ke buku register saat dibuat, bukan menunggu
- * barangnya tersimpan — supaya nomor yang gagal terpakai pun tetap terkunci
- * (lebih aman: kelebihan satu nomor lebih baik daripada nomor dipakai dua kali).
- * Untuk membebaskan nomor yang telanjur terkunci: `npm run kode:bebas lepas <kode>`.
+ * barangnya tersimpan — supaya nomor yang gagal terpakai pun tetap terkunci.
+ *
+ * Pencatatannya bersifat MENGKLAIM: kalau dua permintaan datang bersamaan dan
+ * membaca nomor yang sama, hanya satu yang berhasil mencatat; yang kalah
+ * mencoba nomor berikutnya. Tanpa perulangan ini keduanya memakai nomor sama
+ * dan yang kedua gagal disimpan (500) karena `item_code` unik.
  */
 export async function generateItemCode(rawLocation: string | null | undefined) {
   const { prefix, location } = await resolvePrefix(rawLocation);
   const year = new Date().getFullYear();
-  const seq = await nextSequence(prefix, year);
-  const code = formatCode(prefix, year, seq);
-  await catatKode(code, { sumber: "barang" });
-  return { code, location };
+
+  for (let coba = 0; coba < 25; coba++) {
+    const seq = await nextSequence(prefix, year, coba);
+    const code = formatCode(prefix, year, seq);
+    if (await catatKode(code, { sumber: "barang" })) return { code, location };
+    // kalah balapan → coba nomor berikutnya
+  }
+
+  throw new Error(
+    `Gagal mendapatkan nomor barang untuk "${location}" — terlalu banyak permintaan bersamaan. Coba lagi.`
+  );
 }
