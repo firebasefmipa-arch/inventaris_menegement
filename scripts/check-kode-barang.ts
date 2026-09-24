@@ -117,6 +117,35 @@ async function main() {
   const paksa = await lepasNomor(kodeC, true);
   cek("B5 --paksa menembus penolakan", paksa.ok, paksa.ok ? "" : paksa.alasan);
 
+  // ══ B8: BENTROK — beberapa permintaan serentak harus dapat nomor BERBEDA ══
+  // Inilah bug yang pernah lolos: dua permintaan membaca nomor yang sama,
+  // keduanya memakainya, dan yang kedua gagal disimpan dengan error 500.
+  const serentak = await Promise.all(
+    Array.from({ length: 8 }, () => generateItemCode(LOKASI))
+  );
+  const kodeSerentak = serentak.map((s) => s.code);
+  kodeSerentak.forEach((k) => dibuat.push(k));
+  const unikSerentak = new Set(kodeSerentak);
+  cek(
+    "B8 ▓ INTI: 8 permintaan serentak dapat 8 nomor BERBEDA",
+    unikSerentak.size === 8,
+    `unik=${unikSerentak.size} dari 8 → ${kodeSerentak.join(", ")}`
+  );
+  cek(
+    "B8 semuanya berbentuk kode sah",
+    kodeSerentak.every((k) => /^FMIPA-TI-\d{4}-\d{3}$/.test(k)),
+    kodeSerentak.join(", ")
+  );
+  const tercatatSemua = await db
+    .select()
+    .from(kodeTerpakai)
+    .where(inArray(kodeTerpakai.kode, kodeSerentak));
+  cek(
+    "B8 semuanya tercatat di register",
+    tercatatSemua.length === 8,
+    `tercatat=${tercatatSemua.length}`
+  );
+
   // ══ B1b: register menang atas items ══
   // Semai nomor tinggi tanpa barangnya → nextSequence harus ikut register
   const tinggi = formatCode("TI", TAHUN, 950);
