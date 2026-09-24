@@ -17,7 +17,9 @@
     "check:label": "tsx scripts/check-label-layout.ts",
     "check:habis": "tsx scripts/check-barang-habis.ts",
     "check:snapshot": "tsx scripts/check-item-snapshot.ts",
-    "check:kembali": "tsx scripts/check-barang-kembali.ts"
+    "check:kembali": "tsx scripts/check-barang-kembali.ts",
+    "kode:bebas": "tsx scripts/kode-bebas.ts",
+    "check:kode": "tsx scripts/check-kode-barang.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
