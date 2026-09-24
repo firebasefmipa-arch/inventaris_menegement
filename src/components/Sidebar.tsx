@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Shield,
   ClipboardCheck,
+  Undo2,
   FileArchive,
   Sun,
   Moon,
@@ -31,6 +32,7 @@ const navItems = [
   { href: "/admin/items", label: "Daftar Barang", icon: Package },
   { href: "/admin/transactions", label: "Peminjaman", icon: ArrowLeftRight },
   { href: "/admin/handovers", label: "Serah Terima", icon: ClipboardCheck },
+  { href: "/admin/returns", label: "Pengembalian", icon: Undo2 },
   { href: "/admin/users", label: "Daftar Pengguna", icon: Users },
 ];
 

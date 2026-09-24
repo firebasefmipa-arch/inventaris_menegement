@@ -49,9 +49,11 @@ interface Props {
   categories: string[];
   /** Superadmin: barang stok 0 tampil langsung, tak perlu saklar. */
   canSeeHidden: boolean;
+  /** Berapa unit yang sedang di luar (diserahkan, belum kembali), per id barang. */
+  diLuar: Record<number, number>;
 }
 
-export function ItemsClient({ items, categories, canSeeHidden }: Props) {
+export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) {
   const router = useRouter();
   const [showItemModal, setShowItemModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -757,6 +759,14 @@ export function ItemsClient({ items, categories, canSeeHidden }: Props) {
                         <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                           <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
                         </div>
+                        {/* Sedang di luar = diserahkan tapi belum kembali. Dihitung dari
+                            riwayat serah terima, bukan dari angka stok. */}
+                        {diLuar[item.id] > 0 && (
+                          <div className="mt-2 flex justify-between items-center text-[10px]">
+                            <span className="font-medium text-blue-600 dark:text-blue-400">Sedang di Luar</span>
+                            <span className="font-bold text-blue-700 dark:text-blue-400">{diLuar[item.id]} unit</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -863,6 +873,10 @@ export function ItemsClient({ items, categories, canSeeHidden }: Props) {
                         </div>
                         <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                           <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+                        </div>
+                        <div className="mt-2 flex justify-between items-center text-xs">
+                          <span className="text-gray-500">Sedang di Luar</span>
+                          <span className="font-bold text-blue-700 dark:text-blue-400">{diLuar[item.id] ?? 0} unit</span>
                         </div>
                         <div className="mt-2 flex justify-end item-dropdown-container relative">
                           <button onClick={() => setActiveDropdownId(activeDropdownId === item.id ? null : item.id)}

@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { auth } from "@/auth";
+import { unitDiLuar } from "@/lib/unit-di-luar";
 import { ItemsClient } from "./ItemsClient";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,12 @@ export default async function ItemsPage() {
   const session = await auth();
   const role = (session?.user as any)?.role as string | undefined;
 
+  // Berapa unit tiap barang yang sedang di luar (sudah diserahkan, belum kembali).
+  // Hanya yang > 0 yang perlu dikirim.
+  const diLuarList = await unitDiLuar();
+  const diLuar: Record<number, number> = {};
+  for (const d of diLuarList) diLuar[d.itemId] = d.diLuar;
+
   // Get unique categories for filter
   const categories = [...new Set(itemsData.map((i) => i.category))];
 
@@ -25,6 +32,7 @@ export default async function ItemsPage() {
         items={itemsData}
         categories={categories}
         canSeeHidden={role === "super_admin"}
+        diLuar={diLuar}
       />
     </div>
   );
