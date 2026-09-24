@@ -402,6 +402,15 @@ UPDATE handover_items ri JOIN items i ON i.id = ri.item_id
 - Gunakan `(session?.user as any)?.role` untuk cek role
 - Kembalikan stok item saat transaksi ditolak atau dihapus
 - Untuk multi-item, selalu query `transaction_items` terlebih dahulu, fallback ke `transactions.item_id` legacy
+- **`transactions.item_id` SELALU NULL.** Tautan barang ada di pivot
+  `transaction_items` (`transaction_id` → `transactions.id`). Jadi join
+  `transactions.item_id → items.id` TIDAK PERNAH menghasilkan nama barang —
+  ini penyebab temuan Audit #7 (nama kosong di kartu dashboard admin).
+  Ambil nama lewat pivot: `namaSql(items.name, transactionItems.itemName)`
+  di `.from(transactionItems)` + `.leftJoin(items, eq(transactionItems.itemId, items.id))`,
+  atau subquery `WHERE ti.transaction_id = transactions.id` (BUKAN `ti.item_id`).
+  Kalau perlu baca SETELAH barisnya terbaca (pivot butuh daftar id dulu),
+  tampilkan `"Barang"` untuk baris yang belum punya salinan — jangan `null`.
 
 ### Komponen
 - Client components: gunakan `"use client"` di baris pertama

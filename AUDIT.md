@@ -16,6 +16,137 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #7 — 24 Sep 2026 — Nama barang kosong di kartu dashboard admin
+
+**Pemicu:** audit menyeluruh + simulasi atas permintaan user. Bukan dari
+keluhan — temuan muncul saat memeriksa konsistensi antara API, query halaman,
+dan tampilan yang benar-benar ter-render.
+
+**Temuan P — kartu "Transaksi Terbaru" tak pernah menampilkan nama barang**
+
+Kartu di dashboard admin membaca nama barang lewat
+`leftJoin(items, eq(transactions.itemId, items.id))` dan mengambil `items.name`.
+Masalahnya: **`transactions.item_id` selalu NULL** — tautan barang ada di tabel
+pivot `transaction_items`, karena satu transaksi bisa berisi banyak barang.
+Kolom `item_id` di `transactions` adalah warisan yang hanya diisi jalur lama.
+
+Bukti (7 dari 7 baris `item_id` NULL):
+
+```
+SELECT COUNT(*) total, SUM(item_id IS NULL) item_id_null FROM transactions;
+  total  item_id_null
+  7      7
+```
+
+Karena `items.name` selalu NULL dan tak ada jaring pengaman, `itemName` jadi
+NULL untuk SEMUA baris. Terbukti di halaman yang benar-benar ter-render:
+
+```
+yang DILIHAT admin      : 5 nama PEMINJAM, 0 nama BARANG
+yang SEHARUSNYA         : 5 nama peminjam, 5 nama barang
+```
+
+Angka konkretnya: `transaction_items` punya 8 baris; 4 di antaranya masih
+menyimpan salinan nama (`Mouse Logitech`, `Laptop Macbook Pro`, dua baris lain
+sudah tak punya karena dibuat sebelum kolom salinan ada). Jadi 4 baris
+seharusnya bernama, bukan 0.
+
+**Dampak ke pengguna:** admin membuka dashboard, melihat deretan kartu berisi
+nama peminjam dan jumlah unit — tapi baris nama barangnya bolong. Tidak ada
+pesan error; kartunya hanya tampak "kosong di atas". Admin tak bisa tahu barang
+apa yang baru dipinjam tanpa membuka halaman daftar transaksi.
+
+Kenapa tak ketahuan lebih awal: seluruh pengujian sebelumnya menyentuh API dan
+halaman daftar transaksi — dan halaman daftar **punya penambal** (kalau
+`itemName` NULL, ia membaca pivot dan menambal sendiri). Kartu dashboard tidak
+punya penambal itu. Jadi satu jalur tertutup rapi, jalur satunya bolong.
+
+**Temuan Q — endpoint `/api/stats` memakai kunci pivot yang salah (sama)**
+
+Subquery nama barang di `recentTransactions` memasangkan
+`transaction_items.item_id` dengan `transactions.item_id` — dua kolom yang
+berbeda arti, dan yang kanan selalu NULL. Pasangan yang benar lewat
+`transaction_items.transaction_id = transactions.id`. Endpoint ini belum punya
+pemakai di UI (halaman admin query DB langsung), jadi **belum berdampak** —
+tapi dibiarkan akan jadi jebakan bagi pemakai berikutnya.
+
+**Perbaikan (`e62d638` + `aba81b3`)**
+
+- `admin/page.tsx`: pembacaan nama dipindah ke SETELAH baris terbaca, lewat
+  pivot — pola yang sama dengan kartu "akan jatuh tempo" di file yang sama
+  (jadi pola benarnya sudah ada di situ, hanya kartu ini terlewat). Baris yang
+  memang belum punya salinan nama ditampilkan `"Barang"`, sama seperti halaman
+  daftar transaksi — bukan kosong.
+- `api/stats/route.ts`: kunci subquery diperbaiki.
+
+**Bukti sesudah (dashboard produksi, akun uji sementara):**
+
+```
+KARTU TRANSAKSI TERBARU — 5 baris:
+    [Barang]
+    [Barang]
+    [Barang]
+    [Mouse Logitech, Laptop Macbook Pro]
+    [Laptop Macbook Pro]
+```
+
+Perhatikan baris **4**: itu transaksi berisi dua barang berbeda, dan keduanya
+kini tersambung dengan koma — hal yang mustahil dilakukan join satu-kolom,
+sekaligus bukti bahwa jalur pivot memang yang benar.
+
+**Diverifikasi TIDAK ada masalah (sweep)** — semua diuji, semuanya hijau:
+
+| Yang diperiksa | Hasil |
+|---|---|
+| 40 rute API tanpa login | 401 semua |
+| 4 folder berkas unggahan tanpa login | 401 semua |
+| IDOR: user membuka/mengubah data user lain | 403 |
+| Batas peran: user ke rute admin | 401 |
+| Batas peran: admin ke rute super_admin | 401 |
+| Body kosong/rusak di 8 rute | 400, tak ada 500 |
+| `id tidak valid`, `quantity bukan angka`, nol, minus | 400/404 |
+| Alur penuh: pinjam → setujui → kembalikan | stok 5→2→2→5, benar |
+| Barang dipinjam: `quantity` diturunkan di bawahnya | ditolak, stok utuh |
+| Barang dipinjam: dihapus (satuan & massal) | ditolak, sebut `PB-####` |
+| Dua peminjam nama sama, tanggal sama | dua berkas berbeda (`_21` & `_22`) |
+| `parseInt` tanpa `isNaN` | 0 nyata (semua lewat `idValid`) |
+| `request.json()` mentah | 1, sudah pakai `.catch(() => null)` |
+| `formData()` mentah | 0 |
+| Barang stok 0 yang masih dirujuk | 0 |
+| Mode gelap: 46 varian kelas belum ter-remap | **dibiarkan** — lihat bawah |
+
+**SENGAJA DIBIARKAN — 46 varian kelas ber-opasitas belum masuk tabel mode gelap**
+
+Sweep menemukan 46 kelas seperti `bg-indigo-900/20`, `border-red-800/50`,
+`bg-slate-700/60` yang dipakai di 20-an berkas tapi tak punya padanan di
+`globals.css`. Ini **keterbatasan yang sudah diketahui** dan tercatat di
+`MEMORY.md`: tabel mode gelap bekerja dengan mencocokkan NAMA KELAS, jadi
+varian ber-opasitas harus ditambahkan manual satu per satu.
+
+Dibiarkan karena: (a) bukan kemunduran — sudah begitu sejak awal; (b) menambah
+46 baris CSS sekaligus tanpa memeriksa tiap layar di mode gelap berisiko
+menghasilkan warna yang justru salah; (c) yang paling sering dipakai (25 varian)
+sudah ter-remap. Kalau nanti ada keluhan warna di mode gelap, mulai dari daftar
+ini.
+
+**Jejak uji bersih** — data kembali persis ke keadaan semula:
+
+```
+              SEBELUM   SESUDAH
+items            6     →    6
+transactions     6     →    6
+transaction_items 7    →    7
+handovers        4     →    4
+handover_items   4     →    4
+users            9     →    9
+```
+
+Semua barang: `available_quantity = quantity` (tak ada sisa pinjaman uji).
+Akun uji sementara dihapus; berkas TTD & PDF ujinya dibuang; folder `pending`
+kosong; `git status --short` bersih.
+
+---
+
 ## Audit #6 — 23 Sep 2026 — Barang habis diserahkan: label salah & baris mati
 
 **Pemicu:** user menghitung 6 barang di halaman daftar barang, sementara
