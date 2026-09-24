@@ -15,6 +15,7 @@
     "setup:superadmin": "tsx scripts/create-super-admin.ts",
     "check:pdf": "tsx scripts/check-pdf-layout.ts",
     "check:label": "tsx scripts/check-label-layout.ts",
+    "check:habis": "tsx scripts/check-barang-habis.ts",
     "check:snapshot": "tsx scripts/check-item-snapshot.ts"
   },
   "dependencies": {
