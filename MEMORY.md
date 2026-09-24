@@ -100,6 +100,7 @@ sehingga aman diulang di database produksi):
 | `check-terlambat.ts` | satu definisi "Terlambat" — SQL == klien |
 | `check-barang-habis.ts` | barang habis diserahkan: tetap ada, tersembunyi, terkunci (`npm run check:habis`) |
 | `check-barang-kembali.ts` | pengembalian: "di luar" = keluar−kembali, stok nambah (`npm run check:kembali`) |
+| `check-kode-barang.ts` | buku register: nomor bekas TIDAK dipakai ulang (`npm run check:kode`) |
 | `check-berkas-tak-terpakai.ts` | berkas unggahan tanpa rujukan DB (`--hapus` = buang) |
 
 ---
@@ -145,6 +146,7 @@ transaction_items     -- Detail barang per transaksi (multi-item)
 handovers             -- Header serah terima (permanen, stok berkurang)
 handover_items        -- Detail barang per serah terima
 item_returns          -- Catatan barang KEMBALI dari serah terima (stok nambah)
+kode_terpakai         -- Buku register nomor barang (nomor bekas TIDAK boleh dipakai ulang)
 account               -- OAuth accounts (NextAuth)
 session               -- Sessions (NextAuth)
 verificationToken     -- Token verifikasi (NextAuth)
@@ -193,6 +195,8 @@ transactions.item_id    → items.id   ON DELETE SET NULL   -- nullable, multi-i
 transaction_items.transaction_id → transactions.id ON DELETE CASCADE
 handover_items.handover_id → handovers.id ON DELETE CASCADE
 item_returns.item_id    → items.id   ON DELETE CASCADE   -- catatan kembali ikut terhapus
+-- kode_terpakai SENGAJA TANPA foreign key: catatan nomor HARUS bertahan
+-- walau barangnya dihapus. Itu inti fiturnya.
 ```
 
 ---
@@ -294,6 +298,7 @@ npx tsx scripts/check-import-fix.ts            # impor Excel
 npx tsx scripts/check-terlambat.ts             # definisi "Terlambat"
 npx tsx scripts/check-barang-habis.ts          # barang habis diserahkan (tetap ada & tersembunyi)
 npx tsx scripts/check-barang-kembali.ts        # pengembalian (stok nambah, "di luar" benar)
+npx tsx scripts/check-kode-barang.ts           # buku register nomor barang
 npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 
 # Database
@@ -888,6 +893,23 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - Penjaga: `scripts/check-barang-kembali.ts` (22 pemeriksaan) — `npm run check:kembali`.
     - Tabel `item_returns` dibuat dengan **ALTER manual**, JANGAN `drizzle-kit push` di DB produksi.
     - Kolom "Sedang di Luar" muncul di kartu & baris daftar barang (grid + list desktop); nilainya dikirim dari `admin/items/page.tsx`.
+
+19. **NOMOR BARANG TAK BOLEH DIPAKAI ULANG — buku register `kode_terpakai`** — kode yang **pernah** keluar terkunci selamanya, walau barangnya dihapus.
+    - **Masalah lama:** `nextSequence()` dulu menghitung `MAX` dari baris `items` yang **masih hidup**. Barang dihapus → nomornya bebas → barang baru dapat nomor bekas itu. Terbukti di produksi 24 Sep 2026: `DELETE /api/items/8` (03:04:58) → `POST /api/items` (03:05:37) → `Leptop No. 15` mendapat `FMIPA-TI-2026-001` milik `Proyektor Epson EB-E01`.
+    - **Sumber nomor sekarang:** tabel `kode_terpakai` (buku register). **TIDAK PERNAH dihapus barisnya.**
+    - **SENGAJA TANPA foreign key** ke `items` — kalau dikasih FK, catatan nomor ikut terhapus bersama barangnya dan fiturnya batal. Ini beda dari `item_returns` yang pakai `ON DELETE CASCADE`.
+    - Kapan dicatat: `generateItemCode()` mencatat **saat kode dibuat** (bukan saat barang tersimpan), jadi nomor yang gagal dipakai tetap terkunci. Impor massal → `catatKodeMassal()`.
+    - Bentuk kode: `FMIPA-<KODE LOKASI>-<TAHUN>-<URUT 3 digit>`; urut per (lokasi, tahun) — `FMIPA-TI-2026-001` dan `FMIPA-D-2026-001` berdampingan tanpa bentrok.
+    - Perintah perawatan (**super admin, dijalankan manual di server**):
+      - `npm run kode:bebas daftar` — lihat semua nomor yang terkunci
+      - `npm run kode:bebas cek` — periksa kesehatan register (kode ganda / nomor hidup belum tercatat)
+      - `npm run kode:bebas lepas <KODE>` — bebaskan satu nomor; **DITOLAK** kalau nomornya masih dipakai barang hidup
+      - `npm run kode:bebas lepas --paksa <KODE>` — tembus penolakan (dipakai kalau barangnya sudah terlanjur hilang)
+      - `npm run kode:bebas semai` — isi register dari barang yang sudah ada (dipakai sekali saat pemasangan, `--kering` untuk pratinjau)
+    - Nomor sisa uji **TIDAK** dibebaskan otomatis; penjaga membersihkan miliknya sendiri.
+    - Penjaga: `scripts/check-kode-barang.ts` (**14 pemeriksaan**) — `npm run check:kode`. Inti: barang A dibuat → dihapus → barang B **tidak** mendapat nomor A.
+    - Tabel dibuat dengan **ALTER manual**, JANGAN `drizzle-kit push` di DB produksi. SQL: `scripts/sql/kode_terpakai.sql`.
+    - Konsekuensi yang disadari: kalau admin menambah barang lalu gagal simpan, nomor itu **tetap terpakai** (bolong). Ini disengaja — lebih baik bolong daripada nomor diberikan dua kali.
 
 ---
 

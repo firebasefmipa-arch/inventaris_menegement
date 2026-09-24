@@ -16,6 +16,77 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #10 — 24 Sep 2026 — Nomor barang dipakai ulang (buku register)
+
+**Temuan (dilaporkan user, dibuktikan di produksi):** kode barang
+`FMIPA-TI-2026-001` dipakai dua barang berbeda.
+
+Bukti dari log produksi:
+
+```
+03:04:58  DELETE /api/items/8     (Proyektor Epson EB-E01 dihapus admin)
+03:05:37  POST   /api/items       (Leptop No. 15 dibuat)
+          → Leptop No. 15 mendapat FMIPA-TI-2026-001  ← nomor bekas
+```
+
+**Akar masalah:** `nextSequence()` di `src/lib/item-code.ts` menghitung
+`MAX(urut)` dari baris `items` yang **masih hidup**. Begitu barang dihapus,
+nomornya bebas dan diberikan lagi ke barang berikutnya.
+
+Reproduksi: `repro-kode.sh` (57 baris) membuktikan bug ini di DB salinan.
+
+**Perbaikan:** tabel `kode_terpakai` (buku register) sebagai sumber nomor.
+
+| Sebelum | Sesudah |
+|---|---|
+| `MAX(urut)` dari `items` hidup | `MAX(urut)` dari `kode_terpakai` |
+| barang dihapus → nomor bebas | nomor terkunci selamanya |
+| tak ada jejak nomor | satu baris per kode yang pernah keluar |
+
+**Keputusan penting:** tabel ini **SENGAJA TANPA foreign key** ke `items`.
+Kalau dikasih `ON DELETE CASCADE` (seperti `item_returns`), catatan nomor ikut
+terhapus bersama barangnya — fiturnya batal total. Ini disadari dan disengaja.
+
+Kedua: kode dicatat **saat dibuat**, bukan saat barang tersimpan. Kalau
+penyimpanan gagal, nomornya tetap terkunci (bolong). Dipilih bolong daripada
+nomor diberikan dua kali.
+
+**Yang TIDAK dipulihkan (keputusan user):** nomor bekas yang sudah terlanjur
+dipakai ganda dibiarkan apa adanya. `Leptop No. 15` tetap memakai
+`FMIPA-TI-2026-001`. Nomor berikutnya untuk lokasi TI = `005`.
+
+**Nomor yang tak bisa dilacak:** `Mouse Logitech` & `Laptop Macbook Pro`
+barangnya sudah terhapus dan `item_snapshot.item_code` kosong, jadi nomor
+keduanya tidak pernah bisa ditentukan. Sudah tidak relevan — nomor itu
+terkunci otomatis begitu dipakai barang berikutnya.
+
+**Isi awal register saat pemasangan:** 9 nomor.
+
+```
+6 nomor barang hidup (semai otomatis dari tabel items)
+3 nomor sisa uji yang pernah terpakai (FMIPA-TI-2026-002, -004, FMIPA-D-2026-001)
+```
+
+**Perintah perawatan:** `npm run kode:bebas {daftar|cek|semai|lepas [--paksa]} <KODE>`
+— manual, di server. `lepas` DITOLAK kalau nomornya masih dipakai barang hidup.
+
+**Bukti uji:**
+
+```
+check-kode-barang.ts          14/14 lulus
+ujiB-skenario.sh              A dapat 009 → dihapus → B dapat 010  (bukan 009)
+ujiB-lepas.sh                 lepas kode hidup → DITOLAK
+                              lepas kode bekas → berhasil, nomor bisa dipakai lagi
+                              register setelah semua uji: 9 nomor, 0 sisa
+```
+
+**Berkas baru:** `src/lib/kode-register.ts` (42), `scripts/kode-bebas.ts` (148),
+`scripts/check-kode-barang.ts` (139), `scripts/sql/kode_terpakai.sql` (28).
+**Diubah:** `src/lib/item-code.ts` (121), `src/db/schema.ts`,
+`src/app/api/items/import/route.ts`, `package.json`.
+
+---
+
 ## Audit #9 — 24 Sep 2026 — Fitur pengembalian barang (Bagian C)
 
 **Pemicu:** lanjutan Audit #8. Setelah barang yang habis diserahkan tidak lagi
