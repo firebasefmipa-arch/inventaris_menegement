@@ -16,6 +16,53 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #9 — 24 Sep 2026 — Fitur pengembalian barang (Bagian C)
+
+**Pemicu:** lanjutan Audit #8. Setelah barang yang habis diserahkan tidak lagi
+dihapus (cuma disembunyikan), muncul kebutuhan: **bagaimana barang itu kembali?**
+Keputusan user: admin mengetik **kode barang** → stok **bertambah**.
+
+**Temuan yang muncul saat menyiapkan:**
+
+- **T-1. Riwayat serah terima kolom kode kosong 0/4.** Sisi "keluar" karena itu
+  dilacak lewat `handover_items.item_id`, bukan lewat kode. Tidak diperbaiki —
+  jalur pengembalian memakai kode barang HIDUP (`items.item_code`), yang memang
+  terisi (6/6). Kode di riwayat hanya snapshot historis.
+- **T-2. Barang yang dulu diserahkan sudah terhapus** (`Mouse Logitech`,
+  `Laptop Macbook Pro`) mengikuti aturan lama. Kodenya ikut lenyap, jadi kedua
+  barang itu **tidak bisa dikembalikan** lewat fitur ini. Konsekuensi keputusan
+  "tidak usah dipulihkan" — dicatat, bukan diperbaiki.
+- **T-3. Tidak ada satu pun barang yang sedang di luar** di data sekarang —
+  keenam barang utuh. Kolom "Sedang di Luar" mulai dari 0; itu benar.
+- **T-4. Belum ada tabel pengembalian.** Dibuat `item_returns` (ALTER manual).
+
+**Yang dikerjakan:**
+
+- Tabel `item_returns` — kode, jumlah, nama pengembali, penerima, catatan, tanggal.
+- `src/lib/unit-di-luar.ts` — SATU-SATUNYA definisi "sedang di luar":
+  Σ `handover_items` pada `handovers` berstatus `completed` − Σ `item_returns`.
+- `src/lib/pengembalian.ts` — `catatPengembalian()`. Stok **ditambah**, tidak
+  ditimpa, supaya pengembalian bertahap benar. Dipisah dari route agar bisa diuji.
+- `GET`/`POST /api/admin/returns` — admin & super_admin saja.
+- Halaman `/admin/returns` (menu sidebar "Pengembalian") — form input kode,
+  daftar unit yang masih di luar (bisa diklik → kode terisi), riwayat.
+- Kolom "Sedang di Luar" di kartu & baris daftar barang.
+
+**Verifikasi:**
+
+- Penjaga `check:kembali` — **22 pemeriksaan lulus, 0 gagal**.
+- Endpoint di :3001 — anon 401, user biasa 401, kode salah 404, jumlah melebihi
+  400, jumlah 0 400, tanpa nama 400, kembali bertahap 201+201, tak ada sisa 400.
+- Browser (playwright) — stok 0 tersembunyi → kembalikan 1 lewat formulir →
+  **barang muncul lagi di daftar** → kembalikan sisanya → daftar "di luar" kosong.
+  Konsol bersih.
+- Baseline DB dipulihkan persis: items 6 · tx 6 · ti 7 · hv 4 · hi 4 · usr 9 · ret 0.
+
+**Belum ditutup:** `item_returns` belum ada di dump skema deploy — kalau DB lain
+dibangun ulang, tabel ini harus dibuat manual. Lihat commit untuk SQL-nya.
+
+---
+
 ## Audit #8 — 24 Sep 2026 — Barang habis diserahkan dihapus permanen + kode barang dipakai ulang
 
 **Pemicu:** dua hal dari user. (1) Ralat aturan: barang yang habis karena

@@ -99,6 +99,7 @@ sehingga aman diulang di database produksi):
 | `check-import-fix.ts` | impor Excel: nomor inv 12 digit, lokasi salah ketik, formData |
 | `check-terlambat.ts` | satu definisi "Terlambat" — SQL == klien |
 | `check-barang-habis.ts` | barang habis diserahkan: tetap ada, tersembunyi, terkunci (`npm run check:habis`) |
+| `check-barang-kembali.ts` | pengembalian: "di luar" = keluar−kembali, stok nambah (`npm run check:kembali`) |
 | `check-berkas-tak-terpakai.ts` | berkas unggahan tanpa rujukan DB (`--hapus` = buang) |
 
 ---
@@ -141,6 +142,9 @@ user                  -- Semua pengguna (user, admin, super_admin)
 items                 -- Inventaris barang
 transactions          -- Header transaksi peminjaman
 transaction_items     -- Detail barang per transaksi (multi-item)
+handovers             -- Header serah terima (permanen, stok berkurang)
+handover_items        -- Detail barang per serah terima
+item_returns          -- Catatan barang KEMBALI dari serah terima (stok nambah)
 account               -- OAuth accounts (NextAuth)
 session               -- Sessions (NextAuth)
 verificationToken     -- Token verifikasi (NextAuth)
@@ -187,6 +191,8 @@ Sumber tunggal daftar lokasi + kode: `src/lib/locations.ts` (25 lokasi resmi,
 transactions.user_id    → user.id    ON DELETE SET NULL   -- hapus user, history tetap ada
 transactions.item_id    → items.id   ON DELETE SET NULL   -- nullable, multi-item pakai transaction_items
 transaction_items.transaction_id → transactions.id ON DELETE CASCADE
+handover_items.handover_id → handovers.id ON DELETE CASCADE
+item_returns.item_id    → items.id   ON DELETE CASCADE   -- catatan kembali ikut terhapus
 ```
 
 ---
@@ -287,6 +293,7 @@ npm run check:snapshot         # Harus "SEMUA LOLOS"
 npx tsx scripts/check-import-fix.ts            # impor Excel
 npx tsx scripts/check-terlambat.ts             # definisi "Terlambat"
 npx tsx scripts/check-barang-habis.ts          # barang habis diserahkan (tetap ada & tersembunyi)
+npx tsx scripts/check-barang-kembali.ts        # pengembalian (stok nambah, "di luar" benar)
 npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 
 # Database
@@ -825,7 +832,6 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - **Perilaku lama yang dibatalkan:** `hapusBarangHabis()` sudah DIHAPUS dari `src/lib/item-in-use.ts` beserta pemanggilannya di DUA pintu serah terima, dan `snapshotSebelumHapus()` **tidak lagi** dipanggil di jalur serah terima (karena tak ada yang dihapus). Snapshot tetap dipakai di jalur hapus manual.
     - **Konsekuensi data:** barang yang sudah telanjur terhapus oleh aturan lama **tidak dipulihkan** (keputusan user). Mulai 24 Sep 2026 perilaku barunya berlaku.
 
-
     Filter `gt(items.quantity, 0)` tetap ada di: `/api/items`, katalog, statistik dashboard, `/api/stats`. **`admin/items/page.tsx` TIDAK lagi menyaring** — semua barang dikirim, penyaringan di klien per peran (lihat di atas).
     - Menghapus barang dari menu admin **diperbolehkan** untuk stok >0 (tombol Hapus di kartu). FK CASCADE di `schema.ts` TIDAK ADA di MySQL produksi, jadi baris riwayat tidak ikut terhapus; nama barangnya diamankan snapshot (`snapshotSebelumHapus()`). Lihat bagian "Riwayat ↔ Data Barang".
 
@@ -864,6 +870,24 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - wajib NIM + TTD
 
     Kalau menambah field identitas di body endpoint ini, itu regresi keamanan. Form di `KatalogClient.tsx` sengaja tidak lagi menanyakan nama/divisi/email/HP.
+
+18. **PENGEMBALIAN BARANG: input KODE barang → stok NAMBAH** — hanya **admin & super_admin**. Halaman `/admin/returns` (menu sidebar "Pengembalian"), endpoint `GET`/`POST /api/admin/returns`.
+
+    **Rumus "sedang di luar"** (`src/lib/unit-di-luar.ts` — SATU-SATUNYA definisi):
+    ```
+    sedang di luar = Σ handover_items pada handovers status 'completed'
+                   − Σ item_returns
+    ```
+    **JANGAN** pakai `quantity − availableQuantity` — rumus itu **buta terhadap serah terima** (diserahkan 2 dari 5 → 3−3=0, padahal 2 unit sebenarnya di luar).
+
+    - Pengembalian **DITOLAK** kalau: kode tak dikenal (404), jumlah bukan bilangan bulat ≥ 1 (400), tanpa nama pengembali (400), jumlah melebihi sisa di luar (400), atau sisa di luar sudah 0 (400).
+    - Stok **ditambah** (`quantity + jumlah`, begitupun `available_quantity`), **bukan ditimpa** — supaya pengembalian bertahap (2 keluar, kembali 1 lalu 1) benar.
+    - Barang **stok 0 TETAP bisa dikembalikan** (kodenya masih ketemu di DB); begitu stoknya > 0 ia **muncul lagi otomatis** di daftar barang. Ini penutup lingkaran aturan 12 — tanpa fitur ini, barang yang disembunyikan praktis hilang selamanya.
+    - **Peminjaman TIDAK disentuh** — `item_returns` hanya mencatat serah terima.
+    - Logika di `src/lib/pengembalian.ts` (`catatPengembalian()`), dipisah dari route supaya bisa diuji tanpa sesi HTTP.
+    - Penjaga: `scripts/check-barang-kembali.ts` (22 pemeriksaan) — `npm run check:kembali`.
+    - Tabel `item_returns` dibuat dengan **ALTER manual**, JANGAN `drizzle-kit push` di DB produksi.
+    - Kolom "Sedang di Luar" muncul di kartu & baris daftar barang (grid + list desktop); nilainya dikirim dari `admin/items/page.tsx`.
 
 ---
 
