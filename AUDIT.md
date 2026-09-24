@@ -16,6 +16,83 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #11 — 24 Sep 2026 — Empat bug "bentrok" (dua orang mengklik bersamaan)
+
+**Cara menemukannya:** bukan memeriksa tampilan, tapi **menyerbu** endpoint dengan
+beberapa permintaan di detik yang sama (seperti dua admin mengklik Simpan
+bersamaan), lalu menghitung stoknya.
+
+**Empat temuan, satu akar:** urutan *baca → hitung → tulis* yang tidak dikunci.
+Semua permintaan membaca angka lama, lalu menulis angka hasil hitungan masing-masing.
+Yang terakhir menulis menimpa yang sebelumnya (*lost update*).
+
+| # | Tempat | Gejala terbukti | Asal |
+|---|---|---|---|
+| 1 | `generateItemCode()` | 6 barang serentak → **3 berhasil, 3 error 500**; nomor sama dipakai dua kali | kode baru (Bagian B) |
+| 2 | `catatPengembalian()` | 1 unit di luar, 2 pengembalian serentak → **dua-duanya diterima**, stok naik 2 | kode baru (Bagian C) |
+| 3 | `POST /api/pinjam` | stok 4, 3 pinjaman @2 unit serentak → **ketiganya lolos** (6 dari 4) | sudah lama ada |
+| 4 | `POST /api/admin/handovers` | stok 4, 3 serah terima @2 unit → **ketiganya lolos**; stok akhir ngawur | sudah lama ada |
+
+**Bukti mentah temuan #1** (`audit-race.sh`, sebelum perbaikan):
+
+```
+req1 http=201 kode=FMIPA-TI-2026-005
+req2 http=201 kode=FMIPA-TI-2026-007
+req3 http=500 kode=-
+req4 http=201 kode=FMIPA-TI-2026-006
+req5 http=500 kode=-
+req6 http=500 kode=-
+```
+
+**Bukti mentah temuan #2:** `quantity` jadi **2** dari 1 unit yang keluar; 2 baris
+`item_returns` untuk satu unit.
+
+**Bukti mentah temuan #4:** 6 unit tercatat keluar dari stok 4; stok akhir 2
+(padahal seharusnya 0).
+
+**Penting — data produksi BELUM rusak.** Diperiksa langsung: tak ada stok negatif,
+tak ada `quantity < available_quantity`, tak ada catatan tak sinkron. Kejadian
+bersamaan ini belum pernah menimpa produksi, jadi ini **pencegahan**, bukan pemulihan.
+
+**Perbaikan** (tiga pola, satu tujuan: pindahkan syarat "cukup" ke dalam perintah tulis):
+
+1. **`catatKode()` mengembalikan status klaim.** Sebelumnya `INSERT IGNORE` menelan
+   bentrok dengan senyap; sekarang `affectedRows` diperiksa. `generateItemCode()`
+   mengulang sampai berhasil mengklaim nomor (maks 25 percobaan).
+2. **`catatPengembalian()` dibungkus satu transaksi + `SELECT ... FOR UPDATE`.**
+   Baris barang dikunci sebelum sisa "di luar" dihitung, jadi pengembalian kedua
+   menunggu dan melihat angka yang sudah final.
+3. **Stok dikurangi lewat `UPDATE ... WHERE stok >= jumlah`.** Syarat kecukupan
+   ikut di dalam perintah; kalau 0 baris terpengaruh, permintaan dibatalkan
+   (`409`) dan baris transaksi/serah terima yang telanjur dibuat dihapus kembali.
+
+**Yang TIDAK berubah:** aturan peminjaman (data diri, validasi, TTD, tanggal),
+aturan serah terima, tampilan, alur kerja sehari-hari. Yang berubah hanya
+**cara menulis stok ke database**. Pada peminjaman/penyerahan normal, hasilnya
+identik.
+
+**Perubahan perilaku yang disengaja:** saat dua permintaan bentrok dan stok tak
+cukup untuk keduanya, yang kedua **ditolak** dengan pesan "stok tidak lagi
+mencukupi — coba lagi", bukan sama-sama "berhasil" sambil merusak stok.
+
+**Bukti sesudah perbaikan** (`audit-race-ulang.sh` + `audit-race4.sh`):
+
+```
+#1  6 permintaan serentak   → 6 × 201, 6 nomor berbeda
+#2  2 pengembalian serentak → 1 × 201, 1 × 400; 1 baris; stok naik 1
+#3  3 pinjaman serentak     → 2 × 201, 1 × 409; stok berhenti di 0, tak negatif
+#4  3 serah terima serentak → 2 × 201, 1 × 409; total keluar 4 (pas), stok 0
+```
+
+**Penjaga baru:** `check-kode-barang.ts` bertambah 3 pemeriksaan bentrok
+(8 permintaan serentak → 8 nomor berbeda) → total **17**.
+
+**Berkas diubah:** `src/lib/item-code.ts`, `src/lib/pengembalian.ts`,
+`src/app/api/pinjam/route.ts`, `src/app/api/admin/handovers/route.ts`,
+`scripts/check-kode-barang.ts`.
+
+---
+
 ## Audit #10 — 24 Sep 2026 — Nomor barang dipakai ulang (buku register)
 
 **Temuan (dilaporkan user, dibuktikan di produksi):** kode barang

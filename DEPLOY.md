@@ -631,7 +631,7 @@ npx tsx scripts/check-import-fix.ts   # impor Excel (7 pemeriksaan)
 npx tsx scripts/check-terlambat.ts    # satu definisi "Terlambat" (7 pemeriksaan)
 npm run check:habis                   # barang habis diserahkan: tetap ada, tersembunyi (15)
 npm run check:kembali                 # pengembalian: "di luar" = keluar−kembali, stok nambah (22)
-npm run check:kode                    # buku register: nomor bekas tak dipakai ulang (14)
+npm run check:kode                    # buku register: nomor bekas tak dipakai ulang + bentrok (17)
 npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 ```
 

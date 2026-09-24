@@ -911,6 +911,17 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - Tabel dibuat dengan **ALTER manual**, JANGAN `drizzle-kit push` di DB produksi. SQL: `scripts/sql/kode_terpakai.sql`.
     - Konsekuensi yang disadari: kalau admin menambah barang lalu gagal simpan, nomor itu **tetap terpakai** (bolong). Ini disengaja — lebih baik bolong daripada nomor diberikan dua kali.
 
+20. **BENTROK (dua permintaan bersamaan): syarat "cukup" WAJIB ada di dalam perintah tulis** — bukan di pemeriksaan terpisah sebelumnya.
+    - **Akar bug:** pola `baca → hitung di kode → tulis` bisa kalah balapan. Dua permintaan membaca angka lama, keduanya menulis hasil hitungannya sendiri, yang terakhir menimpa yang sebelumnya (*lost update*). Sudah terbukti di 4 tempat (Audit #11).
+    - **Aturan:** untuk setiap pengurangan stok, tulis `UPDATE ... SET stok = stok - jumlah WHERE id = X AND stok >= jumlah`. Periksa `affectedRows`; kalau 0 → permintaan itu KALAH → batalkan (`409`), jangan diamkan.
+    - `db.update()` Drizzle mengembalikan `[ResultSetHeader]` — ambil `affectedRows` lewat `(Array.isArray(hasil) ? hasil[0] : hasil) as { affectedRows?: number }`. **Jangan** pakai `.$returningId()` untuk ini.
+    - Peminjaman & serah terima memakai pola yang sama (`and(eq(items.id, id), gte(items.stok, jumlah))`).
+    - **Yang HARUS dibatalkan saat kalah:** baris transaksi/serah terima yang telanjur dibuat sebelum pengurangan stok (`DELETE FROM transaction_items/transactions` atau `handover_items/handovers`), supaya tidak meninggalkan dokumen tanpa stok.
+    - **Kode barang:** `catatKode()` mengembalikan `true` kalau nomor BERHASIL diklaim (`affectedRows > 0`), `false` kalau sudah dipakai permintaan lain. `generateItemCode()` mengulang maks 25× sampai dapat nomor bebas. **Jangan** kembali ke `INSERT IGNORE` tanpa memeriksa hasilnya — bentroknya senyap dan berujung error 500 saat menyimpan barang.
+    - **Pengembalian:** satu `db.transaction()` + `SELECT ... FOR UPDATE` pada baris barang SEBELUM menghitung sisa "di luar". Tanpa kunci, dua pengembalian serentak sama-sama membaca "sisa 1" dan stok naik dua kali.
+    - **Cara menguji:** kirim N permintaan serentak (`curl ... &` lalu `wait`) dan hitung stoknya — jangan cuma menguji satu permintaan berurutan. Penjaga: `check-kode-barang.ts` B8 (8 serentak → 8 nomor berbeda).
+    - **Yang TIDAK berubah bagi pemakai:** aturan peminjaman/serah terima, validasi, TTD, tanggal, tampilan. Yang berubah hanya cara menulis stok.
+
 ---
 
 ## 11. Fitur yang Belum Diimplementasi (Backlog)
