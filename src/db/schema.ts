@@ -192,6 +192,32 @@ export const handovers = mysqlTable("handovers", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ── Pengembalian barang yang sudah diserahkan ─────────────────────────────
+// Stok TIDAK ditimpa, tapi ditambah — supaya pengembalian bertahap
+// (2 diserahkan, kembali 1 lalu 1) tetap tercatat.
+//
+// "Sedang di luar" = Σ handover_items pada handovers berstatus completed
+//                    − Σ item_returns. Lihat src/lib/unit-di-luar.ts.
+
+export const itemReturns = mysqlTable("item_returns", {
+  id: int("id").autoincrement().primaryKey(),
+  itemId: int("item_id")
+    .notNull()
+    .references(() => items.id, { onDelete: "cascade" }),
+  quantity: int("quantity").notNull().default(1),
+  // Snapshot — riwayat tetap terbaca walau barangnya kelak dihapus.
+  itemName: varchar("item_name", { length: 255 }),
+  itemCode: varchar("item_code", { length: 255 }),
+  // Siapa yang menyerahkan kembali (diketik admin) & siapa yang menerima
+  // (dari sesi, diisi server).
+  returnedBy: varchar("returned_by", { length: 255 }).notNull(),
+  receivedBy: varchar("received_by", { length: 255 }),
+  receivedById: varchar("received_by_id", { length: 255 }),
+  notes: text("notes"),
+  returnDate: timestamp("return_date").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const handoverItems = mysqlTable("handover_items", {
   id: int("id").autoincrement().primaryKey(),
   handoverId: int("handover_id")
