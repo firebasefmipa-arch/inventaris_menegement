@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { handovers, handoverItems, items, users } from "@/db/schema";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, inArray, and, gte, sql } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
@@ -184,17 +184,38 @@ export async function POST(req: NextRequest) {
       }))
     );
 
-    // Kurangi stok permanen
+    // Kurangi stok permanen — ATOMIK. Syarat "stok cukup" diletakkan di WHERE,
+    // jadi dua permintaan yang datang bersamaan tidak bisa sama-sama lolos:
+    // yang kalah mendapat 0 baris terpengaruh dan request-nya dibatalkan.
     for (const c of cartItems) {
-      const dbItem = itemMap.get(c.itemId)!;
-      const newQty       = dbItem.quantity - c.quantity;
-      const newAvailable = dbItem.availableQuantity - c.quantity;
-      await db.update(items).set({
-        quantity: Math.max(0, newQty),
-        availableQuantity: Math.max(0, newAvailable),
-        status: Math.max(0, newAvailable) === 0 ? "borrowed" : "available",
-        updatedAt: new Date(),
-      }).where(eq(items.id, dbItem.id));
+      const hasil = await db
+        .update(items)
+        .set({
+          quantity: sql`${items.quantity} - ${c.quantity}`,
+          availableQuantity: sql`${items.availableQuantity} - ${c.quantity}`,
+          status: sql`CASE WHEN ${items.availableQuantity} - ${c.quantity} <= 0 THEN 'borrowed' ELSE 'available' END`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(items.id, c.itemId),
+            gte(items.quantity, c.quantity),
+            gte(items.availableQuantity, c.quantity)
+          )
+        );
+
+      const data = (Array.isArray(hasil) ? hasil[0] : hasil) as unknown as { affectedRows?: number };
+      if (Number(data?.affectedRows ?? 0) === 0) {
+        // Kalah balapan / stok berubah → batalkan serah terima yang baru dibuat.
+        await db.delete(handoverItems).where(eq(handoverItems.handoverId, hvId));
+        await db.delete(handovers).where(eq(handovers.id, hvId));
+        return NextResponse.json(
+          {
+            error: `Stok "${itemMap.get(c.itemId)?.name}" tidak lagi mencukupi — mungkin baru diambil permintaan lain. Coba lagi.`,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     // Auto-generate PDF dan simpan ke disk
