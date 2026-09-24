@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { items } from "@/db/schema";
 import { auth } from "@/auth";
 import { LOCATION_CODES, normalizeLocation, lokasiMirip } from "@/lib/locations";
-import { resolvePrefix, nextSequence, formatCode } from "@/lib/item-code";
+import { resolvePrefix, nextSequence, formatCode, catatKodeMassal } from "@/lib/item-code";
 import { IMPORT_COLUMNS, normalizeHeader, pickColumn } from "@/lib/item-import";
 import { formDataAman } from "@/lib/json-body";
 
@@ -238,6 +238,13 @@ export async function POST(request: NextRequest) {
         location: item.location || null,
         status: "available" as const,
       }))
+    );
+
+    // Catat semua kode yang baru dibuat ke buku register — supaya nomornya
+    // terkunci walau barangnya kelak dihapus.
+    await catatKodeMassal(
+      newItems.map((i) => i.itemCode).filter((k): k is string => !!k),
+      "impor"
     );
 
     return NextResponse.json({
