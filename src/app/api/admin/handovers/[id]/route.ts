@@ -9,7 +9,6 @@ import { existsSync } from "fs";
 import path from "path";
 import { deleteUploadByUrl } from "@/lib/delete-upload";
 import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
-import { hapusBarangHabis } from "@/lib/item-in-use";
 
 // PUT /api/admin/handovers/[id] — approve atau reject
 export async function PUT(
@@ -76,11 +75,6 @@ export async function PUT(
         status: "completed",
         signedDocumentUrl: finalPdfUrl,
       }).where(eq(handovers.id, hvId));
-
-      // Barang yang stok FISIKNYA habis karena diserahkan → hilang dari daftar
-      // barang. Yang habis karena dipinjam tidak ikut: quantity-nya masih > 0
-      // (barangnya bakal kembali), jadi tetap tampil.
-      await hapusBarangHabis(hvItems.map((h) => h.itemId));
 
       return NextResponse.json({ success: true, message: "Serah terima berhasil disetujui" });
 

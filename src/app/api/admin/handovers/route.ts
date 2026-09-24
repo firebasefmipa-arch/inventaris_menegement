@@ -10,7 +10,6 @@ import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
-import { hapusBarangHabis } from "@/lib/item-in-use";
 
 // GET /api/admin/handovers — daftar semua serah terima (admin)
 export async function GET(req: NextRequest) {
@@ -236,11 +235,6 @@ export async function POST(req: NextRequest) {
       console.error("Auto-generate handover PDF error:", pdfErr);
       // Tidak gagalkan request jika PDF error
     }
-
-    // Barang yang stok FISIKNYA habis karena diserahkan → hilang dari daftar
-    // barang. Yang habis karena dipinjam tidak ikut: quantity-nya masih > 0
-    // (barangnya bakal kembali), jadi tetap tampil.
-    await hapusBarangHabis(cartItems.map((c) => c.itemId));
 
     return NextResponse.json({ id: hvId, code: `ST-${String(hvId).padStart(4, "0")}`, pdfUrl }, { status: 201 });
   } catch (error) {
