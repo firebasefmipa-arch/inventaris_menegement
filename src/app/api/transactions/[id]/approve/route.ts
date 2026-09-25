@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transactions, transactionItems, items } from "@/db/schema";
+import { transactions, transactionItems } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { periksaAksesUnit } from "@/lib/akses-unit";
+import { kembalikanKeStok } from "@/lib/pengembalian";
 import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
@@ -37,6 +39,13 @@ export async function POST(
     if (!tx) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     if (tx.status !== "pending_approval")
       return NextResponse.json({ error: "Transaction is not pending approval" }, { status: 400 });
+
+    // ── Batas unit ──
+    // Sejak pengajuan dipecah per unit, tiap pecahan punya adminnya sendiri.
+    // Pemeriksaan di SERVER, bukan sekadar menyembunyikan tombol: URL bisa
+    // diketik langsung. Superadmin lolos tanpa diperiksa.
+    const tolak = await periksaAksesUnit(session, tx.unit);
+    if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
 
     const newStatus = action === "approve" ? "active" : "rejected";
 
@@ -77,30 +86,14 @@ export async function POST(
         signedDocumentUrl: null,
       }).where(eq(transactions.id, txId));
 
-      // Kembalikan stok
+      // Kembalikan stok. Transaksi baru memakai pivot transaction_items;
+      // transaksi lama (sebelum multi-item) menautkan barangnya lewat
+      // transactions.item_id — keduanya tetap dilayani.
       const txItems = await db.select().from(transactionItems).where(eq(transactionItems.transactionId, txId));
       if (txItems.length > 0) {
-        for (const txItem of txItems) {
-          const [item] = await db.select().from(items).where(eq(items.id, txItem.itemId)).limit(1);
-          if (item) {
-            const newAvailable = item.availableQuantity + txItem.quantity;
-            await db.update(items).set({
-              availableQuantity: newAvailable,
-              status: newAvailable > 0 ? "available" : "borrowed",
-              updatedAt: new Date(),
-            }).where(eq(items.id, item.id));
-          }
-        }
+        await kembalikanKeStok(txItems.map((t) => ({ itemId: t.itemId, quantity: t.quantity })));
       } else if (tx.itemId) {
-        const [item] = await db.select().from(items).where(eq(items.id, tx.itemId)).limit(1);
-        if (item) {
-          const newAvailable = item.availableQuantity + tx.quantity;
-          await db.update(items).set({
-            availableQuantity: newAvailable,
-            status: newAvailable > 0 ? "available" : "borrowed",
-            updatedAt: new Date(),
-          }).where(eq(items.id, item.id));
-        }
+        await kembalikanKeStok([{ itemId: tx.itemId, quantity: tx.quantity }]);
       }
     }
 

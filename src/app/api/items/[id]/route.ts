@@ -6,6 +6,8 @@ import { toBool } from "@/lib/to-bool";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
 import { normalizeLocation, lokasiMirip } from "@/lib/locations";
+import { normalizeUnit } from "@/lib/units";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 import { barangSedangDipakai, pesanBarangDipakai } from "@/lib/item-in-use";
 
@@ -16,6 +18,31 @@ async function requireAdmin() {
   if (!session?.user || (role !== "admin" && role !== "super_admin"))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return null;
+}
+
+/**
+ * Barang ini ada DAN boleh disentuh pemakai?
+ * Mengembalikan barangnya, atau respons penolakan yang siap dikirim.
+ *
+ * Barang di luar unit admin dijawab 403 — bukan 404. Sengaja: 404 akan
+ * menyamarkan keberadaannya, tapi juga bikin admin bingung mencari barang yang
+ * URL-nya jelas ada. 403 lebih jujur: "ada, tapi bukan hak Anda".
+ */
+async function ambilBarangBoleh(id: string) {
+  const itemId = idValid(id);
+  if (itemId === null)
+    return { tolak: NextResponse.json({ error: "ID tidak valid" }, { status: 400 }) } as const;
+
+  const [item] = await db.select().from(items).where(eq(items.id, itemId));
+  if (!item)
+    return { tolak: NextResponse.json({ error: "Item tidak ditemukan" }, { status: 404 }) } as const;
+
+  const session = await auth();
+  const tolakAkses = await periksaAksesUnit(session, item.unit);
+  if (tolakAkses)
+    return { tolak: NextResponse.json({ error: tolakAkses.pesan }, { status: tolakAkses.status }) } as const;
+
+  return { item } as const;
 }
 
 /** `id` route bisa bukan angka — tanpa cek ini query jadi `WHERE id = NaN`. */
@@ -33,20 +60,9 @@ export async function GET(
     if (denied) return denied;
 
     const { id } = await params;
-    const itemId = idValid(id);
-    if (itemId === null)
-      return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
-    const [item] = await db
-      .select()
-      .from(items)
-      .where(eq(items.id, itemId));
-    if (!item) {
-      return NextResponse.json(
-        { error: "Item tidak ditemukan" },
-        { status: 404 }
-      );
-    }
-    return NextResponse.json(item);
+    const hasil = await ambilBarangBoleh(id);
+    if ("tolak" in hasil) return hasil.tolak;
+    return NextResponse.json(hasil.item);
   } catch (error) {
     console.error("GET /api/items/[id] error:", error);
     return NextResponse.json(
@@ -65,24 +81,31 @@ export async function PUT(
     if (denied) return denied;
 
     const { id } = await params;
-    const itemId = idValid(id);
-    if (itemId === null)
-      return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
+    const hasilAmbil = await ambilBarangBoleh(id);
+    if ("tolak" in hasilAmbil) return hasilAmbil.tolak;
+    const existing = hasilAmbil.item;
+
     const body = await jsonBody(request);
     if (!body) {
       return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     }
-    const { name, category, description, quantity, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } =
+    const { name, category, description, quantity, unit, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } =
       body;
-    const [existing] = await db
-      .select()
-      .from(items)
-      .where(eq(items.id, itemId));
-    if (!existing) {
-      return NextResponse.json(
-        { error: "Item tidak ditemukan" },
-        { status: 404 }
-      );
+
+    // Pindah unit = menyerahkan barang ke pengelola lain. Hanya boleh kalau
+    // pemakai berhak atas unit LAMA (sudah diperiksa di atas) DAN unit BARU.
+    // Tanpa cek kedua, admin TI bisa "menyumbang" barang ke unit mana pun.
+    let unitFinal: string | undefined;
+    if (unit !== undefined) {
+      const u = normalizeUnit(unit);
+      const session = await auth();
+      const tolakTujuan = await periksaAksesUnit(session, u || null);
+      if (tolakTujuan)
+        return NextResponse.json(
+          { error: `Tidak bisa memindahkan barang ke unit itu — ${tolakTujuan.pesan}` },
+          { status: tolakTujuan.status }
+        );
+      unitFinal = u;
     }
 
     // ── Jumlah harus bilangan bulat ──
@@ -142,6 +165,7 @@ export async function PUT(
             existing.availableQuantity + (quantityNum - existing.quantity)
           ),
         }),
+        ...(unitFinal !== undefined && { unit: unitFinal || null }),
         ...(location !== undefined && {
           location: normalizeLocation(lokasiMirip(location) || location) || null,
         }),
@@ -152,9 +176,9 @@ export async function PUT(
         ...(isLabelable !== undefined && { isLabelable: toBool(isLabelable) }),
         updatedAt: new Date(),
       })
-      .where(eq(items.id, itemId));
+      .where(eq(items.id, existing.id));
 
-    const [item] = await db.select().from(items).where(eq(items.id, itemId));
+    const [item] = await db.select().from(items).where(eq(items.id, existing.id));
     return NextResponse.json(item);
   } catch (error) {
     console.error("PUT /api/items/[id] error:", error);
@@ -174,20 +198,10 @@ export async function DELETE(
     if (denied) return denied;
 
     const { id } = await params;
-    const itemId = idValid(id);
-    if (itemId === null)
-      return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
-
-    const [existing] = await db
-      .select()
-      .from(items)
-      .where(eq(items.id, itemId));
-    if (!existing) {
-      return NextResponse.json(
-        { error: "Item tidak ditemukan" },
-        { status: 404 }
-      );
-    }
+    const hasilAmbil = await ambilBarangBoleh(id);
+    if ("tolak" in hasilAmbil) return hasilAmbil.tolak;
+    const existing = hasilAmbil.item;
+    const itemId = existing.id;
 
     // ── F1: jangan hapus barang yang unitnya masih di tangan orang ──
     // Menghapusnya membuat transaksinya menggantung dan pengembalian mustahil.

@@ -5,6 +5,8 @@ import { db } from "@/db";
 import { items } from "@/db/schema";
 import { auth } from "@/auth";
 import { LOCATION_CODES, normalizeLocation, lokasiMirip } from "@/lib/locations";
+import { normalizeUnit, unitDikenal } from "@/lib/units";
+import { batasUnit } from "@/lib/akses-unit";
 import { resolvePrefix, nextSequence, formatCode, catatKodeMassal } from "@/lib/item-code";
 import { IMPORT_COLUMNS, normalizeHeader, pickColumn } from "@/lib/item-import";
 import { formDataAman } from "@/lib/json-body";
@@ -44,6 +46,10 @@ export async function POST(request: NextRequest) {
     const role = (session?.user as any)?.role;
     if (!session?.user || (role !== "admin" && role !== "super_admin"))
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Unit-unit yang dikelola admin ini; null = superadmin (semua unit).
+    const batas = await batasUnit(session);
+    let dilewatiUnit = 0;
 
     const formData = await formDataAman(request);
     if (!formData) {
@@ -95,6 +101,7 @@ export async function POST(request: NextRequest) {
       lastCheckDate?: string | null;
       condition?: string | null;
       quantity: number;
+      unit?: string | null;
       location?: string | null;
       imageUrl?: string | null;
     }> = [];
@@ -145,21 +152,25 @@ export async function POST(request: NextRequest) {
 
       const inventoryNumber = teks("No. Inv DTI");
       const sn = teks("SN");
-      let location = teks("Lokasi");
 
-      // Salah ketik nama lokasi ("Devisi" vs "Divisi") → pakai yang resmi,
-      // supaya kode barang tidak bercabang (FMIPA-DTI vs FMIPA-TI).
-      const mirip = location ? lokasiMirip(location) : null;
-      if (mirip) {
+      // ── Unit: penentu KODE BARANG ──
+      // Harus ada di daftar resmi. Kalau tidak, kode memakai "LAIN" dan
+      // barisnya diberi peringatan supaya bisa dibetulkan.
+      const unitRaw = teks("Unit");
+      const unit = normalizeUnit(unitRaw);
+      if (unitRaw && !unitDikenal(unitRaw)) {
         warnings.push(
-          `Baris ${barisKe} ("${name}"): lokasi "${location}" tidak ada di daftar resmi — dipakai "${mirip}".`
+          `Baris ${barisKe} ("${name}"): unit "${unitRaw}" tidak ada di daftar unit — ` +
+          `kode barang memakai "LAIN". Perbaiki ejaannya atau minta Super Admin menambahkannya.`
         );
-        location = mirip;
-      } else if (location && !LOCATION_CODES[normalizeLocation(location)]) {
+      } else if (!unitRaw) {
         warnings.push(
-          `Baris ${barisKe} ("${name}"): lokasi "${location}" tidak ada di daftar resmi — dianggap lokasi baru.`
+          `Baris ${barisKe} ("${name}"): kolom "Unit" kosong — kode barang memakai "LAIN" ` +
+          `dan hanya Super Admin yang bisa mengelolanya.`
         );
       }
+      // Lokasi: tempat/ruangan, bebas diketik → hanya dirapikan kapitalisasinya.
+      const location = teks("Lokasi");
 
       // Duplikat: sudah ada di database, atau kembar di file ini.
       const kunci = kunciBarang(name, inventoryNumber, sn, location);
@@ -181,8 +192,24 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Kode dari file Excel DIABAIKAN — selalu di-generate ulang.
-      const { prefix, location: normalizedLocation } = await resolvePrefix(location);
+      // Kode dari file Excel DIABAIKAN — selalu di-generate ulang dari UNIT.
+      const { prefix, unit: unitFinal } = await resolvePrefix(unit);
+
+      // ── Batas unit ──
+      // Admin hanya boleh mengimpor barang untuk unit yang dikelolanya. Baris
+      // milik unit lain DILEWATI (bukan membatalkan seluruh berkas) supaya satu
+      // berkas bersama tetap bisa dipakai tanpa saling merusak.
+      if (batas !== null) {
+        const target = normalizeUnit(unitFinal);
+        const boleh = !!target && batas.some((u) => normalizeUnit(u) === target);
+        if (!boleh) {
+          warnings.push(
+            `Baris ${barisKe} ("${name}"): unit "${unitRaw || "(kosong)"}" bukan unit yang Anda kelola — baris dilewati.`
+          );
+          dilewatiUnit++;
+          continue;
+        }
+      }
       let seq = seqCache.get(prefix);
       if (seq === undefined) seq = await nextSequence(prefix, year);
       seqCache.set(prefix, seq + 1);
@@ -198,7 +225,8 @@ export async function POST(request: NextRequest) {
         lastCheckDate: teks("Tanggal Cek"),
         condition: teks("Kondisi"),
         quantity,
-        location: normalizedLocation,
+        unit: unitFinal || null,
+        location: normalizeLocation(location || "") || null,
         imageUrl: null,
       });
     }
@@ -207,6 +235,7 @@ export async function POST(request: NextRequest) {
       const sebab = [
         skippedRows ? `${skippedRows} baris dilewati karena kolom "Nama Barang" kosong` : "",
         duplicates.length ? `${duplicates.length} baris duplikat` : "",
+        dilewatiUnit ? `${dilewatiUnit} baris bukan unit Anda` : "",
       ].filter(Boolean).join(", ");
       return NextResponse.json(
         {
@@ -235,6 +264,7 @@ export async function POST(request: NextRequest) {
         imageUrl: item.imageUrl || null,
         quantity: item.quantity,
         availableQuantity: item.quantity,
+        unit: item.unit || null,
         location: item.location || null,
         status: "available" as const,
       }))

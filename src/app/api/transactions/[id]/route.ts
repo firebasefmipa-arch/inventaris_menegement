@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems, items } from "@/db/schema";
-import { eq, and, count } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 
 export async function PUT(
   request: NextRequest,
@@ -39,6 +40,13 @@ export async function PUT(
       );
     }
 
+    // ── Batas unit ──
+    // Sejak pengajuan dipecah per unit, tiap pecahan punya adminnya sendiri.
+    const tolak = await periksaAksesUnit(session, transaction.unit);
+    if (tolak) {
+      return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
+    }
+
     // ── Validasi transisi status ──
     // Tanpa ini, `returned` bisa dijalankan pada transaksi yang stoknya BELUM
     // pernah dipotong (mis. rejected) sehingga stok bertambah dari udara.
@@ -56,54 +64,31 @@ export async function PUT(
         .from(transactionItems)
         .where(eq(transactionItems.transactionId, txId));
 
+      // Penambahan stok ATOMIK: `available_quantity = available_quantity + n`
+      // dihitung oleh database, bukan dibaca dulu ke aplikasi. Dulu di sini
+      // baca-lalu-tulis — dua pengembalian bersamaan bisa saling menimpa.
+      // `status` disamakan lewat ekspresi, bukan angka dari aplikasi.
       if (txItems.length > 0) {
         for (const txItem of txItems) {
-          const [item] = await db
-            .select()
-            .from(items)
-            .where(eq(items.id, txItem.itemId))
-            .limit(1);
-
-          if (item) {
-            const newAvailable = item.availableQuantity + txItem.quantity;
-            // Cek apakah masih ada transaksi aktif lain untuk item ini
-            const [{ activeCount }] = await db
-              .select({ activeCount: count() })
-              .from(transactionItems)
-              .where(
-                and(
-                  eq(transactionItems.itemId, item.id),
-                )
-              );
-            await db
-              .update(items)
-              .set({
-                availableQuantity: newAvailable,
-                status: newAvailable > 0 ? "available" : "borrowed",
-                updatedAt: new Date(),
-              })
-              .where(eq(items.id, item.id));
-          }
-        }
-      } else if (transaction.itemId) {
-        // Legacy single-item fallback
-        const [item] = await db
-          .select()
-          .from(items)
-          .where(eq(items.id, transaction.itemId))
-          .limit(1);
-
-        if (item) {
-          const newAvailable = item.availableQuantity + transaction.quantity;
           await db
             .update(items)
             .set({
-              availableQuantity: newAvailable,
-              status: "available" as const,
+              availableQuantity: sql`${items.availableQuantity} + ${txItem.quantity}`,
+              status: sql`CASE WHEN ${items.availableQuantity} + ${txItem.quantity} > 0 THEN 'available' ELSE 'borrowed' END`,
               updatedAt: new Date(),
             })
-            .where(eq(items.id, item.id));
+            .where(eq(items.id, txItem.itemId));
         }
+      } else if (transaction.itemId) {
+        // Legacy single-item fallback
+        await db
+          .update(items)
+          .set({
+            availableQuantity: sql`${items.availableQuantity} + ${transaction.quantity}`,
+            status: "available" as const,
+            updatedAt: new Date(),
+          })
+          .where(eq(items.id, transaction.itemId));
       }
 
       await db

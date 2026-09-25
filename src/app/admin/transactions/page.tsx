@@ -1,9 +1,11 @@
 import { db } from "@/db";
 import { transactions, items, transactionItems } from "@/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { namaSql, namaSqlLegacy } from "@/lib/item-snapshot";
 import { sqlTerlambat } from "@/lib/tanggal";
 import { TransactionsClient } from "./TransactionsClient";
+import { auth } from "@/auth";
+import { batasUnit } from "@/lib/akses-unit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,16 @@ export default async function TransactionsPage({
   const { status } = await searchParams;
   const statusFilter = status || "";
 
+  // Admin hanya melihat pecahan unit yang dikelolanya; superadmin semua.
+  const session = await auth();
+  const batas = await batasUnit(session);
+
   const conditions = [];
+  if (batas !== null) {
+    conditions.push(
+      batas.length === 0 ? sql`1 = 0` : inArray(transactions.unit, batas)
+    );
+  }
   if (statusFilter === "overdue") {
     // SATU definisi: lihat sqlTerlambat() di src/lib/tanggal.ts.
     conditions.push(sqlTerlambat());
@@ -28,6 +39,7 @@ export default async function TransactionsPage({
   const data = await db
     .select({
       id: transactions.id,
+      unit: transactions.unit,
       itemId: transactions.itemId,
       quantity: transactions.quantity,
       status: transactions.status,

@@ -12,6 +12,7 @@ type Item = {
   category: string;
   description: string | null;
   availableQuantity: number;
+  unit: string | null;
   location: string | null;
 };
 
@@ -157,10 +158,12 @@ export function KatalogClient({ items, categories, currentSearch, currentCategor
                     {item.description}
                   </p>
                 )}
-                {item.location && (
+                {(item.unit || item.location) && (
                   <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-auto">
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span className="truncate">{item.location}</span>
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                      {[item.unit, item.location].filter(Boolean).join(" — ")}
+                    </span>
                   </div>
                 )}
               </div>

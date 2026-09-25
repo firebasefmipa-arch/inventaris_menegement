@@ -2,9 +2,10 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { handovers, handoverItems, items } from "@/db/schema";
-import { desc, inArray, eq } from "drizzle-orm";
+import { desc, inArray, eq, sql } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { HandoversClient } from "./HandoversClient";
+import { batasUnit } from "@/lib/akses-unit";
 
 export default async function AdminHandoversPage() {
   const session = await auth();
@@ -13,9 +14,19 @@ export default async function AdminHandoversPage() {
     redirect("/admin/login");
   }
 
+  // Admin hanya melihat pecahan unit yang dikelolanya; superadmin semua.
+  const batas = await batasUnit(session);
+
   const hvList = await db
     .select()
     .from(handovers)
+    .where(
+      batas === null
+        ? undefined
+        : batas.length === 0
+          ? sql`1 = 0`
+          : inArray(handovers.unit, batas)
+    )
     .orderBy(desc(handovers.createdAt));
 
   let result: any[] = [];

@@ -16,6 +16,72 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #12 — 25 Sep 2026 — Fitur Unit: batas kelola per unit + sisa pola stok lama
+
+**Latar.** Fitur baru: barang punya **Unit** (pemilik: divisi/prodi), berbeda
+dari **Lokasi** (tempat). Kode barang pindah dari lokasi ke unit. Admin hanya
+boleh mengelola barang unit yang ditugaskan padanya. Satu pengajuan user yang
+memuat barang dari beberapa unit **dipecah di belakang layar** (satu bagian per
+unit) tapi tetap **satu pengajuan** di layar user.
+
+**Cara menemukannya:** dua bagian. (a) menelusuri SETIAP endpoint yang menyentuh
+barang/transaksi/serah terima untuk memasang batas unitnya; (b) memeriksa ulang
+semua tempat yang mengubah stok, karena fitur ini menambah jalur baru.
+
+**(a) Batas unit dipasang di — kalau hanya disembunyikan di layar, URL bisa
+diketik langsung:**
+
+| Berkas | Aksi |
+|---|---|
+| `api/items/route.ts` | daftar disaring unit; POST periksa hak |
+| `api/items/[id]/route.ts` | GET/PUT/DELETE periksa hak barang lama & unit baru |
+| `api/items/import/route.ts` | baris unit lain DILEWATI (bukan gagalkan seluruh berkas) |
+| `api/items/labels/route.ts` | admin tak boleh melabeli barang unit lain |
+| `api/items/bulk-delete/route.ts` | ditolak kalau satu saja di luar wewenang |
+| `api/transactions/route.ts`, `api/transactions/[id]/*` | daftar, approve/reject, koreksi, rincian, unggah, PDF, batal |
+| `api/handovers/route.ts`, `api/admin/handovers*` | sama, jalur serah terima |
+| `api/admin/returns/route.ts` | pengembalian dibatasi unit |
+| `api/stats/route.ts` | angka ringkasan tak boleh membocorkan unit lain |
+| `admin/transactions/page.tsx`, `admin/handovers/page.tsx` | disaring di SERVER — kalau tidak, kartu unit lain ikut terkirim ke browser |
+
+**(b) Tiga pola stok lama yang masih baca-lalu-tulis, ikut ditutup:**
+
+| # | Tempat | Gejala yang mungkin |
+|---|---|---|
+| 1 | `transactions/[id]/route.ts` (tombol "dikembalikan" — jalur lama) | stok dikembalikan lewat angka hasil hitungan aplikasi |
+| 2 | `transactions/[id]/correct` | stok barang lama dikembalikan & barang baru dikurangi tanpa syarat |
+| 3 | `admin/handovers/[id]/correct` | sama untuk jalur serah terima |
+
+Ditambah dua pembatalan yang seluruhnya baca-lalu-tulis:
+`user/transactions/[id]/cancel`, `user/handovers/[id]/cancel`.
+
+**Perbaikan.** Semua pengurangan memakai syarat di `WHERE` + periksa
+`affectedRows` (0 → 409); semua penambahan memakai ekspresi DB
+(`available_quantity + n`) dengan status dihitung `CASE WHEN`.
+
+**Temuan sampingan (cerobekan fitur baru):** laporan rincian transaksi
+(`/api/transactions/[id]/items`) dan serah terima
+(`/api/admin/handovers/[id]/items`) awalnya **hanya memeriksa peran**, tidak
+unit — admin unit lain bisa membaca rincian barang unit lain lewat URL. Sudah
+ditutup.
+
+**Keputusan yang menyertainya:**
+- Dokumen: **satu penandatanganan berlaku untuk semua pecahan** — kalau tidak,
+  pecahan lain tetap menunggu dokumen dan tak pernah bisa disetujui adminnya.
+- Pembatalan: **batal = batal semua pecahan**; ditolak kalau ada satu saja yang
+  sudah diproses.
+- Kelompok **tidak punya status sendiri**; status dihitung untuk tampilan saja.
+
+**Penjaga:** `npm run check:unit` — 27 pemeriksaan (kode dari unit, tiap unit
+urutan sendiri, unit tak dikenal → `LAIN`, hak kelola superadmin/admin/user,
+barang tanpa unit hanya superadmin, pemecahan keranjang tak tercampur).
+Seluruh penjaga lain tetap lulus: `check:pdf` 25, `check:label` 51,
+`check:habis` 15, `check:kembali` 22, `check:kode` 22, `check:snapshot` 19.
+
+**Status:** DIPERBAIKI (belum di-deploy saat audit ini ditulis).
+
+---
+
 ## Audit #11 — 24 Sep 2026 — Empat bug "bentrok" (dua orang mengklik bersamaan)
 
 **Cara menemukannya:** bukan memeriksa tampilan, tapi **menyerbu** endpoint dengan

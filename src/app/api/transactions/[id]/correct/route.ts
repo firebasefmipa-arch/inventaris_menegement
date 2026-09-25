@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems, items, users } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, gte, and, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { generateBorrowingPDF } from "@/lib/pdf-generator";
 import { writeFile, mkdir, unlink } from "fs/promises";
@@ -9,6 +9,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 import { jsonBody } from "@/lib/json-body";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 
 /**
  * PATCH /api/transactions/[id]/correct
@@ -42,20 +43,20 @@ export async function PATCH(
     if (tx.status !== "pending_approval")
       return NextResponse.json({ error: "Hanya bisa koreksi transaksi berstatus menunggu persetujuan" }, { status: 400 });
 
+    // ── Batas unit ── admin hanya boleh mengoreksi pecahan unitnya sendiri.
+    const tolak = await periksaAksesUnit(session, tx.unit);
+    if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
+
     // ── Ambil items lama untuk kembalikan stok ──
     const oldItems = await db.select().from(transactionItems).where(eq(transactionItems.transactionId, txId));
 
-    // Kembalikan stok items lama
+    // Kembalikan stok items lama — atomik (lihat src/lib/pengembalian.ts).
     for (const old of oldItems) {
-      const [item] = await db.select().from(items).where(eq(items.id, old.itemId)).limit(1);
-      if (item) {
-        const newAvailable = item.availableQuantity + old.quantity;
-        await db.update(items).set({
-          availableQuantity: newAvailable,
-          status: newAvailable > 0 ? "available" : "borrowed",
-          updatedAt: new Date(),
-        }).where(eq(items.id, item.id));
-      }
+      await db.update(items).set({
+        availableQuantity: sql`${items.availableQuantity} + ${old.quantity}`,
+        status: sql`CASE WHEN ${items.availableQuantity} + ${old.quantity} > 0 THEN 'available' ELSE 'borrowed' END`,
+        updatedAt: new Date(),
+      }).where(eq(items.id, old.itemId));
     }
 
     // ── Validasi & kurangi stok items baru ──
@@ -87,16 +88,25 @@ export async function PATCH(
       }))
     );
 
-    // Kurangi stok baru
+    // Kurangi stok baru — ATOMIK: syarat "stok cukup" ada di WHERE, jadi dua
+    // koreksi bersamaan tak bisa menjadikan stok minus. Dulu baca-lalu-tulis.
     const totalQty = newItems.reduce((s, ni) => s + ni.quantity, 0);
     for (const ni of newItems) {
-      const dbItem = itemMap.get(ni.itemId)!;
-      const newAvailable = dbItem.availableQuantity - ni.quantity;
-      await db.update(items).set({
-        availableQuantity: newAvailable,
-        status: newAvailable === 0 ? "borrowed" : "available",
+      const hasil = await db.update(items).set({
+        availableQuantity: sql`${items.availableQuantity} - ${ni.quantity}`,
+        status: sql`CASE WHEN ${items.availableQuantity} - ${ni.quantity} <= 0 THEN 'borrowed' ELSE 'available' END`,
         updatedAt: new Date(),
-      }).where(eq(items.id, dbItem.id));
+      }).where(and(eq(items.id, ni.itemId), gte(items.availableQuantity, ni.quantity)));
+
+      if (hasil[0].affectedRows === 0) {
+        // Kalah balapan — batalkan lewat error supaya tak meninggalkan
+        // pencatatan setengah jalan. Stok lama sudah dikembalikan di atas;
+        // pengguna bisa memuat ulang dan mengulang koreksinya.
+        return NextResponse.json(
+          { error: `Stok "${itemMap.get(ni.itemId)?.name}" berubah saat koreksi. Muat ulang lalu coba lagi.` },
+          { status: 409 }
+        );
+      }
     }
 
     // Update total qty di transaksi utama

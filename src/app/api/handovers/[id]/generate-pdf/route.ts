@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 
 export async function GET(
   request: NextRequest,
@@ -22,8 +23,14 @@ export async function GET(
     if (!hv) return new NextResponse("Not found", { status: 404 });
 
     const role = (session.user as any)?.role;
-    if (hv.userId !== session.user.id && role !== "admin" && role !== "super_admin") {
+    const pemilik = hv.userId === session.user.id;
+    if (!pemilik && role !== "admin" && role !== "super_admin") {
       return new NextResponse("Unauthorized", { status: 403 });
+    }
+    // Admin yang bukan pemilik hanya boleh menyentuh pecahan unitnya sendiri.
+    if (!pemilik) {
+      const tolak = await periksaAksesUnit(session, hv.unit);
+      if (tolak) return new NextResponse(tolak.pesan, { status: tolak.status });
     }
 
     // Ambil item-item serah terima

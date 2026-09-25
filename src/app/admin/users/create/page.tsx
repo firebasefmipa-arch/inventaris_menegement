@@ -11,6 +11,7 @@ import { useToast } from "@/components/Toaster";
 import { onlyDigits } from "@/lib/digits";
 import clsx from "clsx";
 import { DEPARTMENT_GROUPS } from "@/lib/departments";
+import { UNIT_OPTIONS, unitCode } from "@/lib/units";
 
 type RoleOption = "admin" | "user";
 
@@ -46,6 +47,9 @@ export default function CreateNativeUserPage() {
     customDepartment: "",
     role: "admin" as RoleOption,
   });
+  // Unit pengelolaan — hanya wajib untuk admin. Dipisah dari "departemen":
+  // departemen itu keterangan data diri, unit itu hak kelola.
+  const [units, setUnits] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -93,6 +97,10 @@ export default function CreateNativeUserPage() {
       toast("Isi nama divisi / prodi", "error");
       return;
     }
+    if (form.role === "admin" && units.length === 0) {
+      toast("Admin wajib diberi minimal 1 unit pengelolaan", "error");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -104,6 +112,7 @@ export default function CreateNativeUserPage() {
         phone: form.phone,
         nim: form.nim,
         department: finalDepartment,
+        units: form.role === "admin" ? units : undefined,
       });
 
       if (!res.success) {
@@ -445,6 +454,50 @@ export default function CreateNativeUserPage() {
               />
             )}
           </div>
+
+          {/* Unit pengelolaan — hanya untuk Admin */}
+          {form.role === "admin" && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">
+                Unit yang Dikelola <span className="text-red-500">*</span>
+              </label>
+              <p className="mb-2 text-[11px] text-gray-500">
+                Admin hanya bisa mengelola barang dari unit yang dipilih di sini.
+                Minimal satu, bisa ditambah atau dicabut nanti.
+              </p>
+              <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                {UNIT_OPTIONS.map((unit) => {
+                  const aktif = units.includes(unit);
+                  return (
+                    <label
+                      key={unit}
+                      className={clsx(
+                        "flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 text-sm transition-colors",
+                        aktif
+                          ? "border-indigo-300 bg-indigo-50 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"
+                          : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={aktif}
+                        onChange={() =>
+                          setUnits((lama) =>
+                            lama.includes(unit) ? lama.filter((u) => u !== unit) : [...lama, unit]
+                          )
+                        }
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="leading-tight">
+                        {unit}
+                        <span className="ml-1 text-[10px] uppercase text-gray-400">{unitCode(unit)}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

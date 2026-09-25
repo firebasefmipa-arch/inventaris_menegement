@@ -6,6 +6,7 @@ import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/Toaster";
 import { LocationSelect } from "@/components/LocationSelect";
+import { UnitSelect } from "@/components/UnitSelect";
 
 const CATEGORY_SUGGESTIONS = [
   "Elektronik",
@@ -34,6 +35,7 @@ export default function EditItemPage() {
     lastCheckDate: "",
     condition: "",
     quantity: "1",
+    unit: "",
     location: "",
     status: "available",
     canBorrow: "1",
@@ -56,6 +58,7 @@ export default function EditItemPage() {
           lastCheckDate: data.lastCheckDate || "",
           condition: data.condition || "",
           quantity: String(data.quantity),
+          unit: data.unit || "",
           location: data.location || "",
           status: data.status,
           canBorrow: data.canBorrow ? "1" : "0",
@@ -92,6 +95,7 @@ export default function EditItemPage() {
           lastCheckDate: form.lastCheckDate?.trim() || null,
           condition: form.condition?.trim() || null,
           quantity: parseInt(form.quantity),
+          unit: form.unit || null,
           location: form.location || null,
           status: form.status,
           canBorrow: form.canBorrow === "1",
@@ -280,6 +284,15 @@ export default function EditItemPage() {
               value={form.quantity}
               onChange={(e) => setForm({ ...form, quantity: e.target.value })}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Unit
+            </label>
+            <UnitSelect
+              value={form.unit}
+              onChange={(v) => setForm({ ...form, unit: v })}
             />
           </div>
           <div>

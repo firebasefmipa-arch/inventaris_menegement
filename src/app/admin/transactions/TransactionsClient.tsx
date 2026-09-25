@@ -19,6 +19,7 @@ import { formatTanggalWIB, formatTanggalJamWIB, hariTerlambat } from "@/lib/tang
 
 type Transaction = {
   id: number;
+  unit: string | null;
   itemId: number;
   quantity: number;
   status: "pending_signature" | "pending_approval" | "active" | "returned" | "overdue" | "rejected";
@@ -94,6 +95,7 @@ export function TransactionsClient({ transactions }: Props) {
           (tx.itemName?.toLowerCase().includes(q) ?? false) ||
           (tx.borrowerName?.toLowerCase().includes(q) ?? false) ||
           (tx.borrowerDepartment?.toLowerCase().includes(q) ?? false) ||
+          (tx.unit?.toLowerCase().includes(q) ?? false) ||
           (tx.notes?.toLowerCase().includes(q) ?? false)
         );
       }
@@ -319,6 +321,11 @@ export function TransactionsClient({ transactions }: Props) {
                               {tx.borrowerName || "Unknown"}
                             </span>
                             {tx.borrowerDepartment && <span>{tx.borrowerDepartment}</span>}
+                            {tx.unit && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
+                                {tx.unit}
+                              </span>
+                            )}
                             <span>
                               {formatTanggalWIB(tx.borrowDate)}
                               {" → "}

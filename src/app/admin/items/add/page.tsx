@@ -6,6 +6,7 @@ import { ArrowLeft, Save, Package } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/Toaster";
 import { LocationSelect } from "@/components/LocationSelect";
+import { UnitSelect } from "@/components/UnitSelect";
 
 const CATEGORY_SUGGESTIONS = [
   "Elektronik",
@@ -27,6 +28,7 @@ export default function AddItemPage() {
     category: "",
     description: "",
     quantity: "1",
+    unit: "",
     location: "",
     imageUrl: "",
     sn: "",
@@ -62,6 +64,7 @@ export default function AddItemPage() {
             .filter(Boolean)
             .join(" | ") || null,
           quantity: parseInt(form.quantity),
+          unit: form.unit || null,
           location: form.location || null,
           imageUrl: form.imageUrl || null,
         }),
@@ -231,7 +234,18 @@ export default function AddItemPage() {
             />
           </div>
 
-          {/* Lokasi */}
+          {/* Unit — pemilik barang, menentukan kode & hak kelola admin */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Unit
+            </label>
+            <UnitSelect
+              value={form.unit}
+              onChange={(v) => setForm({ ...form, unit: v })}
+            />
+          </div>
+
+          {/* Lokasi — keterangan tempat, bebas diketik */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Lokasi

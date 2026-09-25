@@ -35,6 +35,13 @@ export const items = mysqlTable("items", {
   status: mysqlEnum("status", ["available", "borrowed"])
     .notNull()
     .default("available"),
+  // ── Unit pemilik barang (divisi/prodi) ──────────────────────────────────
+  // Berbeda dari `location` (tempat/ruangan, bebas diketik), `unit` adalah
+  // pemiliknya: penentu KODE BARANG dan penentu admin mana yang boleh
+  // mengelola barang ini. Nilainya diambil dari daftar tetap src/lib/units.ts.
+  // Kosong = barang "tak berunit" → hanya superadmin yang boleh mengelola.
+  unit: varchar("unit", { length: 255 }),
+  // Tempat barang berada (ruangan) — bebas diketik, tidak memengaruhi kode.
   location: varchar("location", { length: 255 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -56,6 +63,10 @@ export const users = mysqlTable("user", {
   phone: varchar("phone", { length: 50 }),
   nim: varchar("nim", { length: 50 }),
   department: varchar("department", { length: 100 }),
+  // Unit kerja untuk pengisian otomatis saat superadmin mempromosikan orang
+  // ini jadi admin: unit inilah yang langsung diusulkan. Sumber kebenaran
+  // daftar unit yang DIKELOLA tetap tabel `user_unit`.
+  unitUtama: varchar("unit_utama", { length: 255 }),
   signatureUrl: varchar("signature_url", { length: 500 }),
   status: mysqlEnum("status", ["pending", "active", "suspended"])
     .default("active"),
@@ -141,6 +152,19 @@ export const transactions = mysqlTable("transactions", {
   notes: text("notes"),
   purpose: text("purpose"),
   rejectionReason: text("rejection_reason"),
+  // ── Penanda kelompok pengajuan ──────────────────────────────────────────
+  // Satu kali user mengajukan, isinya dipecah jadi satu transaksi PER UNIT
+  // (supaya tiap admin unit menyetujui bagiannya sendiri). Semua pecahan
+  // memakai grupId yang SAMA, sehingga di riwayat user bisa dibingkai jadi
+  // satu kesatuan: "1 kali ajukan, N bagian".
+  // NULL = transaksi lama/tak termasuk pengajuan majemuk.
+  // Sengaja TANPA tabel kelompok: grup tak punya status sendiri, status
+  // tetap milik tiap transaksi — supaya tak ada dua sumber kebenaran.
+  grupId: varchar("grup_id", { length: 64 }),
+  // Unit pemilik barang pada pecahan ini. Satu pengajuan majemuk dipecah
+  // per unit, jadi kolom ini yang menentukan admin mana yang berhak
+  // menyetujui/menolaknya. NULL = barang tanpa unit → hanya superadmin.
+  unit: varchar("unit", { length: 255 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -188,6 +212,11 @@ export const handovers = mysqlTable("handovers", {
     "rejected",
   ]).notNull().default("pending_signature"),
   rejectionReason: text("rejection_reason"),
+  // Penanda kelompok pengajuan — alasan sama seperti transactions.grupId.
+  grupId: varchar("grup_id", { length: 64 }),
+  // Unit pemilik barang pada pecahan ini — menentukan admin mana yang berhak
+  // menyetujui/menolaknya. NULL = barang tanpa unit → hanya superadmin.
+  unit: varchar("unit", { length: 255 }),
   handoverDate: timestamp("handover_date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -237,6 +266,25 @@ export const kodeTerpakai = mysqlTable("kode_terpakai", {
   itemId: int("item_id"),
   // 'barang' (tambah manual) | 'impor' (Excel) | 'awal' (semai dari data lama)
   sumber: varchar("sumber", { length: 20 }).notNull().default("barang"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Unit yang dikelola seorang admin ──────────────────────────────────────
+// Satu baris = satu unit yang boleh dikelola. Admin bisa punya BANYAK baris
+// (tambah/cabut kapan saja), dengan syarat minimal satu selama dia admin.
+//
+// Sengaja tabel terpisah, bukan satu kolom berisi daftar dipisah koma:
+//   • bisa dicari & dihitung ("siapa saja admin unit Kimia?")
+//   • FK ke user ikut terhapus otomatis saat akunnya dihapus
+//   • tak ada batas panjang yang bikin terpotong diam-diam
+// Ini juga yang dipakai untuk membatasi admin mengelola/menyetujui barang
+// unit-nya saja. Lihat src/lib/akses-unit.ts.
+export const userUnits = mysqlTable("user_unit", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  unit: varchar("unit", { length: 255 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

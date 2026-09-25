@@ -33,6 +33,8 @@ export async function GET(req: NextRequest) {
     const txList = await db
       .select({
         id: transactions.id,
+        grupId: transactions.grupId,
+        unit: transactions.unit,
         quantity: transactions.quantity,
         status: transactions.status,
         signedDocumentUrl: transactions.signedDocumentUrl,

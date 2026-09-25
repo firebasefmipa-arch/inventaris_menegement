@@ -1,13 +1,15 @@
 import { Metadata } from "next";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, userUnits } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { UserStatusButton } from "./UserStatusButton";
 import { UserRoleButton } from "./UserRoleButton";
+import { UnitPickerButton } from "./UnitPickerButton";
 import { DeleteUserButtons } from "./DeleteUserButtons";
 import { NativePasswordButton } from "./NativePasswordButton";
 import { auth } from "@/auth";
-import { Shield, ShieldCheck, User as UserIcon, UserPlus } from "lucide-react";
+import { UNIT_OPTIONS } from "@/lib/units";
+import { Shield, ShieldCheck, User as UserIcon, UserPlus, Building2 } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 
@@ -34,6 +36,20 @@ export default async function UsersPage() {
     password: users.password,
     // plain_password TIDAK dikirim ke client — hanya didekripsi on-demand via server action
   }).from(users).orderBy(asc(users.name));
+
+  // Unit pengelolaan tiap admin, dikumpulkan sekali untuk semua baris — bukan
+  // satu query per baris, supaya tak jadi N+1 saat penggunanya ratusan.
+  const unitRows = await db
+    .select({ userId: userUnits.userId, unit: userUnits.unit })
+    .from(userUnits);
+  const unitPerUser = new Map<string, string[]>();
+  for (const r of unitRows) {
+    const daftar = unitPerUser.get(r.userId) ?? [];
+    daftar.push(r.unit);
+    unitPerUser.set(r.userId, daftar);
+  }
+  // Urutkan mengikuti urutan daftar resmi, bukan urutan acak dari database.
+  const unitDari = (id: string) => (unitPerUser.get(id) ?? []).slice().sort();
 
   const sortedUsers = allUsers.sort((a, b) => {
     const order = { super_admin: 0, admin: 1, user: 2 };
@@ -123,7 +139,15 @@ export default async function UsersPage() {
                           {user.department || "-"}
                         </span>
                       </td>
-                      <td className="px-5 py-4">{getRoleBadge(targetRole)}</td>
+                      <td className="px-5 py-4">{getRoleBadge(targetRole)}{unitDari(user.id).length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {unitDari(user.id).map((u) => (
+                            <span key={u} className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50">
+                              <Building2 className="w-2.5 h-2.5" />{u}
+                            </span>
+                          ))}
+                        </div>
+                      )}</td>
                       <td className="px-5 py-4">
                         {user.status === "active" ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -151,6 +175,27 @@ export default async function UsersPage() {
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-2 flex-wrap">
                           {isSuperAdmin && targetRole !== "super_admin" && !isCurrentUser && (
+                            targetRole === "admin" ? (
+                              <UnitPickerButton
+                                userId={user.id}
+                                userName={user.name || user.email || "User"}
+                                mode="atur"
+                                unitsAwal={unitDari(user.id)}
+                              />
+                            ) : (
+                              <UnitPickerButton
+                                userId={user.id}
+                                userName={user.name || user.email || "User"}
+                                mode="promote"
+                                unitsAwal={
+                                  user.department && UNIT_OPTIONS.includes(user.department)
+                                    ? [user.department]
+                                    : []
+                                }
+                              />
+                            )
+                          )}
+                          {isSuperAdmin && targetRole === "admin" && !isCurrentUser && (
                             <UserRoleButton userId={user.id} currentRole={targetRole} isCurrentUser={false} />
                           )}
                           {!isCurrentUser && targetRole !== "super_admin" && (
@@ -236,6 +281,17 @@ export default async function UsersPage() {
                       )}
                     </div>
 
+                    {/* Unit pengelolaan — hanya relevan untuk admin */}
+                    {unitDari(user.id).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {unitDari(user.id).map((u) => (
+                          <span key={u} className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50">
+                            <Building2 className="w-2.5 h-2.5" />{u}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Password — hanya superadmin, hanya akun native */}
                     {isSuperAdmin && user.password && (
                       <div>
@@ -250,7 +306,28 @@ export default async function UsersPage() {
                     {(!isCurrentUser && targetRole !== "super_admin") && (
                       <div className="flex items-center gap-2 flex-wrap pt-0.5">
                         {isSuperAdmin && !isCurrentUser && (
-                          <UserRoleButton userId={user.id} currentRole={targetRole} isCurrentUser={false} />
+                          targetRole === "admin" ? (
+                            <>
+                              <UnitPickerButton
+                                userId={user.id}
+                                userName={user.name || user.email || "User"}
+                                mode="atur"
+                                unitsAwal={unitDari(user.id)}
+                              />
+                              <UserRoleButton userId={user.id} currentRole={targetRole} isCurrentUser={false} />
+                            </>
+                          ) : (
+                            <UnitPickerButton
+                              userId={user.id}
+                              userName={user.name || user.email || "User"}
+                              mode="promote"
+                              unitsAwal={
+                                user.department && UNIT_OPTIONS.includes(user.department)
+                                  ? [user.department]
+                                  : []
+                              }
+                            />
+                          )
                         )}
                         <UserStatusButton
                           userId={user.id}

@@ -102,18 +102,29 @@ export const IMPORT_COLUMNS: ImportColumn[] = [
     aliases: ["jumlah", "quantity", "qty"],
   },
   {
-    header: "Lokasi",
+    header: "Unit",
     contoh1: "Divisi Teknologi Informasi",
+    contoh2: "S1 Kimia",
+    wajib: false,
+    keterangan:
+      "Pemilik barang (divisi/prodi). Kode barang dibuat otomatis dari sini, " +
+      "dan unit inilah yang menentukan admin mana yang boleh mengelolanya. " +
+      "Harus salah satu dari daftar unit — kosong berarti \"LAIN\".",
+    aliases: ["unit", "unitkerja", "divisi", "prodi", "programstudi"],
+  },
+  {
+    header: "Lokasi",
+    contoh1: "Ruang Server Lt. 2",
     contoh2: "Laboratorium Terpadu UII",
     wajib: false,
-    keterangan: "Nama lokasi resmi. Kode barang dibuat otomatis dari sini.",
-    aliases: ["lokasi", "location"],
+    keterangan: "Tempat barang berada (ruangan). Bebas diisi, tidak memengaruhi kode barang.",
+    aliases: ["lokasi", "location", "ruang", "tempat"],
   },
 ];
 
 /** Nama kolom yang dibuat otomatis oleh sistem — jangan diisi dari file. */
 export const IMPORT_AUTO_COLUMNS = [
-  { header: "Kode Barang", keterangan: "Dibuat otomatis (FMIPA-<LOKASI>-<TAHUN>-<URUT>). Isi dari file diabaikan." },
+  { header: "Kode Barang", keterangan: "Dibuat otomatis (FMIPA-<UNIT>-<TAHUN>-<URUT>). Isi dari file diabaikan." },
 ];
 
 /**

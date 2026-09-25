@@ -3,6 +3,8 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { inArray } from "drizzle-orm";
+import { batasUnit } from "@/lib/akses-unit";
+import { normalizeUnit } from "@/lib/units";
 import { generateLabelsPDF } from "@/lib/label-pdf-generator";
 
 /**
@@ -37,6 +39,22 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = await db.select().from(items).where(inArray(items.id, ids));
+
+    // ── Batas unit ──
+    // Admin hanya boleh melabeli barang unit yang dikelolanya. Diperiksa di
+    // server, bukan cuma disembunyikan di layar.
+    const batas = await batasUnit(session);
+    if (batas !== null) {
+      const luar = rows.filter(
+        (r) => !batas.some((u) => normalizeUnit(u) === normalizeUnit(r.unit))
+      );
+      if (luar.length > 0) {
+        return NextResponse.json(
+          { error: `Barang pilihan ada yang bukan unit Anda: ${luar.map((r) => r.name).join(", ")}.` },
+          { status: 403 }
+        );
+      }
+    }
 
     // Dua syarat: punya Kode Barang, dan tidak ditandai "tidak bisa dilabeli".
     const printable = rows.filter((r) => r.itemCode?.trim() && r.isLabelable);

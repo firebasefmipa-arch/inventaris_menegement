@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { formDataAman } from "@/lib/json-body";
 import { auth } from "@/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { uploadPath } from "@/lib/upload-dir";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -73,12 +74,16 @@ export async function POST(
     }
 
     const role = (session.user as any).role;
-    if (
-      tx.userId !== session.user.id &&
-      role !== "admin" &&
-      role !== "super_admin"
-    ) {
+    const pemilik = tx.userId === session.user.id;
+    if (!pemilik && role !== "admin" && role !== "super_admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    // ── Batas unit ── admin yang bukan pemilik hanya boleh menyentuh pecahan
+    // unit yang dikelolanya. Pemilik selalu boleh (dokumennya sendiri).
+    if (!pemilik) {
+      const tolak = await periksaAksesUnit(session, tx.unit);
+      if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
     }
 
     if (tx.status !== "pending_signature" && tx.status !== "pending_approval") {
@@ -110,13 +115,32 @@ export async function POST(
 
     const signedDocumentUrl = `/uploads/signed_forms/${safeFilename}`;
 
+    // ── Satu dokumen untuk SATU kelompok ──
+    // Pengajuan user dipecah per unit di belakang layar, tapi user hanya
+    // menandatangani SEKALI. Dokumen yang sama ditempelkan ke semua pecahan
+    // dalam kelompok yang sama — kalau tidak, pecahan lain tetap menunggu
+    // dokumen dan tak pernah bisa disetujui adminnya.
+    const sesama =
+      tx.grupId && pemilik
+        ? await db
+            .select({ id: transactions.id })
+            .from(transactions)
+            .where(
+              and(
+                eq(transactions.grupId, tx.grupId),
+                eq(transactions.userId, tx.userId!),
+                inArray(transactions.status, ["pending_signature", "pending_approval"])
+              )
+            )
+        : [{ id: tx.id }];
+
     await db
       .update(transactions)
       .set({
         signedDocumentUrl,
         status: "pending_approval",
       })
-      .where(eq(transactions.id, tx.id));
+      .where(inArray(transactions.id, sesama.map((r) => r.id)));
 
     return NextResponse.json({ success: true, url: signedDocumentUrl });
   } catch (error) {

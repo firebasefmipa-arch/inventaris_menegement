@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { handovers } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { formDataAman } from "@/lib/json-body";
 import { auth } from "@/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { uploadPath } from "@/lib/upload-dir";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -45,8 +46,16 @@ export async function POST(
     if (!hv) return NextResponse.json({ error: "Serah terima tidak ditemukan" }, { status: 404 });
 
     const role = (session.user as any).role;
-    if (hv.userId !== session.user.id && role !== "admin" && role !== "super_admin") {
+    const pemilik = hv.userId === session.user.id;
+    if (!pemilik && role !== "admin" && role !== "super_admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    // ── Batas unit ── admin yang bukan pemilik hanya boleh menyentuh pecahan
+    // unit yang dikelolanya.
+    if (!pemilik) {
+      const tolak = await periksaAksesUnit(session, hv.unit);
+      if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
     }
 
     if (hv.status !== "pending_signature") {
@@ -72,10 +81,26 @@ export async function POST(
 
     const signedDocumentUrl = `/uploads/handovers/${safeFilename}`;
 
+    // ── Satu dokumen untuk SATU kelompok ──
+    // Serah terima juga dipecah per unit; user menandatangani sekali saja.
+    const sesama =
+      hv.grupId && pemilik
+        ? await db
+            .select({ id: handovers.id })
+            .from(handovers)
+            .where(
+              and(
+                eq(handovers.grupId, hv.grupId),
+                eq(handovers.userId, hv.userId!),
+                inArray(handovers.status, ["pending_signature", "pending_approval"])
+              )
+            )
+        : [{ id: hv.id }];
+
     await db.update(handovers).set({
       signedDocumentUrl,
       status: "pending_approval",
-    }).where(eq(handovers.id, hvId));
+    }).where(inArray(handovers.id, sesama.map((r) => r.id)));
 
     return NextResponse.json({ success: true, url: signedDocumentUrl });
   } catch (error) {

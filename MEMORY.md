@@ -554,16 +554,107 @@ utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
 > membacanya; jangan panik, itu hanya tanda potong.
 
 ### Lokasi & Kode Barang
-- Dropdown lokasi: komponen `src/components/LocationSelect.tsx` (dipakai
-  `ItemModal`, `add/page.tsx`, `[id]/edit/page.tsx`). Opsi resmi dari
-  `LOCATION_OPTIONS` + lokasi custom yang sudah dipakai barang di DB
-  (`existingLocations`), jadi custom otomatis "tersimpan" tanpa tabel baru.
+- **Lokasi = tempat/ruangan, KETIK BEBAS.** `LocationSelect` memakai
+  `<input list="…">` + `<datalist>`: saran tetap muncul (opsi resmi +
+  `existingLocations`), tapi pemakai boleh mengetik apa saja. Tidak ada
+  pemaksaan ke daftar. Lokasi **tidak lagi** menentukan kode barang.
 - Kapitalisasi lokasi dirapikan `normalizeLocation()` — cocok beda
   besar-kecil dengan opsi resmi langsung jadi bentuk resmi, nama baru jadi
   Title Case (akronim TI/IT/UII/FMIPA/OSCE/CEOS/D3/S1/S2/S3 dipertahankan).
-- Kode barang `FMIPA-<KODE LOKASI>-<TAHUN>-<URUT>` dibuat di server oleh
-  `generateItemCode()`. Input kode dari klien SELALU diabaikan; import Excel
-  juga mengabaikan kolom kode dan men-generate ulang.
+- **Kode barang ditentukan UNIT**, bukan lokasi. Lihat bagian Unit di bawah.
+
+### Unit (pemilik barang) & Pembatasan Admin per Unit
+
+**Unit ≠ Lokasi.**
+| | dipakai untuk | diisi lewat |
+|---|---|---|
+| **Unit** | kode barang + hak kelola admin | `UnitSelect` (daftar TETAP) |
+| **Lokasi** | keterangan tempat/ruangan | ketik bebas + saran |
+
+- Daftar unit: `src/lib/units.ts` — 4 divisi + 11 prodi. **SENGAJA disamakan
+  dengan `src/lib/departments.ts`** supaya satu satuan tak punya dua nama.
+  Nama unit adalah **kunci tersimpan di DB** → perlakukan seperti kolom
+  immutable; mengganti namanya membuat barang lama tak dikenali.
+- Kode unit: `UNIT_CODES` ("Divisi Teknologi Informasi" → `TI`). Unit tak
+  dikenal / kosong → `LAIN` (barang tetap punya nomor sah, dua unit tak dikenal
+  tak saling menabrak). Kode barang: `FMIPA-<KODE UNIT>-<TAHUN>-<URUT>` — **tiap
+  unit punya urutan sendiri**. `buildUnitItemCode()` di `units.ts`.
+- Penjaga: `npm run check:unit` (27 pemeriksaan, murni tanpa DB).
+
+**Hak kelola — SATU tempat: `src/lib/akses-unit.ts`.** Jangan tulis ulang
+aturannya di route.
+| peran | boleh |
+|---|---|
+| `super_admin` | semua unit, **termasuk barang tanpa unit** |
+| `admin` | hanya unit di `user_unit` |
+| `user` | tak mengelola apa pun |
+| barang tanpa unit | **hanya super_admin** — unit kosong bukan milik bersama |
+
+- `periksaAksesUnit(session, unit)` → `null` (boleh) atau `{pesan,status}`.
+  Dipakai sebelum aksi yang mengubah/melihat satu transaksi.
+- `batasUnit(session)` → `null` (superadmin) atau daftar unit. Dipakai untuk
+  **menyaring daftar** (`inArray(tabel.unit, batas)`); admin tanpa unit →
+  `sql\`1 = 0\`` (tak melihat apa pun, bukan melihat yang kosong).
+- **Penolakan WAJIB di server.** Menyembunyikan tombol di layar tidak cukup —
+  URL bisa diketik langsung. Sudah dipasang di: items (GET/POST/PUT/DELETE),
+  impor, label, bulk-delete, transaksi (daftar/approve/reject/correct/items/
+  upload/generate-pdf/regenerate-doc/cancel), serah terima (daftar/setujui/
+  tolak/koreksi/rincian/dokumen/cancel), pengembalian, statistik.
+- Halaman server (`admin/transactions/page.tsx`, `admin/handovers/page.tsx`)
+  menyaring lewat `batasUnit` juga — kalau tidak, kartu unit lain ikut terkirim
+  ke browser walau tombolnya disembunyikan.
+- **Admin WAJIB punya minimal 1 unit.** Promosi ke admin tanpa unit ditolak;
+  turun ke user → unitnya dilepas. `changeUserRole` / `aturUnitAdmin` di
+  `src/app/admin/users/actions.ts`; pemilihnya `UnitPickerButton.tsx`.
+
+### Pemecahan Pengajuan per Unit (`grup_id`)
+
+Satu kali user mengajukan bisa memuat barang dari beberapa unit. Pengajuan itu
+**dipecah di belakang layar** supaya tiap admin menyetujui bagian unitnya —
+tapi **di layar user tetap SATU pengajuan**.
+
+- Helper: `src/lib/pecah-unit.ts` — `pecahPerUnit(keranjang, petaUnit)` +
+  `bacaKeranjang()`. Dipakai BERSAMA oleh `/api/pinjam` dan `/api/handovers`
+  supaya aturannya tak bisa berbeda antar jalur.
+- Kolom penanda: `transactions.grup_id` dan `handovers.grup_id` (varchar 255).
+  Semua pecahan satu pengajuan berbagi `grup_id` yang sama. Tiap pecahan
+  menyimpan `unit`-nya sendiri.
+- **Kelompok TIDAK punya status sendiri.** Tiap pecahan tetap punya status
+  masing-masing — status kelompok dihitung untuk tampilan saja.
+- **Ralat tampilan (keputusan user):** user melihat **2 baris dibungkus satu
+  bingkai**, BUKAN satu baris. Status campuran (1 disetujui, 1 ditolak) harus
+  terbaca dari bingkainya.
+- **Dokumen: satu penandatanganan berlaku untuk semua pecahan.** Saat pemilik
+  mengunggah dokumen, URL dokumen itu ditempelkan ke SEMUA pecahan sekelompok
+  (`inArray`) — kalau tidak, pecahan lain tetap menunggu dokumen dan tak pernah
+  bisa disetujui adminnya. Jalur: `transactions/[id]/upload`,
+  `handovers/[id]/upload`.
+- **Batal = batal semua pecahan.** Kalau ada satu pecahan yang sudah diproses,
+  seluruh pembatalan DITOLAK (400) — sebagian batal sebagian jalan bikin
+  bingung. Jalur: `user/transactions/[id]/cancel`,
+  `user/handovers/[id]/cancel`.
+- **Dokumen gabungan** untuk user: `src/lib/penggabung-pdf.ts` +
+  `GET /api/grup/[grupId]/dokumen?jenis=transaksi|serah-terima` (pdf-lib,
+  tanpa dependency baru).
+
+### Stok — SEMUA pengurangan/penambahan WAJIB ATOMIK
+
+- **Pengurangan:** syarat "stok cukup" ditaruh di `WHERE`, bukan dibaca dulu
+  ke aplikasi. `UPDATE items SET available_quantity = available_quantity - n
+  WHERE id = ? AND available_quantity >= n`, lalu periksa `affectedRows`.
+  `0` = kalah balapan → balas **409** dan hapus baris transaksi/handover yang
+  telanjur dibuat. **Pola baca-hitung-tulis = lost update.**
+- **Penambahan:** pakai ekspresi DB (`available_quantity + n`), bukan angka
+  hasil hitungan aplikasi. Status ikut dihitung lewat
+  `CASE WHEN available_quantity + n > 0 THEN 'available' ELSE 'borrowed' END`.
+- Helper bersama: `src/lib/pengembalian.ts`.
+- Lokasi rawan yang SUDAH diperbaiki: `pinjam/route.ts`,
+  `handovers/route.ts`, `admin/handovers/route.ts`, `admin/handovers/[id]`,
+  `transactions/[id]/approve`, `transactions/[id]/route.ts` (pengembalian),
+  `transactions/[id]/correct`, `admin/handovers/[id]/correct`,
+  `user/transactions/[id]/cancel`, `user/handovers/[id]/cancel`.
+  **Kalau menambah jalur stok baru, ikuti pola ini.**
+
 
 ### Impor Barang dari Excel (`.xlsx` / `.xls` / `.csv`)
 
@@ -583,7 +674,8 @@ petunjuk ikut berubah sendiri.
 | Tanggal Cek | — | lastcheckdate, tanggalpengecekan |
 | Kondisi | — | condition |
 | Jumlah | — | quantity, qty (harus bilangan bulat ≥1, kalau tidak → 1 + peringatan) |
-| Lokasi | — | location |
+| Unit | — | unit, divisi, prodi (**penentu KODE BARANG**; di luar daftar → kode `LAIN` + peringatan) |
+| Lokasi | — | location (tempat/ruangan, bebas diketik) |
 
 Normalisasi nama kolom: huruf kecil, spasi/titik/strip/underscore dibuang
 (`normalizeHeader()`), jadi "No. Inv DTI" ≡ "NO_INV_DTI" ≡ "noinv-dti".

@@ -9,6 +9,7 @@ import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 
 export async function POST(
   request: NextRequest,
@@ -27,8 +28,14 @@ export async function POST(
 
     const role = (session.user as any)?.role;
     // User hanya bisa regenerate miliknya, admin bisa semua
-    if (tx.userId !== session.user.id && role !== "admin" && role !== "super_admin") {
+    const pemilik = tx.userId === session.user.id;
+    if (!pemilik && role !== "admin" && role !== "super_admin") {
       return NextResponse.json({ error: "Tidak memiliki akses" }, { status: 403 });
+    }
+    // Admin yang bukan pemilik hanya boleh menyentuh pecahan unitnya sendiri.
+    if (!pemilik) {
+      const tolak = await periksaAksesUnit(session, tx.unit);
+      if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
     }
 
     // Hanya bisa regenerate jika status 'deleted' ATAU file fisik tidak ada (rusak/hilang)

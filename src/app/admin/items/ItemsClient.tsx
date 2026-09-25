@@ -29,6 +29,7 @@ type Item = {
   canBorrow: boolean;
   canHandover: boolean;
   isLabelable: boolean;
+  unit: string | null;
   location: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -75,6 +76,7 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
 
   // Filter tambahan: kategori, lokasi, tanggal cek
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [unitFilter, setUnitFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [lastCheckFilter, setLastCheckFilter] = useState("");
   const [borrowFilter, setBorrowFilter] = useState("");
@@ -105,6 +107,7 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
       if (!showHidden && item.quantity === 0) return false;
       if (statusFilter && item.status !== statusFilter) return false;
       if (categoryFilter && item.category !== categoryFilter) return false;
+      if (unitFilter && (item.unit || "") !== unitFilter) return false;
       if (locationFilter && (item.location || "") !== locationFilter) return false;
       if (lastCheckFilter && (item.lastCheckDate || "") !== lastCheckFilter) return false;
       if (borrowFilter && item.canBorrow !== (borrowFilter === "yes")) return false;
@@ -117,6 +120,7 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
           item.name.toLowerCase().includes(q) ||
           (item.category?.toLowerCase().includes(q) ?? false) ||
           (item.description?.toLowerCase().includes(q) ?? false) ||
+          (item.unit?.toLowerCase().includes(q) ?? false) ||
           (item.location?.toLowerCase().includes(q) ?? false) ||
           (item.inventoryNumber?.toLowerCase().includes(q) ?? false) ||
           (item.itemCode?.toLowerCase().includes(q) ?? false) ||
@@ -128,7 +132,7 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
 
       return true;
     });
-  }, [items, searchQuery, statusFilter, categoryFilter, locationFilter, lastCheckFilter, borrowFilter, handoverFilter, showHidden]);
+  }, [items, searchQuery, statusFilter, categoryFilter, unitFilter, locationFilter, lastCheckFilter, borrowFilter, handoverFilter, showHidden]);
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
@@ -258,6 +262,10 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
   ];
 
   // Unique values untuk dropdown filter
+  const uniqueUnits = useMemo(() =>
+    [...new Set(items.map((i) => i.unit).filter(Boolean) as string[])].sort(),
+    [items]
+  );
   const uniqueLocations = useMemo(() =>
     [...new Set(items.map((i) => i.location).filter(Boolean) as string[])].sort(),
     [items]
@@ -266,7 +274,7 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
     [...new Set(items.map((i) => i.lastCheckDate).filter(Boolean) as string[])].sort().reverse(),
     [items]
   );
-  const hasExtraFilter = categoryFilter || locationFilter || lastCheckFilter || borrowFilter || handoverFilter;
+  const hasExtraFilter = categoryFilter || unitFilter || locationFilter || lastCheckFilter || borrowFilter || handoverFilter;
 
   const availabilityBadge = (label: string, ok: boolean) => (
     <span
@@ -475,6 +483,23 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
 
+          {/* Unit — pemilik barang */}
+          {uniqueUnits.length > 1 && (
+            <select
+              value={unitFilter}
+              onChange={(e) => setUnitFilter(e.target.value)}
+              className={clsx(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all appearance-none cursor-pointer",
+                unitFilter
+                  ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                  : "bg-white border-gray-200 text-gray-600 hover:border-indigo-300"
+              )}
+            >
+              <option value="">Semua Unit</option>
+              {uniqueUnits.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          )}
+
           {/* Lokasi */}
           {uniqueLocations.length > 0 && (
             <select
@@ -544,7 +569,7 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
           {/* Reset filter */}
           {hasExtraFilter && (
             <button
-              onClick={() => { setCategoryFilter(""); setLocationFilter(""); setLastCheckFilter(""); setBorrowFilter(""); setHandoverFilter(""); }}
+              onClick={() => { setCategoryFilter(""); setUnitFilter(""); setLocationFilter(""); setLastCheckFilter(""); setBorrowFilter(""); setHandoverFilter(""); }}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 transition-colors"
             >
               <X className="w-3.5 h-3.5" /> Reset

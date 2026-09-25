@@ -6,6 +6,7 @@ import { X, Save, Plus } from "lucide-react";
 import { useToast } from "@/components/Toaster";
 import { AVAILABLE_ICONS_LIST } from "@/lib/iconMap";
 import { LocationSelect } from "@/components/LocationSelect";
+import { UnitSelect } from "@/components/UnitSelect";
 
 const CATEGORY_SUGGESTIONS = [
   "Elektronik",
@@ -35,6 +36,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
     category: "",
     description: "",
     quantity: "1",
+    unit: "",
     location: "",
     imageUrl: "", // We will store the chosen icon name here for custom categories
     sn: "",
@@ -70,6 +72,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
       category: "",
       description: "",
       quantity: "1",
+      unit: "",
       location: "",
       imageUrl: "",
       sn: "",
@@ -125,6 +128,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
           lastCheckDate: form.tanggalcek?.trim() || null,
           condition: form.kondisi?.trim() || null,
           quantity: parseInt(form.quantity),
+          unit: form.unit || null,
           location: form.location || null,
           imageUrl: form.imageUrl || null,
           canBorrow: form.canBorrow === "1",
@@ -363,7 +367,18 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
                 />
               </div>
 
-              {/* Lokasi */}
+              {/* Unit — pemilik barang, menentukan kode & hak kelola admin */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Unit
+                </label>
+                <UnitSelect
+                  value={form.unit}
+                  onChange={(v) => setForm({ ...form, unit: v })}
+                />
+              </div>
+
+              {/* Lokasi — keterangan tempat, bebas diketik */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Lokasi

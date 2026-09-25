@@ -1,35 +1,19 @@
 import { db } from "@/db";
 import { items } from "@/db/schema";
-import { like, sql } from "drizzle-orm";
-import { buildItemCode, normalizeLocation } from "@/lib/locations";
+import { sql } from "drizzle-orm";
+import { normalizeUnit, unitCode } from "@/lib/units";
 
 /**
- * Tentukan prefix kode untuk sebuah lokasi + lokasi yang sudah dinormalisasi.
- * Prefix dikunci dari kode yang sudah ada agar lokasi custom tetap konsisten;
- * kalau belum ada, diturunkan dari nama lokasi.
+ * Tentukan prefix kode untuk sebuah UNIT + unit yang sudah dinormalisasi.
+ *
+ * Berbeda dari Lokasi (yang bebas diketik), Unit diambil dari daftar tetap
+ * src/lib/units.ts → kodenya STABIL dan tak perlu dicari dari database:
+ * "Divisi Teknologi Informasi" selalu "TI", ditulis bagaimana pun oleh pemakai.
+ * Unit tak dikenal → "LAIN" (barang tetap dapat nomor yang sah).
  */
-export async function resolvePrefix(rawLocation: string | null | undefined) {
-  const location = normalizeLocation(rawLocation || "");
-
-  const [existingSameLocation] = await db
-    .select({ code: items.itemCode })
-    .from(items)
-    .where(sql`${items.location} = ${location} AND ${items.itemCode} IS NOT NULL`)
-    .limit(1);
-
-  if (existingSameLocation?.code) {
-    return { prefix: existingSameLocation.code.split("-")[1], location };
-  }
-
-  const allCodes = await db
-    .select({ code: items.itemCode })
-    .from(items)
-    .where(sql`${items.itemCode} IS NOT NULL`);
-
-  const taken = allCodes.map((r) => r.code!.split("-")[1]).filter(Boolean);
-  const prefix = buildItemCode(location, new Date().getFullYear(), 0, taken).split("-")[1];
-
-  return { prefix, location };
+export async function resolvePrefix(rawUnit: string | null | undefined) {
+  const unit = normalizeUnit(rawUnit || "");
+  return { prefix: unitCode(unit), unit };
 }
 
 /**
@@ -110,8 +94,8 @@ export async function catatKodeMassal(
 }
 
 /**
- * Buat kode barang otomatis: FMIPA-<KODE LOKASI>-<TAHUN>-<URUT>
- * Urut per LOKASI per TAHUN, tahun = tahun berjalan.
+ * Buat kode barang otomatis: FMIPA-<KODE UNIT>-<TAHUN>-<URUT>
+ * Urut per UNIT per TAHUN, tahun = tahun berjalan.
  * Kode dari klien SELALU diabaikan (dipanggil dari server saja).
  *
  * Nomornya LANGSUNG dicatat ke buku register saat dibuat, bukan menunggu
@@ -122,18 +106,18 @@ export async function catatKodeMassal(
  * mencoba nomor berikutnya. Tanpa perulangan ini keduanya memakai nomor sama
  * dan yang kedua gagal disimpan (500) karena `item_code` unik.
  */
-export async function generateItemCode(rawLocation: string | null | undefined) {
-  const { prefix, location } = await resolvePrefix(rawLocation);
+export async function generateItemCode(rawUnit: string | null | undefined) {
+  const { prefix, unit } = await resolvePrefix(rawUnit);
   const year = new Date().getFullYear();
 
   for (let coba = 0; coba < 25; coba++) {
     const seq = await nextSequence(prefix, year, coba);
     const code = formatCode(prefix, year, seq);
-    if (await catatKode(code, { sumber: "barang" })) return { code, location };
+    if (await catatKode(code, { sumber: "barang" })) return { code, unit };
     // kalah balapan → coba nomor berikutnya
   }
 
   throw new Error(
-    `Gagal mendapatkan nomor barang untuk "${location}" — terlalu banyak permintaan bersamaan. Coba lagi.`
+    `Gagal mendapatkan nomor barang untuk unit "${unit}" — terlalu banyak permintaan bersamaan. Coba lagi.`
   );
 }

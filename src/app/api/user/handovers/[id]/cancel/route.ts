@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { handovers, handoverItems, items } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { deleteUploadByUrl } from "@/lib/delete-upload";
 
@@ -26,41 +26,60 @@ export async function POST(
       return NextResponse.json({ error: "Tidak memiliki akses" }, { status: 403 });
     }
 
-    if (hv.status !== "pending_signature" && hv.status !== "pending_approval") {
+    // ── Satu kelompok = satu pengajuan dari sisi user ──
+    // Serah terima juga dipecah per unit; membatalkan berarti membatalkan
+    // seluruh pecahannya, bukan satu potong saja.
+    const pecahan = hv.grupId
+      ? await db
+          .select()
+          .from(handovers)
+          .where(and(eq(handovers.grupId, hv.grupId), eq(handovers.userId, session.user.id)))
+      : [hv];
+
+    const semuaId = pecahan.map((p) => p.id);
+
+    const belumProses = pecahan.filter(
+      (p) => p.status === "pending_signature" || p.status === "pending_approval"
+    );
+    if (belumProses.length !== pecahan.length) {
       return NextResponse.json(
-        { error: "Hanya bisa dibatalkan jika belum diproses" },
+        { error: "Pengajuan ini sudah diproses sebagian, jadi tidak bisa dibatalkan lagi." },
         { status: 400 }
       );
     }
 
-    // Kembalikan stok availableQuantity
-    const hvItems = await db.select().from(handoverItems).where(eq(handoverItems.handoverId, hvId));
-    for (const hvItem of hvItems) {
-      const [item] = await db.select().from(items).where(eq(items.id, hvItem.itemId)).limit(1);
-      if (item) {
-        const newAvailable = item.availableQuantity + hvItem.quantity;
-        await db.update(items).set({
-          availableQuantity: newAvailable,
-          status: "available",
-          updatedAt: new Date(),
-        }).where(eq(items.id, item.id));
-      }
+    // Kembalikan stok — ATOMIK: penambahan dihitung database.
+    const baris = await db
+      .select()
+      .from(handoverItems)
+      .where(inArray(handoverItems.handoverId, semuaId));
+
+    for (const b of baris) {
+      await db.update(items).set({
+        availableQuantity: sql`${items.availableQuantity} + ${b.quantity}`,
+        status: sql`CASE WHEN ${items.availableQuantity} + ${b.quantity} > 0 THEN 'available' ELSE 'borrowed' END`,
+        updatedAt: new Date(),
+      }).where(eq(items.id, b.itemId));
     }
 
     // Belum upload dokumen → hapus total
-    if (hv.status === "pending_signature" && !hv.signedDocumentUrl) {
-      await db.delete(handoverItems).where(eq(handoverItems.handoverId, hvId));
-      await db.delete(handovers).where(eq(handovers.id, hvId));
+    const belumAdaDokumen = pecahan.every(
+      (p) => p.status === "pending_signature" && !p.signedDocumentUrl
+    );
+
+    if (belumAdaDokumen) {
+      await db.delete(handoverItems).where(inArray(handoverItems.handoverId, semuaId));
+      await db.delete(handovers).where(inArray(handovers.id, semuaId));
       return NextResponse.json({ success: true, message: "Permintaan serah terima dibatalkan dan dihapus" });
     }
 
     // Sudah upload → set rejected; file dihapus (dokumen batal tak disimpan)
-    await deleteUploadByUrl(hv.signedDocumentUrl);
+    for (const p of pecahan) await deleteUploadByUrl(p.signedDocumentUrl);
     await db.update(handovers).set({
       status: "rejected",
       rejectionReason: "Dibatalkan oleh pemohon",
       signedDocumentUrl: null,
-    }).where(eq(handovers.id, hvId));
+    }).where(inArray(handovers.id, semuaId));
 
     return NextResponse.json({ success: true, message: "Permintaan serah terima berhasil dibatalkan" });
   } catch (error) {

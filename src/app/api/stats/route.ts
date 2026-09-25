@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { items, transactions } from "@/db/schema";
-import { eq, and, sql, count, gt } from "drizzle-orm";
+import { eq, and, sql, count, gt, inArray } from "drizzle-orm";
 import { auth } from "@/auth";
 import { sqlTerlambat } from "@/lib/tanggal";
+import { batasUnit } from "@/lib/akses-unit";
 
 export async function GET() {
   try {
@@ -12,31 +13,49 @@ export async function GET() {
     if (!session?.user || (role !== "admin" && role !== "super_admin"))
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const [totalItems] = await db.select({ count: count() }).from(items).where(gt(items.quantity, 0));
+    // ── Batas unit ──
+    // Angka ringkasan admin hanya menghitung unit yang dikelolanya; kalau tidak,
+    // dashboard-nya membocorkan jumlah barang unit lain.
+    const batas = await batasUnit(session);
+    const kosong = batas !== null && batas.length === 0;
+    const saringBarang = () => {
+      if (batas === null) return undefined;
+      return kosong ? sql`1 = 0` : inArray(items.unit, batas);
+    };
+    const saringTx = () => {
+      if (batas === null) return undefined;
+      return kosong ? sql`1 = 0` : inArray(transactions.unit, batas);
+    };
+
+    const [totalItems] = await db
+      .select({ count: count() })
+      .from(items)
+      .where(and(gt(items.quantity, 0), saringBarang()));
     const [availableItems] = await db
       .select({ count: count() })
       .from(items)
-      .where(and(eq(items.status, "available"), gt(items.quantity, 0)));
+      .where(and(eq(items.status, "available"), gt(items.quantity, 0), saringBarang()));
     const [borrowedItems] = await db
       .select({ count: count() })
       .from(items)
-      .where(and(eq(items.status, "borrowed"), gt(items.quantity, 0)));
+      .where(and(eq(items.status, "borrowed"), gt(items.quantity, 0), saringBarang()));
 
     // Count unique borrowers from transactions
     const [totalBorrowers] = await db
       .select({
         count: sql<number>`COUNT(DISTINCT ${transactions.borrowerName})`,
       })
-      .from(transactions);
+      .from(transactions)
+      .where(saringTx());
 
     const [activeTransactions] = await db
       .select({ count: count() })
       .from(transactions)
-      .where(eq(transactions.status, "active"));
+      .where(and(eq(transactions.status, "active"), saringTx()));
     const [overdueTransactions] = await db
       .select({ count: count() })
       .from(transactions)
-      .where(sqlTerlambat());
+      .where(and(sqlTerlambat(), saringTx()));
 
     const categoriesResult = await db
       .select({
@@ -44,7 +63,7 @@ export async function GET() {
         count: count(),
       })
       .from(items)
-      .where(gt(items.quantity, 0))
+      .where(and(gt(items.quantity, 0), saringBarang()))
       .groupBy(items.category);
 
     const recentTransactions = await db
@@ -62,6 +81,7 @@ export async function GET() {
       })
       .from(transactions)
       .leftJoin(items, eq(transactions.itemId, items.id))
+      .where(saringTx())
       .orderBy(sql`${transactions.createdAt} DESC`)
       .limit(5);
 

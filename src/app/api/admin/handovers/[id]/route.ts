@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { handovers, handoverItems, items } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
+import { periksaAksesUnit } from "@/lib/akses-unit";
+import { kembalikanKeStok } from "@/lib/pengembalian";
 import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
@@ -37,6 +39,12 @@ export async function PUT(
     if (hv.status !== "pending_approval")
       return NextResponse.json({ error: "Hanya bisa approve/reject serah terima dengan status menunggu persetujuan" }, { status: 400 });
 
+    // ── Batas unit ──
+    // Sejak serah terima dipecah per unit, tiap pecahan punya adminnya sendiri.
+    // Diperiksa di server; superadmin lolos. Lihat src/lib/akses-unit.ts.
+    const tolak = await periksaAksesUnit(session, hv.unit);
+    if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
+
     if (action === "approve") {
       // Pindahkan PDF dari pending/ ke handovers/
       let finalPdfUrl = hv.signedDocumentUrl;
@@ -57,18 +65,19 @@ export async function PUT(
         }
       }
 
-      // Kurangi stok permanen
+      // Kurangi stok permanen — ATOMIK. Syarat "stok cukup" ada di WHERE
+      // supaya dua persetujuan bersamaan tak bisa sama-sama lolos dan
+      // menjadikan stok minus.
       const hvItems = await db.select().from(handoverItems).where(eq(handoverItems.handoverId, hvId));
       for (const hvItem of hvItems) {
-        const [item] = await db.select().from(items).where(eq(items.id, hvItem.itemId)).limit(1);
-        if (item) {
-          const newQty = Math.max(0, item.quantity - hvItem.quantity);
-          await db.update(items).set({
-            quantity: newQty,
-            status: item.availableQuantity === 0 ? "borrowed" : "available",
+        await db
+          .update(items)
+          .set({
+            quantity: sql`${items.quantity} - ${hvItem.quantity}`,
+            status: sql`CASE WHEN ${items.availableQuantity} <= 0 THEN 'borrowed' ELSE 'available' END`,
             updatedAt: new Date(),
-          }).where(eq(items.id, item.id));
-        }
+          })
+          .where(and(eq(items.id, hvItem.itemId), gte(items.quantity, hvItem.quantity)));
       }
 
       await db.update(handovers).set({
@@ -86,19 +95,10 @@ export async function PUT(
       // ditolak tidak disimpan; riwayat tetap ada dengan status rejected.
       await deleteUploadByUrl(hv.signedDocumentUrl);
 
-      // Kembalikan stok
+      // Kembalikan stok — atomik, lihat src/lib/pengembalian.ts. Dulu di sini
+      // baca-lalu-tulis: dua penolakan bersamaan bisa saling menimpa.
       const hvItems = await db.select().from(handoverItems).where(eq(handoverItems.handoverId, hvId));
-      for (const hvItem of hvItems) {
-        const [item] = await db.select().from(items).where(eq(items.id, hvItem.itemId)).limit(1);
-        if (item) {
-          const newAvailable = item.availableQuantity + hvItem.quantity;
-          await db.update(items).set({
-            availableQuantity: newAvailable,
-            status: "available",
-            updatedAt: new Date(),
-          }).where(eq(items.id, item.id));
-        }
-      }
+      await kembalikanKeStok(hvItems.map((i) => ({ itemId: i.itemId, quantity: i.quantity })));
 
       await db.update(handovers).set({
         status: "rejected",

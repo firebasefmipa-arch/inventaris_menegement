@@ -4,6 +4,7 @@ import { transactions, transactionItems, items } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 
 export async function GET(
   _req: NextRequest,
@@ -20,6 +21,10 @@ export async function GET(
 
   const [tx] = await db.select().from(transactions).where(eq(transactions.id, txId)).limit(1);
   if (!tx) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Admin hanya boleh melihat rincian pecahan unit yang dikelolanya.
+  const tolak = await periksaAksesUnit(session, tx.unit);
+  if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
 
   const rows = await db
     .select({

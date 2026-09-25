@@ -15,19 +15,28 @@ export type UnitDiLuar = {
   itemId: number;
   itemCode: string | null;
   itemName: string;
+  unit: string | null;
   diserahkan: number;
   kembali: number;
   diLuar: number;
 };
 
-/** Satu barang (atau semua kalau itemId kosong) beserta sisa unit di luar. */
-export async function unitDiLuar(itemId?: number): Promise<UnitDiLuar[]> {
-  const filter = itemId && Number.isInteger(itemId) ? sql`WHERE i.id = ${itemId}` : sql``;
+/** Satu barang (atau semua kalau itemId kosong) beserta sisa unit di luar.
+ *  `batasUnit` menyaring menurut unit pemilik barang — null = tanpa batasan
+ *  (superadmin), array kosong = tak melihat apa pun (admin tanpa unit). */
+export async function unitDiLuar(itemId?: number, batasUnit?: string[] | null): Promise<UnitDiLuar[]> {
+  const syarat: any[] = [];
+  if (itemId && Number.isInteger(itemId)) syarat.push(sql`i.id = ${itemId}`);
+  if (batasUnit) {
+    syarat.push(batasUnit.length > 0 ? sql`i.unit IN (${sql.join(batasUnit.map((u) => sql`${u}`), sql`, `)})` : sql`1 = 0`);
+  }
+  const filter = syarat.length > 0 ? sql`WHERE ${sql.join(syarat, sql` AND `)}` : sql``;
 
   const rows = await db.execute(sql`
     SELECT i.id AS itemId,
            i.item_code AS itemCode,
            i.name AS itemName,
+           i.unit AS unit,
            COALESCE(keluar.jumlah, 0) AS diserahkan,
            COALESCE(masuk.jumlah, 0)  AS kembali
       FROM items i
@@ -54,6 +63,7 @@ export async function unitDiLuar(itemId?: number): Promise<UnitDiLuar[]> {
       itemId: Number(r.itemId),
       itemCode: r.itemCode ?? null,
       itemName: r.itemName ?? "Barang",
+      unit: r.unit ?? null,
       diserahkan: Number(r.diserahkan) || 0,
       kembali: Number(r.kembali) || 0,
       diLuar: (Number(r.diserahkan) || 0) - (Number(r.kembali) || 0),

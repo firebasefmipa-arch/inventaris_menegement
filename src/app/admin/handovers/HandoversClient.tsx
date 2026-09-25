@@ -27,6 +27,7 @@ type HvItem = {
 
 type Handover = {
   id: number;
+  unit: string | null;
   receiverName: string;
   receiverNim: string | null;
   unitName: string | null;
@@ -327,6 +328,10 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
                             <p className="font-medium text-gray-700">{hv.receiverNim}</p>
                           </div>
                         )}
+                        <div>
+                          <span className="text-gray-400">Unit</span>
+                          <p className="font-medium text-gray-700">{hv.unit || "—"}</p>
+                        </div>
                         <div>
                           <span className="text-gray-400">Divisi/Prodi</span>
                           <p className="font-medium text-gray-700">{hv.department || "—"}</p>

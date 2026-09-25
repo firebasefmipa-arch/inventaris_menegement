@@ -28,7 +28,8 @@ function cek(nama: string, kondisi: boolean, info = "") {
   else { gagal++; console.log(`  GAGAL  ${nama}${info ? ` — ${info}` : ""}`); }
 }
 
-const LOKASI = "Divisi Teknologi Informasi";
+const UNIT = "Divisi Teknologi Informasi";
+const UNIT_KIMIA = "S1 Kimia";
 const TAHUN = new Date().getFullYear();
 const TANDA = "ZZ-UJI-KODE";
 
@@ -62,7 +63,7 @@ async function main() {
       `seq=${dasar}`);
 
   // ══ B3: nomor tercatat SAAT DIBUAT ══
-  const { code: kodeBaru, location } = await generateItemCode(LOKASI);
+  const { code: kodeBaru, unit } = await generateItemCode(UNIT);
   dibuat.push(kodeBaru);
   const adaDiRegister = await db.select().from(kodeTerpakai).where(eq(kodeTerpakai.kode, kodeBaru));
   cek("B3 nomor langsung tercatat saat dibuat (belum tentu ada barangnya)",
@@ -76,12 +77,12 @@ async function main() {
 
   // ══ B2: INTI — hapus barang, nomor bekas tak boleh dipakai lagi ══
   const [{ id: idA }] = await db.insert(items).values({
-    name: `${TANDA} Barang`, category: "Elektronik", location,
+    name: `${TANDA} Barang`, category: "Elektronik", unit,
     quantity: 1, availableQuantity: 1, itemCode: kodeBaru,
   }).$returningId();
 
   // Barang B dibuat SETELAH A ada → harus dapat nomor yang lebih tinggi
-  const { code: kodeB } = await generateItemCode(LOKASI);
+  const { code: kodeB } = await generateItemCode(UNIT);
   dibuat.push(kodeB);
   cek("B2 barang kedua dapat nomor berbeda", kodeB !== kodeBaru, `${kodeBaru} vs ${kodeB}`);
 
@@ -92,7 +93,7 @@ async function main() {
       `catatan=${regTetap.length}`);
 
   // Barang C dibuat setelah A dihapus → HARUS dapat nomor baru, bukan nomor A
-  const { code: kodeC } = await generateItemCode(LOKASI);
+  const { code: kodeC } = await generateItemCode(UNIT);
   dibuat.push(kodeC);
   cek("B2 ▓ INTI: nomor bekas TIDAK diberikan ke barang baru",
       kodeC !== kodeBaru, `kodeC=${kodeC} (tidak boleh = ${kodeBaru})`);
@@ -109,7 +110,7 @@ async function main() {
 
   // Nomor yang MASIH dipakai → tolak
   const [{ id: idM }] = await db.insert(items).values({
-    name: `${TANDA} Barang`, category: "Elektronik", location,
+    name: `${TANDA} Barang`, category: "Elektronik", unit,
     quantity: 1, availableQuantity: 1, itemCode: kodeC,
   }).$returningId();
   const tolak = await lepasNomor(kodeC, false);
@@ -121,7 +122,7 @@ async function main() {
   // Inilah bug yang pernah lolos: dua permintaan membaca nomor yang sama,
   // keduanya memakainya, dan yang kedua gagal disimpan dengan error 500.
   const serentak = await Promise.all(
-    Array.from({ length: 8 }, () => generateItemCode(LOKASI))
+    Array.from({ length: 8 }, () => generateItemCode(UNIT))
   );
   const kodeSerentak = serentak.map((s) => s.code);
   kodeSerentak.forEach((k) => dibuat.push(k));
@@ -146,6 +147,28 @@ async function main() {
     `tercatat=${tercatatSemua.length}`
   );
 
+  // ══ B9: KODE DARI UNIT, BUKAN LOKASI ══
+  // Inti pemisahan Unit vs Lokasi: barang dinomori menurut PEMILIKnya (unit),
+  // bukan menurut ruangan tempatnya. Dua barang berunit sama harus berbagi satu
+  // urutan, walau lokasinya ditulis berbeda-beda.
+  const kB = await generateItemCode(UNIT); dibuat.push(kB.code);
+  const kK = await generateItemCode(UNIT_KIMIA); dibuat.push(kK.code);
+  cek("B9 unit TI memakai kode TI", /^FMIPA-TI-\d{4}-\d{3}$/.test(kB.code), kB.code);
+  cek("B9 unit Kimia memakai kode KIM", /^FMIPA-KIM-\d{4}-\d{3}$/.test(kK.code), kK.code);
+  cek("B9 tiap unit punya urutannya SENDIRI (mulai dari 1)",
+      (bacaKode(kK.code)?.urut ?? 0) === 1,
+      `urutKimia=${bacaKode(kK.code)?.urut} (harus 1 — belum ada barang Kimia)`);
+
+  // Kelompok berbeda kata harus TETAP unitnya, bukan ditulis bebas.
+  const kSalah = await generateItemCode("Divisi Teknologi InformasI"); dibuat.push(kSalah.code);
+  cek("B9 besar-kecil huruf unit dinormalkan (tetap prefix TI)",
+      kSalah.code.startsWith("FMIPA-TI-"), kSalah.code);
+
+  // Unit di luar daftar → LAIN, bukan bikin prefix acak yang memecah urutan.
+  const kNyasar = await generateItemCode("Ruang Server Lt. 2"); dibuat.push(kNyasar.code);
+  cek("B9 unit tak dikenal memakai LAIN (bukan prefix karangan)",
+      kNyasar.code.startsWith("FMIPA-LAIN-"), kNyasar.code);
+
   // ══ B1b: register menang atas items ══
   // Semai nomor tinggi tanpa barangnya → nextSequence harus ikut register
   const tinggi = formatCode("TI", TAHUN, 950);
@@ -158,7 +181,7 @@ async function main() {
   // ══ B4b: items jadi jaring pengaman kalau register kosong ══
   await db.delete(kodeTerpakai).where(eq(kodeTerpakai.kode, tinggi));
   const [{ id: idJaring }] = await db.insert(items).values({
-    name: `${TANDA} Barang`, category: "Elektronik", location,
+    name: `${TANDA} Barang`, category: "Elektronik", unit,
     quantity: 1, availableQuantity: 1, itemCode: formatCode("TI", TAHUN, 960),
   }).$returningId();
   const jaring = await nextSequence("TI", TAHUN);

@@ -5,6 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { generateBorrowingPDF } from "@/lib/pdf-generator";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 
 export async function GET(
   request: NextRequest,
@@ -30,8 +31,14 @@ export async function GET(
     if (!tx) return new NextResponse("Transaction not found", { status: 404 });
 
     const role = (session.user as any)?.role;
-    if (tx.userId !== session.user.id && role !== "admin" && role !== "super_admin") {
+    const pemilik = tx.userId === session.user.id;
+    if (!pemilik && role !== "admin" && role !== "super_admin") {
       return new NextResponse("Unauthorized", { status: 403 });
+    }
+    // Admin yang bukan pemilik hanya boleh menyentuh pecahan unitnya sendiri.
+    if (!pemilik) {
+      const tolak = await periksaAksesUnit(session, tx.unit);
+      if (tolak) return new NextResponse(tolak.pesan, { status: tolak.status });
     }
 
     // Ambil semua item dalam transaksi ini

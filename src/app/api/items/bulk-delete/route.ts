@@ -6,6 +6,8 @@ import { auth } from "@/auth";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 import { jsonBody } from "@/lib/json-body";
 import { barangSedangDipakai, pesanBarangDipakai } from "@/lib/item-in-use";
+import { batasUnit } from "@/lib/akses-unit";
+import { normalizeUnit } from "@/lib/units";
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,6 +50,26 @@ export async function POST(request: NextRequest) {
         { error: `Barang stok 0 tidak bisa dihapus (unitnya mungkin kembali): ${adaStokNol.map((i) => i.name).join(", ")}.` },
         { status: 400 }
       );
+    }
+
+    // ── F3: batas unit ──
+    // Admin hanya boleh menghapus barang unit yang dikelolanya. Seluruh
+    // permintaan ditolak kalau ada satu saja di luar wewenangnya.
+    const batas = await batasUnit(session);
+    if (batas !== null) {
+      const rows = await db
+        .select({ id: items.id, name: items.name, unit: items.unit })
+        .from(items)
+        .where(inArray(items.id, angka));
+      const luar = rows.filter(
+        (r) => !batas.some((u) => normalizeUnit(u) === normalizeUnit(r.unit))
+      );
+      if (luar.length > 0) {
+        return NextResponse.json(
+          { error: `Barang pilihan ada yang bukan unit Anda: ${luar.map((r) => r.name).join(", ")}.` },
+          { status: 403 }
+        );
+      }
     }
 
     // Salin identitas barang terakhir ke baris riwayat SEBELUM barang dihapus,

@@ -3,6 +3,32 @@ import { items, itemReturns } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 
 /**
+ * Kembalikan stok yang tadinya ditahan (transaksi/serah terima ditolak).
+ *
+ * Dulu di tiap jalur penolakan ini dilakukan dengan pola baca-lalu-tulis:
+ * baca `available_quantity`, tambahkan di JavaScript, lalu tulis kembali.
+ * Kalau dua penolakan terjadi bersamaan, keduanya membaca angka yang sama dan
+ * yang satu menimpa hasil yang lain — stok akhirnya kurang dari seharusnya.
+ * Di sini penambahannya dilakukan oleh database dalam satu perintah, jadi
+ * tidak ada angka yang perlu dibaca lebih dulu.
+ */
+export async function kembalikanKeStok(
+  daftar: { itemId: number; quantity: number }[]
+): Promise<void> {
+  for (const d of daftar) {
+    if (!d.itemId || d.quantity <= 0) continue;
+    await db
+      .update(items)
+      .set({
+        availableQuantity: sql`${items.availableQuantity} + ${d.quantity}`,
+        status: sql`CASE WHEN ${items.availableQuantity} + ${d.quantity} > 0 THEN 'available' ELSE 'borrowed' END`,
+        updatedAt: new Date(),
+      })
+      .where(eq(items.id, d.itemId));
+  }
+}
+
+/**
  * Catat barang yang kembali ke inventaris.
  *
  * Dipisah dari route supaya bisa diuji langsung (tanpa sesi HTTP) — lihat
