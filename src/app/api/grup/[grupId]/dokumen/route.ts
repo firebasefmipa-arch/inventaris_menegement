@@ -4,6 +4,7 @@ import { transactions, handovers } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { auth } from "@/auth";
 import { gabungPdfDariUrl } from "@/lib/penggabung-pdf";
+import { unitDikelola, bolehKelolaUnit } from "@/lib/akses-unit";
 
 /**
  * Dokumen gabungan untuk satu kelompok pengajuan.
@@ -30,10 +31,12 @@ export async function GET(
     const jenis = searchParams.get("jenis") === "serah-terima" ? "serah-terima" : "transaksi";
 
     const role = (session.user as any).role;
-    const bolehSemua = role === "admin" || role === "super_admin";
+    const bolehSemua = role === "super_admin";
 
     let urls: (string | null)[] = [];
     let nama = "dokumen-gabungan";
+    let unitPecahan: (string | null)[] = [];
+    let pemilikId: string | null = null;
 
     if (jenis === "transaksi") {
       const baris = await db
@@ -42,19 +45,15 @@ export async function GET(
           userId: transactions.userId,
           signedDocumentUrl: transactions.signedDocumentUrl,
           borrowerName: transactions.borrowerName,
+          unit: transactions.unit,
         })
         .from(transactions)
         .where(eq(transactions.grupId, grupId))
         .orderBy(transactions.id);
 
       if (baris.length === 0) return NextResponse.json({ error: "Tidak ditemukan" }, { status: 404 });
-      // Pemiliknya sendiri, atau admin. Admin pun hanya melihat pecahan unitnya
-      // di daftar — tapi dokumen gabungan ini dipakai oleh PEMINJAM, jadi yang
-      // penting adalah pemiliknya tak bisa membuka milik orang lain.
-      if (!bolehSemua && baris[0].userId !== session.user.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-      }
-
+      unitPecahan = baris.map((b) => b.unit);
+      pemilikId = baris[0].userId;
       urls = baris.map((b) => b.signedDocumentUrl);
       nama = `PB_${(baris[0].borrowerName || "Peminjam").replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30)}_gabungan`;
     } else {
@@ -64,18 +63,30 @@ export async function GET(
           userId: handovers.userId,
           signedDocumentUrl: handovers.signedDocumentUrl,
           receiverName: handovers.receiverName,
+          unit: handovers.unit,
         })
         .from(handovers)
         .where(eq(handovers.grupId, grupId))
         .orderBy(handovers.id);
 
       if (baris.length === 0) return NextResponse.json({ error: "Tidak ditemukan" }, { status: 404 });
-      if (!bolehSemua && baris[0].userId !== session.user.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-      }
-
+      unitPecahan = baris.map((b) => b.unit);
+      pemilikId = baris[0].userId;
       urls = baris.map((b) => b.signedDocumentUrl);
       nama = `ST_${(baris[0].receiverName || "Penerima").replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30)}_gabungan`;
+    }
+
+    // ── Siapa yang boleh membuka ──
+    // Pemiliknya sendiri, superadmin, atau admin yang mengelola SALAH SATU unit
+    // di kelompok itu. Admin unit lain tidak boleh — dulu di sini cukup
+    // "role === admin", sehingga admin unit mana pun bisa membuka dokumen
+    // pengajuan orang lain.
+    if (!bolehSemua && pemilikId !== session.user.id) {
+      if (role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
+      const daftar = (await unitDikelola(session.user.id)) ?? [];
+      const boleh = unitPecahan.some((u) => bolehKelolaUnit(role, daftar, u));
+      if (!boleh) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const pdf = await gabungPdfDariUrl(urls);
