@@ -624,6 +624,10 @@ Perubahan schema DB → tambahkan kolom manual (Langkah 2), jangan
 
 | Tanggal | Commit | Isi |
 |---|---|---|
+| 25 Sep 2026 | `edec98d` | **Batas unit pada halaman yang membaca DB langsung** (Audit #16) — daftar barang, detail barang, dashboard, dan halaman pengembalian disaring `batasUnit`/`periksaAksesUnit`. Sebelumnya API menolak 403, tapi halaman server tidak lewat API sehingga seluruh baris terkirim ke browser. Sekaligus: riwayat transaksi per barang dibaca lewat tabel penghubung `transaction_items` (kolom `transactions.item_id` selalu NULL), dan badge **"Terlambat"** dihitung dari tanggal (`status = 'overdue'` tak pernah ditulis siapa pun). Tanpa perubahan schema. |
+| 25 Sep 2026 | `6393a84` | **Kondisi barang menentukan segalanya** — hanya `condition = "Baik"` yang boleh dipinjam, diserahterimakan, dan terlihat user. Barang Rusak / berkondisi kosong disembunyikan dari user, dikunci di 5 pintu, dan diberi border merah di kartu admin. Kolom baru: `items.catatan_kerusakan varchar(255)` (lihat `scripts/sql/catatan_kerusakan.sql`) — log kerusakan, tidak dihapus saat barang kembali Baik. |
+| 25 Sep 2026 | `5079dbc` | Hapus katalog publik (`/katalog` + `/api/public/borrow`) — jalur itu menerima peminjaman tanpa kolom `unit`. |
+| 25 Sep 2026 | `cf9b889` | Validasi jumlah & panjang teks masukan dari klien (`src/lib/validasi.ts`). |
 | 25 Sep 2026 | `e9ce9c7` | **Fitur Unit** — kode barang dari unit, admin hanya boleh mengelola barang unit yang ditugaskan (`user_unit`), pengajuan lintas unit dipecah per unit dengan `grup_id` + dokumen gabungan. Kolom baru: `items.unit`, `transactions.unit`/`grup_id`, `handovers.unit`/`grup_id`, `user.unit_utama`, tabel `user_unit` (lihat `scripts/sql/unit_admin.sql`). Uji asap lintas unit 46/46 lulus di :3001 sebelum deploy. |
 | 24 Sep 2026 | `6416bde` | 4 bug balapan stok (baca-lalu-tulis → atomik) |
 
@@ -643,12 +647,22 @@ npx tsx scripts/check-terlambat.ts    # satu definisi "Terlambat" (7 pemeriksaan
 npm run check:habis                   # barang habis diserahkan: tetap ada, tersembunyi (15)
 npm run check:kembali                 # pengembalian: "di luar" = keluar−kembali, stok nambah (22)
 npm run check:kode                    # buku register: nomor bekas tak dipakai ulang + bentrok (22)
-npm run check:unit                    # fitur Unit: batas kelola admin + pengajuan dipecah (31)
+npm run check:unit                    # fitur Unit + kondisi barang + batas unit halaman (87)
 npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 ```
 
 Semua harus lulus sebelum & sesudah deploy. Yang `npx tsx` memang belum punya
 alias `npm run` — jalankan langsung.
+
+> **Sesudah deploy, periksa CSS benar-benar 200.** `npm run build` mengganti
+> nama berkas CSS (hash isi). Kalau `pm2 restart` terlewat, proses lama meminta
+> nama berkas lama → **halaman tampil tanpa warna** (HTML saja). Ambil nama
+> berkasnya dari HTML login, lalu curl:
+>
+> ```bash
+> curl -s https://science.uii.ac.id/logistik/login | grep -oP 'href="[^"]*\.css[^"]*"'
+> curl -s -o /dev/null -w '%{http_code}\n' https://science.uii.ac.id/logistik/_next/static/chunks/<nama>.css
+> ```
 
 ---
 
