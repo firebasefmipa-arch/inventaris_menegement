@@ -78,7 +78,26 @@ barang tanpa unit hanya superadmin, pemecahan keranjang tak tercampur).
 Seluruh penjaga lain tetap lulus: `check:pdf` 25, `check:label` 51,
 `check:habis` 15, `check:kembali` 22, `check:kode` 22, `check:snapshot` 19.
 
-**Status:** DIPERBAIKI (belum di-deploy saat audit ini ditulis).
+**Status:** DIPERBAIKI + **DI-DEPLOY 25 Sep 2026** (`105d02c`, `e9ce9c7`, `9b9e62f`).
+
+**Uji asap lintas unit (sebelum deploy, server uji :3001, DB kosong).** Dijalankan
+dengan akun uji sementara sendiri (`@uji.local`, dihapus lagi setelah selesai) —
+**46/46 lulus**:
+
+| Bagian | Yang dibuktikan |
+|---|---|
+| Uji 1 (25) | kode barang per unit (`FMIPA-TI-…`/`FMIPA-KIM-…`, urutan tiap unit sendiri); pengajuan campur 2 unit → **terpecah 2 transaksi, 1 `grup_id`**; satu unggahan dokumen mengisi KEDUA pecahan; admin TI **ditolak** menyetujui/menolak/mengedit/menghapus pecahan & barang Kimia (403 di server, bukan sekadar tombol hilang); stok terpotong sesuai; user biasa ditolak membuat barang |
+| Uji 2 (21) | serah terima juga terpecah + tiap pecahan lahir dengan PDF sendiri ber-kode unit; admin TI ditolak pada pecahan Kimia; dokumen gabungan jadi PDF sah; **admin unit lain tak bisa membuka dokumen gabungan milik orang lain**; balapan stok (3 pinjaman serentak atas stok 4 → tak semuanya lolos, stok tak minus); batal lintas unit membatalkan kedua pecahan sekaligus + stok kedua barang kembali penuh |
+
+**Bug baru yang ketemu lewat uji ini (satu, sudah diperbaiki di `e9ce9c7`):**
+`api/grup/[grupId]/dokumen` sebelumnya hanya memeriksa `role === "admin"`,
+sehingga **admin unit mana pun bisa membuka dokumen gabungan milik siapa pun**.
+Sekarang dibatasi: pemiliknya sendiri, superadmin, atau admin yang mengelola
+salah satu unit di kelompok itu.
+
+**Catatan susulan (bukan bug, sengaja):** serah terima lahir langsung berstatus
+`pending_approval` dan PDF-nya dibuat otomatis (berbeda dari peminjaman yang
+harus diunggah user) — ini perilaku lama, tak diubah oleh fitur Unit.
 
 ---
 

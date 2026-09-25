@@ -29,6 +29,7 @@ import {
 } from "@/lib/units";
 import { bolehKelolaUnit } from "@/lib/akses-unit";
 import { pecahPerUnit, type Keranjang } from "@/lib/pecah-unit";
+import { readFileSync } from "fs";
 
 let lulus = 0;
 let gagal = 0;
@@ -116,6 +117,32 @@ cek("U7 pengajuan satu unit → satu bagian", satuGrup.size === 1);
 // ── Daftar unit konsisten ─────────────────────────────────────────────────
 cek("U1 setiap unit punya kode", UNIT_OPTIONS.every((u) => !!UNIT_CODES[u]));
 cek("U1 kode unit unik", new Set(Object.values(UNIT_CODES)).size === Object.keys(UNIT_CODES).length);
+
+// ── Dokumen gabungan: siapa yang boleh membuka? ───────────────────────────
+// Dulu di sini hanya diperiksa `role === "admin"`, sehingga admin unit mana pun
+// bisa membuka dokumen gabungan milik orang lain. Sekarang unitnya ikut
+// diperiksa — aturan inilah yang harus dijaga.
+const dokumenSrc = readFileSync("src/app/api/grup/[grupId]/dokumen/route.ts", "utf8");
+cek(
+  "U10 dokumen gabungan memeriksa unit, bukan sekadar peran",
+  dokumenSrc.includes("bolehKelolaUnit") && dokumenSrc.includes("unitDikelola"),
+  "harus memakai unitDikelola + bolehKelolaUnit"
+);
+cek(
+  "U10 admin biasa tidak lagi otomatis boleh",
+  !dokumenSrc.includes('role === "admin" || role === "super_admin"'),
+  "pola lama masih ada"
+);
+cek(
+  "U10 unit tiap pecahan ikut diambil",
+  (dokumenSrc.match(/unit: (transactions|handovers)\.unit/g) ?? []).length === 2,
+  "kedua jalur harus menyertakan kolom unit"
+);
+cek(
+  "U10 hanya pemilik/superadmin/admin unit itu yang boleh",
+  dokumenSrc.includes("pemilikId !== session.user.id"),
+  "pemeriksaan pemilik harus ada"
+);
 
 console.log(`\n  lulus=${lulus} gagal=${gagal}\n`);
 process.exit(gagal > 0 ? 1 : 0);
