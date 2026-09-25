@@ -56,7 +56,7 @@ kembali masuk.
 jalur; stok pulih tepat 10/10). Regresi utuh tetap hijau: uji-1 25/25,
 uji-2 21/21, uji-super 23/23.
 
-**Temuan kedua dari audit yang sama — DIPERBAIKI (`f9d3a15`).**
+**Temuan kedua dari audit yang sama — DIPERBAIKI (`cf9b889`).**
 
 *Masukan angka & panjang teks tidak diperiksa.* Bukti sebelum perbaikan:
 
