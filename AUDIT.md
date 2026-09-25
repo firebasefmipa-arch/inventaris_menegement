@@ -86,7 +86,7 @@ Uji logika tebakan kondisi: **39/39 lulus** — termasuk `Kurang Baik` → Rusak
 
 Dijaga oleh penjaga `check:unit` **U15** (17 pemeriksaan baru, total **81**).
 
-**Status:** diperbaiki. Commit `<diisi saat commit>`.
+**Status:** diperbaiki. Commit `6393a84`.
 
 **Belum dikerjakan (sengaja):** barang lama berkondisi kosong dibiarkan, tidak
 diisi otomatis — admin mengisi kapan sempat, dan selama itu barangnya
