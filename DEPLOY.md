@@ -620,6 +620,17 @@ pm2 restart pinjam-app --update-env
 Perubahan schema DB → tambahkan kolom manual (Langkah 2), jangan
 `drizzle-kit push`.
 
+### Riwayat deploy
+
+| Tanggal | Commit | Isi |
+|---|---|---|
+| 25 Sep 2026 | `e9ce9c7` | **Fitur Unit** — kode barang dari unit, admin hanya boleh mengelola barang unit yang ditugaskan (`user_unit`), pengajuan lintas unit dipecah per unit dengan `grup_id` + dokumen gabungan. Kolom baru: `items.unit`, `transactions.unit`/`grup_id`, `handovers.unit`/`grup_id`, `user.unit_utama`, tabel `user_unit` (lihat `scripts/sql/unit_admin.sql`). Uji asap lintas unit 46/46 lulus di :3001 sebelum deploy. |
+| 24 Sep 2026 | `6416bde` | 4 bug balapan stok (baca-lalu-tulis → atomik) |
+
+> **Catatan fitur Unit:** akun admin yang sudah ada perlu diberi unit lewat
+> halaman **Admin → Kelola User** (tombol Unit). Tanpa unit, admin hanya bisa
+> melihat — promosi user ke admin mewajibkan pilih minimal 1 unit.
+
 ### Uji sebelum & sesudah deploy
 
 ```bash
@@ -631,7 +642,8 @@ npx tsx scripts/check-import-fix.ts   # impor Excel (7 pemeriksaan)
 npx tsx scripts/check-terlambat.ts    # satu definisi "Terlambat" (7 pemeriksaan)
 npm run check:habis                   # barang habis diserahkan: tetap ada, tersembunyi (15)
 npm run check:kembali                 # pengembalian: "di luar" = keluar−kembali, stok nambah (22)
-npm run check:kode                    # buku register: nomor bekas tak dipakai ulang + bentrok (17)
+npm run check:kode                    # buku register: nomor bekas tak dipakai ulang + bentrok (22)
+npm run check:unit                    # fitur Unit: batas kelola admin + pengajuan dipecah (27)
 npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 ```
 
