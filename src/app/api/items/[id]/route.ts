@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
 import { normalizeLocation, lokasiMirip } from "@/lib/locations";
 import { normalizeUnit } from "@/lib/units";
+import { cekPanjangTeks, JUMLAH_MAKS } from "@/lib/validasi";
 import { periksaAksesUnit } from "@/lib/akses-unit";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 import { barangSedangDipakai, pesanBarangDipakai } from "@/lib/item-in-use";
@@ -92,6 +93,22 @@ export async function PUT(
     const { name, category, description, quantity, unit, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } =
       body;
 
+    // ── Panjang teks disesuaikan lebar kolom ──
+    // Kalau kepanjangan, MySQL membalas error dan pemakai cuma melihat
+    // "500 Terjadi kesalahan" tanpa tahu bagian mana yang salah.
+    const tolakPanjang = cekPanjangTeks({
+      Nama: [name, 255],
+      Kategori: [category, 100],
+      "No. Inventaris": [inventoryNumber, 255],
+      "No. Asset": [assetNumber, 255],
+      "Nomor Seri": [sn, 255],
+      Kondisi: [condition, 255],
+      Unit: [unit, 255],
+      Lokasi: [location, 255],
+      "URL gambar": [imageUrl, 500],
+    });
+    if (tolakPanjang) return NextResponse.json({ error: tolakPanjang }, { status: 400 });
+
     // Pindah unit = menyerahkan barang ke pengelola lain. Hanya boleh kalau
     // pemakai berhak atas unit LAMA (sudah diperiksa di atas) DAN unit BARU.
     // Tanpa cek kedua, admin TI bisa "menyumbang" barang ke unit mana pun.
@@ -122,6 +139,14 @@ export async function PUT(
       if (!Number.isInteger(n) || n < 0 || berkurangKeNol) {
         return NextResponse.json(
           { error: "Jumlah minimal 1 unit. Stok 0 hanya terjadi lewat serah terima." },
+          { status: 400 }
+        );
+      }
+      // Batas atas: kolom `quantity` bertipe int, dan penambahan berikutnya
+      // (pengembalian) bisa melewati batas itu dan gagal simpan.
+      if (n > JUMLAH_MAKS) {
+        return NextResponse.json(
+          { error: `Jumlah maksimal ${JUMLAH_MAKS.toLocaleString("id-ID")} unit.` },
           { status: 400 }
         );
       }

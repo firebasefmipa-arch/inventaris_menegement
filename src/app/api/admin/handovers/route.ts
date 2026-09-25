@@ -6,7 +6,7 @@ import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
 import { batasUnit, periksaAksesUnit } from "@/lib/akses-unit";
-import { bacaKeranjang, pecahPerUnit, type Keranjang } from "@/lib/pecah-unit";
+import { bacaKeranjang, pecahPerUnit, pesanKeranjangTidakValid, type Keranjang } from "@/lib/pecah-unit";
 import { unitCode } from "@/lib/units";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir } from "fs/promises";
@@ -135,6 +135,11 @@ export async function POST(req: NextRequest) {
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
       return NextResponse.json({ error: "Pilih minimal satu barang" }, { status: 400 });
     }
+
+    // Jumlah dari klien diperiksa DULU — jangan sampai angka ngawur
+    // (0, negatif, 2.5, "abc") diam-diam dibetulkan jadi 1 oleh bacaKeranjang.
+    const pesanKeranjang = pesanKeranjangTidakValid(cart);
+    if (pesanKeranjang) return NextResponse.json({ error: pesanKeranjang }, { status: 400 });
 
     const cartItems: Keranjang[] = bacaKeranjang(cart);
 

@@ -9,7 +9,7 @@ import path from "path";
 import { uploadPath } from "@/lib/upload-dir";
 import { jsonBody } from "@/lib/json-body";
 import { unitCode } from "@/lib/units";
-import { bacaKeranjang, pecahPerUnit, type Keranjang } from "@/lib/pecah-unit";
+import { bacaKeranjang, pecahPerUnit, pesanKeranjangTidakValid, type Keranjang } from "@/lib/pecah-unit";
 
 type CartItem = { itemId: number; quantity: number; notes?: string };
 
@@ -67,6 +67,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Tanggal kembali tidak valid." }, { status: 400 });
 
     // ── Validasi stok ──
+    // Jumlah dari klien diperiksa DULU — jangan sampai angka ngawur
+    // (0, negatif, 2.5, "abc") diam-diam dibetulkan jadi 1 oleh bacaKeranjang.
+    const pesanKeranjang = pesanKeranjangTidakValid(cart);
+    if (pesanKeranjang) return NextResponse.json({ error: pesanKeranjang }, { status: 400 });
+
     const cartItems: Keranjang[] = bacaKeranjang(cart);
 
     const dbItems = await db.select().from(items).where(inArray(items.id, cartItems.map((c) => c.itemId)));

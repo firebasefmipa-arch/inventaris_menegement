@@ -5,6 +5,7 @@ import { eq, inArray, gte, and, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
 import { periksaAksesUnit } from "@/lib/akses-unit";
+import { pesanJumlahTidakValid } from "@/lib/validasi";
 import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
@@ -35,6 +36,19 @@ export async function PATCH(
 
     if (!Array.isArray(newItems) || newItems.length === 0)
       return NextResponse.json({ error: "Minimal satu barang wajib ada" }, { status: 400 });
+
+    // ── Bentuk jumlah dari klien diperiksa DULU ──
+    // Dulu hanya dibandingkan dengan stok yang tersedia. Untuk jumlah negatif
+    // perbandingan itu selalu bernilai false, jadi lolos; untuk `"abc"`
+    // hasilnya NaN, dibandingkan apa pun juga false, lalu meledak jadi error
+    // 500 saat INSERT. Diperiksa sebelum apa pun diubah supaya tak ada
+    // pengembalian stok yang telanjur jalan.
+    for (const ni of newItems) {
+      if (!Number.isInteger(Number(ni?.itemId)) || Number(ni?.itemId) < 1)
+        return NextResponse.json({ error: "Barang yang dipilih tidak dikenal." }, { status: 400 });
+      const pesanJumlah = pesanJumlahTidakValid(ni?.quantity);
+      if (pesanJumlah) return NextResponse.json({ error: pesanJumlah }, { status: 400 });
+    }
 
     const [hv] = await db.select().from(handovers).where(eq(handovers.id, hvId));
     if (!hv) return NextResponse.json({ error: "Serah terima tidak ditemukan" }, { status: 404 });

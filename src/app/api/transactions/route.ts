@@ -7,7 +7,7 @@ import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
 import { sqlTerlambat } from "@/lib/tanggal";
 import { periksaAksesUnit, batasUnit } from "@/lib/akses-unit";
-import { bacaKeranjang, pecahPerUnit, type Keranjang } from "@/lib/pecah-unit";
+import { bacaKeranjang, pecahPerUnit, pesanKeranjangTidakValid, type Keranjang } from "@/lib/pecah-unit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -145,6 +145,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Jumlah dari klien diperiksa DULU — jangan sampai angka ngawur
+    // (0, negatif, 2.5, "abc") diam-diam dibetulkan jadi 1 oleh bacaKeranjang.
+    const pesanKeranjang = pesanKeranjangTidakValid(cart);
+    if (pesanKeranjang) return NextResponse.json({ error: pesanKeranjang }, { status: 400 });
 
     const cartItems: Keranjang[] = bacaKeranjang(cart);
 

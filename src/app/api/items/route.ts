@@ -8,6 +8,7 @@ import { jsonBody } from "@/lib/json-body";
 import { generateItemCode } from "@/lib/item-code";
 import { normalizeLocation } from "@/lib/locations";
 import { normalizeUnit } from "@/lib/units";
+import { cekPanjangTeks, pesanJumlahTidakValid } from "@/lib/validasi";
 import { batasUnit, periksaAksesUnit } from "@/lib/akses-unit";
 
 // Semua endpoint /api/items adalah panel admin. Halaman user membaca DB
@@ -134,7 +135,38 @@ export async function POST(request: NextRequest) {
     const tolak = await periksaAksesUnit(session, normalizedUnit);
     if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
 
-    const qty = quantity || 1;
+    // ── Jumlah harus bilangan bulat minimal 1 ──
+    // Dulu `quantity || 1`, sehingga `-5`, `2.5`, `0`, atau `"abc"` ikut
+    // tersimpan apa adanya (atau meledak jadi 500 di kolom int). Perhatikan
+    // `quantity || 1`: angka 0 pun ditelan jadi 1 — padahal 0 justru yang
+    // paling berbahaya karena barangnya langsung tersembunyi.
+    // Patokan `items/[id]` (form edit) yang sudah benar sejak awal.
+    //
+    // `null` juga DITOLAK, bukan diartikan 1: `Number(null)` bernilai 0, dan
+    // menganggap "kosong" sebagai satu unit membuat kesalahan isi formulir
+    // tak pernah ketahuan.
+    let qty = 1;
+    if (quantity !== undefined) {
+      const pesanJumlah = pesanJumlahTidakValid(quantity);
+      if (pesanJumlah) return NextResponse.json({ error: pesanJumlah }, { status: 400 });
+      qty = Number(quantity);
+    }
+
+    // ── Panjang teks disesuaikan lebar kolom ──
+    // Tanpa ini, nama 5000 karakter membuat MySQL membalas error dan
+    // pemakai hanya melihat "Failed to create item" (500) tanpa penjelasan.
+    const tolakPanjang = cekPanjangTeks({
+      Nama: [name, 255],
+      Kategori: [category, 100],
+      "No. Inventaris": [inventoryNumber, 255],
+      "No. Asset": [assetNumber, 255],
+      "Nomor Seri": [sn, 255],
+      Kondisi: [condition, 255],
+      Unit: [normalizedUnit, 255],
+      Lokasi: [location, 255],
+      "URL gambar": [imageUrl, 500],
+    });
+    if (tolakPanjang) return NextResponse.json({ error: tolakPanjang }, { status: 400 });
 
     // Kode barang dibuat di server, terkunci — nilai itemCode dari klien diabaikan.
     const { code: itemCode, unit: unitFinal } = await generateItemCode(normalizedUnit);

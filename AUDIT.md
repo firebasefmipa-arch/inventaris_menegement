@@ -44,7 +44,7 @@ melewati pengembalian stok sebelum salah satunya menandai.
 lalu mengizinkan peminjaman yang secara fisik tidak ada, dan angkanya tidak
 bisa dipulihkan sendiri tanpa hitung ulang manual.
 
-**Perbaikan (`3a2c1e8`).** Keempat berkas disamakan polanya: status ikut
+**Perbaikan (`13bb04a`).** Keempat berkas disamakan polanya: status ikut
 disyaratkan di `WHERE`, `affectedRows` diperiksa, yang kalah balapan balas
 **409** ("sudah diproses, muat ulang"). Urutan dibalik: **kunci status dulu,
 baru sentuh stok**. Persetujuan serah terima juga tidak lagi mengunci
@@ -56,17 +56,40 @@ kembali masuk.
 jalur; stok pulih tepat 10/10). Regresi utuh tetap hijau: uji-1 25/25,
 uji-2 21/21, uji-super 23/23.
 
-**Sisa dari audit yang sama, BELUM diperbaiki** (prioritas berikutnya):
+**Temuan kedua dari audit yang sama — DIPERBAIKI (`f9d3a15`).**
 
-1. **Masukan angka tidak divalidasi** — `const qty = quantity || 1` di
-   `src/app/api/items/route.ts` dan `bacaKeranjang` di `src/lib/pecah-unit.ts`
-   (`Math.max(1, Number(c.quantity) || 1)`). Akibatnya: barang bisa dibuat
-   dengan jumlah `-5`, `2.5`, `0`, atau `999999999`; pinjam jumlah `0`/`-3`/
-   `"abc"` diam-diam jadi 1; nama 5000 karakter → 500. Pembanding yang sudah
-   benar: `src/app/api/items/[id]/route.ts` (tolak bukan bilangan bulat,
-   tolak negatif, tolak turun ke 0, tolak di bawah yang sedang dipinjam).
-2. **`/api/public/borrow` masih hidup** dan masih baca-lalu-tulis stok.
-   Tidak ada tautan ke sana di katalog, tapi alamatnya masih bisa dibuka.
+*Masukan angka & panjang teks tidak diperiksa.* Bukti sebelum perbaikan:
+
+```
+POST /api/items   { quantity: -5 }         → 201, tersimpan quantity=-5
+POST /api/items   { quantity: 2.5 }        → 201, tersimpan jadi 3
+POST /api/items   { quantity: 0 }          → 201, barang tersembunyi permanen
+POST /api/items   { name: "x"*5000 }       → 500 (kolom hanya 255)
+POST /api/pinjam  { cart:[{quantity:0}] }  → diterima, dicatat jadi 1
+PATCH .../correct { items:[{quantity:-5}] }→ diterima, stok malah BERTAMBAH 5
+```
+
+Akar: `const qty = quantity || 1` (`items/route.ts`) dan
+`Math.max(1, Number(c.quantity) || 1)` (`pecah-unit.ts`) — keduanya memaksa
+angka ngawur jadi 1 tanpa memeriksa. Di jalur koreksi lebih halus lagi: jumlah
+hanya dibandingkan dengan stok tersedia, dan perbandingan dengan `NaN` atau
+angka negatif selalu bernilai `false`, jadi selalu lolos.
+
+Perbaikan: satu tempat pemeriksaan, `src/lib/validasi.ts`
+(`pesanJumlahTidakValid`, `cekPanjangTeks`, `JUMLAH_MAKS = 1.000.000`), dipakai
+di 8 titik: tambah barang, edit barang, 4 jalur keranjang (pinjam, serah
+terima, ajukan transaksi, serah terima admin), dan 2 jalur koreksi. Panjang
+teks kini dibatasi sesuai lebar kolom dengan pesan yang menyebut batasnya,
+bukan 500. Penjaga **U13** (14 pemeriksaan) ditambahkan.
+
+**Verifikasi temuan kedua.** uji-masukan **23/23** lulus, uji-koreksi **13/13**
+lulus, uji-balapan **15/15** lulus; regresi uji-1 25/25, uji-2 21/21,
+uji-super 23/23.
+
+**Sisa dari audit yang sama, BELUM diperbaiki:**
+
+- **`/api/public/borrow` masih hidup** dan masih baca-lalu-tulis stok.
+  Tidak ada tautan ke sana di katalog, tapi alamatnya masih bisa dibuka.
 
 ---
 

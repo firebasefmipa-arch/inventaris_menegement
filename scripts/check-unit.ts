@@ -199,5 +199,81 @@ for (const [nama, berkas] of berkasKunci) {
   );
 }
 
+// ── Validasi masukan dari klien (Audit #14 temuan kedua) ──────────────────
+// Dulu jumlah dari klien dipaksa jadi angka yang "masuk akal" tanpa diperiksa:
+// `quantity || 1` dan `Math.max(1, Number(x) || 1)`. Akibatnya -5, 2.5, 0, dan
+// "abc" diterima diam-diam sebagai 1 — atau tersimpan ngawur lalu meledak 500.
+// Sekarang angkanya diperiksa dulu lewat satu tempat: src/lib/validasi.ts.
+const validasiSrc = readFileSync("src/lib/validasi.ts", "utf8");
+cek(
+  "U13 batas jumlah ada di satu tempat",
+  validasiSrc.includes("pesanJumlahTidakValid") && validasiSrc.includes("JUMLAH_MAKS")
+);
+cek(
+  "U13 jumlah negatif & pecahan ditolak",
+  validasiSrc.includes("Number.isInteger(n) || n < 1"),
+  "pemeriksaan bilangan bulat minimal 1 harus ada"
+);
+cek(
+  "U13 jumlah terlalu besar dibatasi",
+  validasiSrc.includes("n > JUMLAH_MAKS"),
+  "tanpa batas atas, kolom int bisa dilewati"
+);
+cek(
+  "U13 panjang teks diperiksa sebelum simpan",
+  validasiSrc.includes("cekPanjangTeks") && validasiSrc.includes("maksimal ${batas} karakter"),
+  "pesan panjang harus menyebut batasnya"
+);
+
+const itemPostSrc = readFileSync("src/app/api/items/route.ts", "utf8");
+cek(
+  "U13 tambah barang tidak lagi memakai `quantity || 1`",
+  !/const qty = quantity \|\| 1/.test(itemPostSrc),
+  "pola lama masih ada — 0 dan NaN akan lolos"
+);
+cek(
+  "U13 tambah barang memakai pesanJumlahTidakValid",
+  itemPostSrc.includes("pesanJumlahTidakValid(quantity)"),
+  "harus memakai pemeriksa bersama"
+);
+cek(
+  "U13 tambah barang memeriksa panjang teks",
+  itemPostSrc.includes("cekPanjangTeks({"),
+  "tanpa ini nama kepanjangan → 500"
+);
+
+const keranjangSrc = readFileSync("src/lib/pecah-unit.ts", "utf8");
+cek(
+  "U13 keranjang punya pemeriksa tersendiri",
+  keranjangSrc.includes("pesanKeranjangTidakValid"),
+  "jumlah ngawur dari keranjang harus ditolak, bukan dibetulkan jadi 1"
+);
+for (const berkas of [
+  "src/app/api/pinjam/route.ts",
+  "src/app/api/handovers/route.ts",
+  "src/app/api/transactions/route.ts",
+  "src/app/api/admin/handovers/route.ts",
+]) {
+  const s = readFileSync(berkas, "utf8");
+  const nama = berkas.split("/").slice(-2, -1)[0];
+  cek(
+    `U13 ${nama} memeriksa keranjang sebelum dipakai`,
+    s.includes("pesanKeranjangTidakValid(cart)"),
+    "tanpa ini jumlah ngawur diam-diam jadi 1"
+  );
+}
+
+for (const berkas of [
+  "src/app/api/transactions/[id]/correct/route.ts",
+  "src/app/api/admin/handovers/[id]/correct/route.ts",
+]) {
+  const s = readFileSync(berkas, "utf8");
+  cek(
+    `U13 koreksi ${berkas.includes("admin") ? "serah terima" : "transaksi"} memeriksa jumlah`,
+    s.includes("pesanJumlahTidakValid(ni?.quantity)"),
+    "jumlah negatif/NaN lolos kalau hanya dibandingkan dengan stok"
+  );
+}
+
 console.log(`\n  lulus=${lulus} gagal=${gagal}\n`);
 process.exit(gagal > 0 ? 1 : 0);

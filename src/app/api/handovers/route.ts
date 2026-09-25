@@ -6,7 +6,7 @@ import { namaSql } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
 import { uploadPath } from "@/lib/upload-dir";
 import { jsonBody } from "@/lib/json-body";
-import { bacaKeranjang, pecahPerUnit, type Keranjang } from "@/lib/pecah-unit";
+import { bacaKeranjang, pecahPerUnit, pesanKeranjangTidakValid, type Keranjang } from "@/lib/pecah-unit";
 import { unitCode } from "@/lib/units";
 
 // GET /api/handovers — daftar serah terima milik user yang login
@@ -124,6 +124,11 @@ export async function POST(req: NextRequest) {
 
     if (!userRow?.signatureUrl)
       return NextResponse.json({ error: "SIGNATURE_REQUIRED" }, { status: 422 });
+
+    // Jumlah dari klien diperiksa DULU — jangan sampai angka ngawur
+    // (0, negatif, 2.5, "abc") diam-diam dibetulkan jadi 1 oleh bacaKeranjang.
+    const pesanKeranjang = pesanKeranjangTidakValid(cart);
+    if (pesanKeranjang) return NextResponse.json({ error: pesanKeranjang }, { status: 400 });
 
     const cartItems: Keranjang[] = bacaKeranjang(cart);
 
