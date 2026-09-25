@@ -29,7 +29,7 @@ import {
 } from "@/lib/units";
 import { bolehKelolaUnit } from "@/lib/akses-unit";
 import { pecahPerUnit, type Keranjang } from "@/lib/pecah-unit";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 
 let lulus = 0;
 let gagal = 0;
@@ -274,6 +274,26 @@ for (const berkas of [
     "jumlah negatif/NaN lolos kalau hanya dibandingkan dengan stok"
   );
 }
+
+// ── Katalog publik & endpoint lama TETAP terhapus (Audit #14, pilihan 1) ──
+// Jalur itu menerima peminjaman TANPA kolom `unit`, sehingga catatannya tidak
+// muncul di daftar tugas admin unit mana pun. Dihapus 25 Sep 2026. Dijaga di
+// sini supaya tidak bangkit lagi tanpa sengaja.
+cek(
+  "U14 halaman katalog publik tidak ada lagi",
+  !existsSync("src/app/(public)/katalog"),
+  "kalau benar-benar dibutuhkan lagi, bikin baru yang ikut aturan unit"
+);
+cek(
+  "U14 endpoint /api/public/borrow tidak ada lagi",
+  !existsSync("src/app/api/public/borrow"),
+  "endpoint itu menyimpan peminjaman tanpa kolom unit"
+);
+cek(
+  "U14 komponen mati PinjamFlow tidak ada lagi",
+  !existsSync("src/components/PinjamFlow.tsx"),
+  "sudah tidak dirujuk siapa pun"
+);
 
 console.log(`\n  lulus=${lulus} gagal=${gagal}\n`);
 process.exit(gagal > 0 ? 1 : 0);

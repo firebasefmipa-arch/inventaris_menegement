@@ -86,10 +86,35 @@ bukan 500. Penjaga **U13** (14 pemeriksaan) ditambahkan.
 lulus, uji-balapan **15/15** lulus; regresi uji-1 25/25, uji-2 21/21,
 uji-super 23/23.
 
-**Sisa dari audit yang sama, BELUM diperbaiki:**
+**Sisa dari audit yang sama — DIPERBAIKI (pilihan 1, commit `a2f6976`).**
 
-- **`/api/public/borrow` masih hidup** dan masih baca-lalu-tulis stok.
-  Tidak ada tautan ke sana di katalog, tapi alamatnya masih bisa dibuka.
+*`/api/public/borrow` + halaman `/katalog` masih hidup.* Diuji langsung di
+server uji :3001 dengan user biasa:
+
+```
+GET  /logistik/katalog          → 200 (terbuka tanpa login)
+POST /api/public/borrow         → 201 BERHASIL
+catatan: id 128 | unit = NULL | grup_id = NULL | "uji lewat alamat lama"
+banding: id 129 | unit = Divisi Teknologi Informasi | grup_id = <uuid>
+```
+
+Permintaannya masuk, tapi tersimpan **tanpa kolom `unit`**. Karena unit itulah
+yang menentukan admin mana yang berhak menyetujui, baris itu tidak muncul di
+daftar tugas admin mana pun — hanya superadmin yang melihatnya. Bukan
+kebocoran data, tapi pengajuan menggantung tanpa penanggung jawab jelas.
+
+Awalnya dikira hanya "alamat lama tanpa tautan". Ternyata halaman `/katalog`
+masih ada dan masih menembak ke alamat itu — jadi memperbaiki endpointnya saja
+tidak cukup.
+
+Perbaikan: dihapus ketiganya — `src/app/(public)/katalog/`,
+`src/app/api/public/borrow/`, dan `src/components/PinjamFlow.tsx` (komponen
+mati). Verifikasi: `/logistik/katalog` → **404**, `POST
+/api/public/borrow` → **404**; halaman dalam aplikasi (`/`, `/login`,
+`/dashboard/*`, `/admin/items`) tetap normal (200 atau 307 ke login), dan
+`POST /api/pinjam` tanpa login tetap **401**. Regresi 120/120 lulus.
+
+**Audit #14 selesai seluruhnya.** Tidak ada temuan terbuka dari audit ini.
 
 ---
 

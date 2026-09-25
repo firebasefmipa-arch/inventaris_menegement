@@ -34,7 +34,6 @@
 ```
 src/
 ├── app/
-│   ├── (public)/katalog/         # Halaman katalog publik
 │   ├── admin/                    # Dashboard admin
 │   │   ├── (auth)/login/         # Login admin/super_admin (native)
 │   │   ├── items/                # Manajemen barang
@@ -60,7 +59,6 @@ src/
 │   ├── BasePathProvider.tsx     # Patch window.fetch: tambah prefix base path ke /api & /uploads
 │   ├── UserSidebar.tsx          # Sidebar dashboard user (badge notifikasi)
 │   ├── Sidebar.tsx              # Sidebar dashboard admin
-│   ├── PinjamFlow.tsx           # Form pinjam untuk halaman publik /katalog (DEAD CODE)
 │   ├── UserPinjamFlow.tsx       # Form pinjam yang benar-benar dipakai dashboard user
 │   ├── DueSoonCard.tsx          # Kartu "Segera Dikembalikan" (variant user|admin)
 │   ├── LocationSelect.tsx       # Dropdown lokasi barang (25 opsi resmi + custom)
@@ -838,8 +836,7 @@ Arti:
 **Admin TIDAK bisa menimpa aturan ini** (keputusan pemilik produk, Sep 2026) —
 harus ubah flag dulu. Endpoint yang WAJIB menolak bila flag mati:
 `/api/pinjam`, `/api/transactions`, `/api/transactions/[id]/correct`,
-`/api/handovers`, `/api/admin/handovers`, `/api/admin/handovers/[id]/correct`,
-`/api/public/borrow` (endpoint lama).
+`/api/handovers`, `/api/admin/handovers`, `/api/admin/handovers/[id]/correct`.
 
 Titik filter (jangan lupa bila menambah daftar barang baru):
 - `GET /api/items?canBorrow=1` / `?canHandover=1` (query param opsional).
@@ -905,10 +902,9 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
 
 9. **Sidebar admin active state** — `Sidebar.tsx` memakai `navItemsAll` (navItems + item "Dokumen" `/admin/documents` khusus super_admin) untuk menghitung `bestMatch`. Jangan hitung bestMatch hanya dari `navItems` dasar, atau item yang di-append di luar (Dokumen) tak akan pernah kehover.
 
-10. **Brand tampilan = "Management logistic"** — dipakai di SEMUA tempat: `metadata.title` tiap halaman, teks di bawah logo (`Sidebar.tsx`, `UserSidebar.tsx`), landing (`app/page.tsx`), katalog, login, `PinjamFlow.tsx`. Kalau ganti lagi, sisir semua file (pernah 14 kemunculan) — jangan hanya layout.tsx.
+10. **Brand tampilan = "Management logistic"** — dipakai di SEMUA tempat: `metadata.title` tiap halaman, teks di bawah logo (`Sidebar.tsx`, `UserSidebar.tsx`), landing (`app/page.tsx`), login. Kalau ganti lagi, sisir semua file (pernah 14 kemunculan) — jangan hanya layout.tsx.
 
 11. **Logo mode gelap** — pakai komponen klien `src/components/Logo.tsx`: mode terang `fmipa-logo.png`, mode gelap `fmipa-logo-kuning.png`. Wrapper-nya WAJIB `dark:bg-transparent` (kalau tetap putih, logo kuning tak terbaca di atas putih). Halaman server-component tak bisa pakai hook tema — pakai komponen ini.
-    - Katalog publik (`(public)/katalog`) tidak punya dark mode → logo statis di sana aman.
 
 12. **Barang habis karena DISERAHKAN: DISEMBUNYIKAN, BUKAN DIHAPUS** *(berubah 24 Sep 2026 — dulu otomatis dihapus)* — begitu stok FISIK (`quantity`) jadi 0 lewat serah terima, barangnya **TETAP ADA di tabel `items`**, hanya tak tampil di daftar. Alasannya: unitnya **bisa kembali** ke inventaris, dan saat dikembalikan admin mencarinya **lewat kode barang** — barang yang sudah dihapus tak bisa ditemukan.
 
@@ -965,13 +961,12 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
 
     **Penting:** penghapusan otomatis (`hapusBarangHabis()`, nomor 12) memakai penjagaan yang sama — kalau ada pinjaman belum selesai, penghapusan DITAHAN, bukan dipaksa.
 
-17. **`/api/public/borrow` = endpoint lama katalog, aturannya disamakan dengan `/api/pinjam`** — halaman `/katalog` sudah tidak punya menu/link ke sana, tapi alamatnya masih bisa dibuka langsung, jadi tetap dijaga:
-
-    - status `pending_approval` (BUKAN `active`) — admin tetap menyetujui
-    - identitas peminjam dari **SESI**, bukan body (body hanya `itemId`, `quantity`, `returnDate`, `purpose`, `location`)
-    - wajib NIM + TTD
-
-    Kalau menambah field identitas di body endpoint ini, itu regresi keamanan. Form di `KatalogClient.tsx` sengaja tidak lagi menanyakan nama/divisi/email/HP.
+17. **KATALOG PUBLIK SUDAH DIHAPUS (25 Sep 2026, commit `a2f6976`)** — jangan dibuat lagi tanpa sengaja.
+    Yang dihapus: `src/app/(public)/katalog/` (halaman), `src/app/api/public/borrow/` (endpoint), dan `src/components/PinjamFlow.tsx` (komponen mati).
+    **Alasannya:** halaman itu masih terbuka di `/logistik/katalog` meski sudah tidak punya menu, dan endpointnya masih menerima peminjaman. Peminjaman yang masuk lewat situ tersimpan **tanpa kolom `unit`** (NULL), sehingga tidak muncul di daftar tugas admin unit mana pun — hanya superadmin yang melihatnya. Itu bukan kebocoran, tapi pengajuan yang nyangkut tanpa penanggung jawab jelas.
+    **Sekarang:** `/katalog` dan `/api/public/borrow` sama-sama **404**. Jalur resmi satu-satunya: `/api/pinjam` (user) dan `/api/handovers` (serah terima).
+    **Kalau butuh katalog publik lagi:** jangan bangkitkan yang lama — bikin baru yang ikut aturan unit (kolom `unit` + `grup_id` terisi lewat `pecahPerUnit`).
+    Sisa rujukan di `AUDIT.md` bagian #4.2 adalah catatan sejarah, bukan aturan yang berlaku.
 
 18. **PENGEMBALIAN BARANG: input KODE barang → stok NAMBAH** — hanya **admin & super_admin**. Halaman `/admin/returns` (menu sidebar "Pengembalian"), endpoint `GET`/`POST /api/admin/returns`.
 
