@@ -1,7 +1,9 @@
 import { db } from "@/db";
-import { items, transactions } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { items, transactions, transactionItems } from "@/db/schema";
+import { eq, desc, inArray } from "drizzle-orm";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { periksaAksesUnit } from "@/lib/akses-unit";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -29,10 +31,28 @@ export default async function ItemDetailPage({
   const { id: idStr } = await params;
   const idNum = parseInt(idStr);
 
+  // Halaman ini membaca DB LANGSUNG, jadi penyaringan unit di route API tak
+  // menolong. Tanpa pemeriksaan di sini admin unit lain bisa membuka detail
+  // (dan form edit) barang bukan miliknya hanya dengan mengetik URL.
+  const session = await auth();
+  const role = (session?.user as any)?.role;
+  if (!session?.user || (role !== "admin" && role !== "super_admin")) redirect("/admin/login");
+
   const [item] = await db.select().from(items).where(eq(items.id, idNum));
   if (!item) notFound();
 
-  const itemTransactions = await db
+  const tolakAkses = await periksaAksesUnit(session, item.unit);
+  if (tolakAkses) redirect("/admin/items");
+
+  // Riwayat transaksi barang dibaca lewat PIVOT transaction_items.
+  // `transactions.item_id` SELALU NULL (tautan barang ada di pivot), sehingga
+  // membaca lewat kolom itu menghasilkan daftar kosong selamanya.
+  const tautan = await db
+    .select({ transactionId: transactionItems.transactionId })
+    .from(transactionItems)
+    .where(eq(transactionItems.itemId, idNum));
+
+  const itemTransactions = tautan.length === 0 ? [] : await db
     .select({
       id: transactions.id,
       status: transactions.status,
@@ -45,7 +65,7 @@ export default async function ItemDetailPage({
       borrowerDepartment: transactions.borrowerDepartment,
     })
     .from(transactions)
-    .where(eq(transactions.itemId, idNum))
+    .where(inArray(transactions.id, tautan.map((t) => t.transactionId)))
     .orderBy(desc(transactions.createdAt))
     .limit(10);
 

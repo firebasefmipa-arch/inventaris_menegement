@@ -395,5 +395,47 @@ cek(
   "pintu kedua dengan aturan berbeda — gunakan ItemModal"
 );
 
+// ── U16: halaman server WAJIB menyaring batas unit ──────────────────────────
+// Halaman-halaman ini membaca DB langsung, sehingga penyaringan di route API
+// tak menolong: seluruh baris unit lain ikut terkirim ke browser dan bisa
+// dibaca dari DevTools walau kartunya tak ditampilkan.
+const halamanBacaLangsung = [
+  "src/app/admin/items/page.tsx",
+  "src/app/admin/page.tsx",
+  "src/app/admin/returns/page.tsx",
+];
+for (const f of halamanBacaLangsung) {
+  const isi = readFileSync(f, "utf8");
+  cek(`U16 ${f} menyaring batas unit`, /batasUnit\s*\(/.test(isi),
+      "halaman baca-langsung tanpa batasUnit = kebocoran lintas unit");
+}
+
+// Halaman detail barang: baca langsung + memuat satu barang, jadi wajib
+// memeriksa hak kelola, bukan menyaring daftar.
+cek(
+  "U16 halaman detail barang memeriksa hak kelola",
+  /periksaAksesUnit\s*\(/.test(readFileSync("src/app/admin/items/[id]/page.tsx", "utf8")),
+  "detail + form edit barang unit lain bisa dibuka dengan mengetik URL"
+);
+
+// ── U16b: kolom `transactions.item_id` selalu NULL → jangan dibaca ──────────
+// Riwayat barang yang dibaca lewat kolom itu selalu kosong.
+const berkasRiwayat = [
+  "src/app/admin/items/[id]/page.tsx",
+];
+for (const f of berkasRiwayat) {
+  const isi = readFileSync(f, "utf8");
+  cek(`U16 ${f} memakai pivot, bukan transactions.item_id`,
+      !/eq\(transactions\.itemId/.test(isi),
+      "transactions.item_id selalu NULL — riwayat barang jadi kosong");
+}
+
+// ── U16c: kolom status "overdue" tak pernah ditulis → jangan dipercaya ──────
+cek(
+  "U16 kolom status 'overdue' tak dipakai untuk badge",
+  !/status\s*===\s*"overdue"/.test(readFileSync("src/app/admin/page.tsx", "utf8")),
+  "kolom status 'overdue' tak punya penulis — badge Terlambat tak pernah muncul"
+);
+
 console.log(`\n  lulus=${lulus} gagal=${gagal}\n`);
 process.exit(gagal > 0 ? 1 : 0);

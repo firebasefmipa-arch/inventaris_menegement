@@ -1,6 +1,9 @@
 import { db } from "@/db";
 import { items, transactions, users, transactionItems } from "@/db/schema";
 import { eq, sql, count, and, lte, inArray, gt } from "drizzle-orm";
+import { auth } from "@/auth";
+import { batasUnit } from "@/lib/akses-unit";
+import { hariTerlambat } from "@/lib/tanggal";
 import { namaSql } from "@/lib/item-snapshot";
 import {
   Package,
@@ -23,6 +26,16 @@ async function getStats() {
   // Batas: 24 jam dari sekarang
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
+  // ── Batas unit ──
+  // Dashboard ini membaca DB langsung. Tanpa penyaringan di sini, admin unit A
+  // melihat angka barang & transaksi unit B — dan seluruh barisnya ikut
+  // terkirim ke browser walau kartunya tidak ditampilkan.
+  const session = await auth();
+  const batas = await batasUnit(session);
+  const kosong = batas !== null && batas.length === 0;
+  const saringBarang = () => (batas === null ? undefined : kosong ? sql`1 = 0` : inArray(items.unit, batas));
+  const saringTx = () => (batas === null ? undefined : kosong ? sql`1 = 0` : inArray(transactions.unit, batas));
+
   // ── 4 query paralel ──
   const [itemStats, transactionStats, recentTransactions, dueSoonRaw] = await Promise.all([
     // Query 1: semua stats items sekaligus dengan conditional count
@@ -33,7 +46,7 @@ async function getStats() {
       category:  items.category,
     })
     .from(items)
-    .where(gt(items.quantity, 0))
+    .where(and(gt(items.quantity, 0), saringBarang()))
     .groupBy(items.category),
 
     // Query 2: stats transaksi sekaligus
@@ -43,7 +56,8 @@ async function getStats() {
       active:  count(sql`CASE WHEN ${transactions.status} = 'active' THEN 1 END`),
       overdue: count(sql`CASE WHEN ${sqlTerlambat()} THEN 1 END`),
     })
-    .from(transactions),
+    .from(transactions)
+    .where(saringTx()),
 
     // Query 3: 5 transaksi terbaru
     // Nama diambil SETELAH barisnya terbaca, lewat pivot transaction_items —
@@ -53,10 +67,13 @@ async function getStats() {
       id:           transactions.id,
       status:       transactions.status,
       borrowDate:   transactions.borrowDate,
+      expectedReturnDate: transactions.expectedReturnDate,
+      actualReturnDate:   transactions.actualReturnDate,
       quantity:     transactions.quantity,
       borrowerName: transactions.borrowerName,
     })
     .from(transactions)
+    .where(saringTx())
     .orderBy(sql`${transactions.createdAt} DESC`)
     .limit(5),
 
@@ -67,15 +84,14 @@ async function getStats() {
       borrowerPhone:      transactions.borrowerPhone,
       borrowerDepartment: transactions.borrowerDepartment,
       expectedReturnDate: transactions.expectedReturnDate,
-      itemName:           items.name,
       quantity:           transactions.quantity,
     })
     .from(transactions)
-    .leftJoin(items, eq(transactions.itemId, items.id))
     .where(
       and(
         eq(transactions.status, "active"),
         lte(transactions.expectedReturnDate, in24h),
+        saringTx(),
       )
     )
     .orderBy(transactions.expectedReturnDate),
@@ -106,7 +122,7 @@ async function getStats() {
     borrowerPhone: t.borrowerPhone,
     expectedReturnDate: t.expectedReturnDate,
     quantity: t.quantity,
-    itemNames: dueNamesByTx.get(t.id) ?? (t.itemName ? [t.itemName] : []),
+    itemNames: dueNamesByTx.get(t.id) ?? [],
   }));
 
   // Nama barang untuk "Transaksi Terbaru" — jalur yang sama dengan dueSoon:
@@ -129,12 +145,20 @@ async function getStats() {
     recentNamesByTx.set(r.transactionId, list);
   }
 
-  const recentWithNames = recentTransactions.map((t) => ({
-    ...t,
-    // Baris lama (dibuat sebelum kolom snapshot ada) memang tak punya salinan
-    // nama — tampilkan "Barang" seperti jalur lain, jangan kosong.
-    itemName: recentNamesByTx.get(t.id)?.join(", ") || "Barang",
-  }));
+  const recentWithNames = recentTransactions.map((t) => {
+    // "Terlambat" dihitung dari TANGGAL, bukan kolom status. Kolom `status`
+    // tak pernah bernilai "overdue" (tak ada penulisnya), jadi badge merahnya
+    // dulu tak pernah muncul. Cakup dua keadaan: belum kembali (dibandingkan
+    // hari ini) dan sudah kembali tapi dulu telat.
+    const telat = hariTerlambat(t.expectedReturnDate, t.actualReturnDate ?? undefined) > 0;
+    return {
+      ...t,
+      telat,
+      // Baris lama (dibuat sebelum kolom snapshot ada) memang tak punya salinan
+      // nama — tampilkan "Barang" seperti jalur lain, jangan kosong.
+      itemName: recentNamesByTx.get(t.id)?.join(", ") || "Barang",
+    };
+  });
 
   // Agregasi hasil query 1
   const totalItems     = itemStats.reduce((s, r) => s + Number(r.total),     0);
@@ -265,19 +289,19 @@ export default async function HomePage() {
                 >
                   <div
                     className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                      tx.status === "returned"  ? "bg-emerald-100"
+                      tx.telat                  ? "bg-red-100"
+                      : tx.status === "returned"  ? "bg-emerald-100"
                       : tx.status === "active"  ? "bg-amber-100"
-                      : tx.status === "overdue" ? "bg-red-100"
                       : tx.status === "rejected"? "bg-red-100"
                       : "bg-blue-100"           // pending_signature / pending_approval
                     }`}
                   >
-                    {tx.status === "returned" ? (
+                    {tx.telat ? (
+                      <AlertTriangle className="w-4 h-4 text-red-600" />
+                    ) : tx.status === "returned" ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     ) : tx.status === "active" ? (
                       <Clock className="w-4 h-4 text-amber-600" />
-                    ) : tx.status === "overdue" ? (
-                      <AlertTriangle className="w-4 h-4 text-red-600" />
                     ) : tx.status === "rejected" ? (
                       <AlertTriangle className="w-4 h-4 text-red-600" />
                     ) : (
@@ -295,18 +319,18 @@ export default async function HomePage() {
                   <div className="text-right">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        tx.status === "returned"          ? "bg-emerald-100 text-emerald-700"
+                        tx.telat                          ? "bg-red-100 text-red-700"
+                        : tx.status === "returned"        ? "bg-emerald-100 text-emerald-700"
                         : tx.status === "active"          ? "bg-amber-100 text-amber-700"
-                        : tx.status === "overdue"         ? "bg-red-100 text-red-700"
                         : tx.status === "rejected"        ? "bg-red-100 text-red-700"
                         : tx.status === "pending_approval"? "bg-blue-100 text-blue-700"
                         : "bg-gray-100 text-gray-700"     // pending_signature
                       }`}
                     >
-                      {tx.status === "returned"           ? "Dikembalikan"
-                        : tx.status === "active"          ? "Dipinjam"
-                        : tx.status === "overdue"         ? "Terlambat"
-                        : tx.status === "rejected"        ? "Ditolak"
+                      {tx.telat                          ? "Terlambat"
+                        : tx.status === "returned"       ? "Dikembalikan"
+                        : tx.status === "active"         ? "Dipinjam"
+                        : tx.status === "rejected"       ? "Ditolak"
                         : tx.status === "pending_approval"? "Menunggu Persetujuan"
                         : "Menunggu TTD"}
                     </span>

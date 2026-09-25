@@ -16,6 +16,94 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #16 — 25 Sep 2026 — Halaman admin membaca database langsung, batas unit tidak dipasang
+
+**Kesempatan:** setelah Audit #15 ditutup, diminta audit menyeluruh lagi
+("ok sekarang audit menyeluruh dan simulasi lagi"). Fokus yang dipilih: cari
+kelas bug yang belum pernah diperiksa — bukan mengulang yang sudah.
+
+**Temuan pokok:** penyaringan unit selama ini **hanya dipasang di route API**.
+Sebagian halaman admin **tidak lewat API sama sekali** — server component yang
+query database sendiri. Untuk halaman seperti itu, route API yang sudah benar
+**tidak menolong apa pun**.
+
+Bukti nyata (HTTP sungguhan, dua akun admin beda unit, 25 Sep 2026):
+
+```
+Admin Kimia membuka /logistik/admin/items/370   (Mikroskop — unit Farmasi)
+  → 200, HTML memuat "Mikroskop"
+
+Admin Kimia membuka /logistik/admin/items/371   (Meja — unit lain)
+  → 200, HTML memuat "Meja"
+
+Admin Kimia membuka /logistik/admin/items/368   (barang tanpa unit)
+  → 200
+
+rute API-nya sendiri:
+  GET /logistik/api/items/370  → 403   ← sudah benar
+```
+
+Jadi API menolak, tetapi **halaman detail + form editnya terbuka**, dan daftar
+barang seluruh unit dikirim utuh ke browser (bisa dibaca lewat Inspect Element
+walau kartunya tidak ditampilkan).
+
+**Enam temuan pada audit ini:**
+
+| # | Temuan | Dampak |
+|---|---|---|
+| 1 | `admin/items/page.tsx` query `items` tanpa saring unit | admin melihat seluruh barang unit lain |
+| 2 | `admin/items/[id]/page.tsx` tanpa `periksaAksesUnit` | detail + form edit unit lain terbuka (tulis tetap ditolak server) |
+| 3 | `admin/items/[id]/page.tsx` membaca riwayat lewat `transactions.itemId` | kolom itu **selalu NULL** → riwayat selalu kosong |
+| 4 | `admin/page.tsx` — stats & daftar transaksi tanpa batas unit | admin melihat nama peminjam & barang unit lain |
+| 5 | `admin/page.tsx` badge "Terlambat" pakai `tx.status === "overdue"` | kolom `status` tak pernah bernilai `overdue` → badge tak pernah muncul |
+| 6 | `admin/returns/page.tsx` mengirim riwayat semua unit ke browser | kebocoran lintas unit |
+| 7 | `unitDiLuar()` dipanggil tanpa batas unit | hitungan barang "di luar" unit lain ikut terbaca |
+
+**Bukti temuan #3** (`transactions.item_id` selalu NULL):
+
+```
+SELECT COUNT(*) total, SUM(item_id IS NULL) null_itemid FROM transactions;
+→ total 22, null_itemid 22     ← 100% kosong
+grep -rn "itemId:" src/app/   → tak ada satu pun penulisnya
+```
+
+**Bukti temuan #5:** `grep -rn '=== "overdue"' src/` — nilai `overdue` tidak
+pernah ditulis di mana pun; "Terlambat" harus dihitung dari
+`expectedReturnDate` vs waktu sekarang (`sqlTerlambat()` di `src/lib/tanggal.ts`).
+
+**Perbaikan (commit penutup: `b6d49e7`):**
+
+- `src/app/admin/items/page.tsx` — saring unit + `unitDiLuar` dibatasi.
+- `src/app/admin/items/[id]/page.tsx` — `periksaAksesUnit` + riwayat lewat
+  tabel penghubung `transaction_items`.
+- `src/app/admin/page.tsx` — batas unit di `getStats()` dan daftar transaksi;
+  badge/ikon "Terlambat" dihitung dari **tanggal** (`tx.telat`).
+- `src/app/admin/returns/page.tsx` — riwayat disaring lewat unit barangnya.
+- `scripts/check-unit.ts` — **U16** (6 pemeriksaan), total 87 butir.
+
+**Verifikasi:** `cek-tipe.sh` bersih · `npm run build` sukses · simulasi aturan
+kondisi 25/25 · simulasi alur + kebocoran lintas unit 27/27 · regresi penuh
+120/120 · `check:unit` 87 lulus 0 gagal.
+
+**Pelajarannya:** untuk tiap halaman di `src/app/admin/**/page.tsx`, periksa
+apakah ia memanggil `batasUnit`/`periksaAksesUnit`. Halaman yang membaca DB
+sendiri **wajib** memanggilnya — tidak bisa mengandalkan route API. Cara
+mengujinya: dua akun admin beda unit, lalu cari nama barang unit lain di HTML
+yang benar-benar terkirim, bukan di layar yang tampak.
+
+**Dibiarkan (dengan alasan):**
+
+- `/api/auth/verify` — mutasi tanpa pemeriksaan sesi, **tetapi rute ini MATI**:
+  tabel `verification_tokens` tidak ada di database, jadi tidak ada kode
+  verifikasi yang pernah dibuat. Belum dihapus karena masih ada halaman
+  `/verify` yang menautkannya; menunggu keputusan pemilik produk.
+- Halaman `/admin/users` — admin (bukan superadmin) bisa **membuka** daftar
+  pengguna. Tombol pengubahnya sudah dikunci di server (hanya superadmin bisa
+  mengubah peran/menghapus), jadi tidak ada data yang bisa dirusak — tetapi
+  daftar nama & email terlihat. Menunggu keputusan pemilik produk.
+
+---
+
 ## Audit #15 — 25 Sep 2026 — Barang rusak masih bisa dipinjam & diserahterimakan
 
 **Kesempatan:** user menyadari data barang sudah punya kolom kondisi (Baik/Rusak),

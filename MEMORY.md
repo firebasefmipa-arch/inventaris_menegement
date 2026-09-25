@@ -850,6 +850,12 @@ Titik filter (jangan lupa bila menambah daftar barang baru):
 **Jangan pakai `Boolean(nilai)` untuk flag ini** — `Boolean("0")` = `true`.
 Pakai helper `toBool()` dari `src/lib/to-bool.ts`.
 
+**Hubungan dengan kolom `condition` (Audit #15, aturan 23):** dua flag di atas
+**bukan** penyaring tunggal. Yang menentukan barang layak jalan adalah
+`condition === "Baik"` — dan itu **selalu diperiksa langsung**, karena barang
+lama lahir dengan `can_borrow = 1` dari nilai bawaan kolom. Flag ini hanya alat
+manual tambahan di atasnya; keduanya wajib lolos.
+
 ### Bisa Dilabeli (`is_labelable`)
 
 Flag manual per barang, sejajar `can_borrow`/`can_handover` (dropdown "Label" di
@@ -1048,7 +1054,23 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - **Catatan kerusakan (`items.catatan_kerusakan`, varchar 255) = LOG, bukan status.** Hanya diisi saat menandai Rusak, **TIDAK dihapus** saat barang kembali "Baik". Rusak lagi → **ditambahi** lewat `tambahCatatan()`, bukan ditimpa, dengan format `"Layar retak (25 Sep 2026) • Baterai kembung (12 Nov 2026)"`. **Hanya terlihat admin** — user tak pernah melihatnya.
     - **Impor Excel (`item-import.ts` + `items/import/route.ts`):** kolom `Kondisi` tidak wajib di file, tapi isinya **dinormalkan** lewat `rapikanKondisi()`. Urutannya penting — **teks buruk diperiksa LEBIH DULU**, karena `"Kurang Baik"` mengandung kata `"baik"`; kalau dibalik, barang cacat lolos jadi Baik. Barang impor yang kondisinya tak dikenali **tetap masuk** tapi langsung terkunci + bertanda "data tidak lengkap" di kartu admin (jangan hilang diam-diam).
     - **Sisi admin:** kartu berkondisi bukan "Baik" → **border merah** (dua tempat: tampilan grid & daftar), badge `Rusak` / `Data tidak lengkap`, dan badge `Pernah rusak` kalau sudah Baik lagi tapi catatannya ada. Kondisi kosong **tidak diisi otomatis** — admin mengisi kapan sempat.
-    - Penjaga: **U15** di `scripts/check-unit.ts` (**17 pemeriksaan**, total 81). Uji nyata: `uji-kondisi-http.ts` (33, di `/root/audit-20260925/`) & uji logika `uji-kondisi.ts` (39, di `/root/audit-20260925/`).
+    - Penjaga: **U15** di `scripts/check-unit.ts` (**17 pemeriksaan**). Uji nyata: `uji-kondisi-http.ts` (33, di `/root/audit-20260925/`) & uji logika `uji-kondisi.ts` (39, di `/root/audit-20260925/`).
+
+24. **HALAMAN SERVER MEMBACA DB LANGSUNG — batas unit WAJIB diperiksa di halamannya sendiri** (Audit #16).
+    - **Akar masalahnya:** penyaringan unit selama ini dipasang di **route API**, padahal sebagian halaman **tidak lewat API sama sekali** — ia query DB sendiri (server component). Untuk halaman begitu, route API yang sudah benar **tidak menolong apa pun**: seluruh baris terkirim ke browser dan bisa dibaca lewat Inspect Element walau kartunya tak ditampilkan.
+    - **Bedakan dua bentuk halaman** (dua-duanya perlu penanganan berbeda):
+      | bentuk | contoh | yang wajib dipasang |
+      |---|---|---|
+      | daftar | `admin/items/page.tsx`, `admin/page.tsx`, `admin/returns/page.tsx` | **`batasUnit(session)`** lalu `inArray(tabel.unit, batas)` |
+      | satu barang | `admin/items/[id]/page.tsx` | **`periksaAksesUnit(session, item.unit)`** lalu `redirect("/admin/items")` |
+    - **`batasUnit()` mengembalikan `null` untuk superadmin**, `[]` untuk admin tanpa unit, dan daftar unit untuk admin biasa. `null` artinya **tanpa batasan** — jangan dipakai sebagai daftar (`batas.length` akan error). Pola benar: `batas === null ? undefined : batas.length === 0 ? sql\`1 = 0\` : inArray(tabel.unit, batas)`.
+    - **Utang teknis menutup pintu bukan mengganti gembok:** halaman detail cukup **di-redirect**, bukan 404 — URL-nya jelas ada, jadi 403/redirect lebih jujur daripada menyamarkan keberadaan.
+    - **`transactions.item_id` SELALU NULL → jangan pernah dibaca.** Tautan barang ada di tabel penghubung `transaction_items`. Riwayat peminjaman per barang yang dibaca dari kolom itu **selalu kosong** — halaman tampak normal ("Belum ada riwayat") padahal barangnya sudah dipinjam berkali-kali. Pola benar: baca `transaction_items` dulu untuk mendapat daftar `transaction_id`, baru ambil baris `transactions`-nya (`inArray(transactions.id, ...)`).
+    - **Kolom status `"overdue"` TIDAK PERNAH ditulis siapa pun.** Selamanya kosong. "Terlambat" **dihitung dari tanggal** — satu-satunya definisi `sqlTerlambat()` (`src/lib/tanggal.ts`) untuk query, dan `hariTerlambat()` untuk di layar. Jangan menulis `status === "overdue"` di mana pun.
+    - **`unitDiLuar()` menerima batas unit sebagai argumen kedua** (`unitDiLuar(itemId?, batasUnit?)`). Halaman yang memanggilnya tanpa argumen itu membocorkan hitungan unit lain.
+    - **Riwayat pengembalian (`item_returns`) tidak menyimpan unit** — saring lewat unit barangnya (peta `id → unit` dari tabel `items`, diambil sekali, bukan per baris).
+    - Penjaga: **U16** di `scripts/check-unit.ts` (**6 pemeriksaan**, total 87): halaman baca-langsung wajib memanggil `batasUnit`, halaman detail wajib `periksaAksesUnit`, `transactions.itemId` tak boleh dibaca, dan `status === "overdue"` tak boleh dipakai.
+    - **Cara menemukannya (ulangi tiap kali menambah halaman admin):** untuk tiap berkas di `src/app/admin/**/page.tsx`, periksa apakah ia memanggil `batasUnit`/`periksaAksesUnit`. Yang tidak memanggil padahal menampilkan data = kandidat kebocoran. Ujilah dengan **dua akun admin beda unit** lalu cari nama barang unit lain di HTML yang benar-benar terkirim.
 
 ---
 
