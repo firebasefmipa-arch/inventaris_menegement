@@ -1019,6 +1019,16 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - **Cara menguji:** kirim N permintaan serentak (`curl ... &` lalu `wait`) dan hitung stoknya — jangan cuma menguji satu permintaan berurutan. Penjaga: `check-kode-barang.ts` B8 (8 serentak → 8 nomor berbeda).
     - **Yang TIDAK berubah bagi pemakai:** aturan peminjaman/serah terima, validasi, TTD, tanggal, tampilan. Yang berubah hanya cara menulis stok.
 
+21. **SATU PENGAJUAN HANYA BOLEH DIPROSES SEKALI — syarat status wajib ada di `WHERE`** (Audit #14, commit `13bb04a`).
+    - **Akar bug:** `UPDATE ... WHERE id = X` saja, tanpa `AND status = 'pending_approval'`. Tiga permintaan bersamaan sama-sama balas `200` dan sama-sama menjalankan `kembalikanKeStok()` → barang fisika 10 bisa berubah jadi **tersedia 22**. Sudah diuji: penolakan 3× serentak → `200, 200, 200` (sebelum) → `200, 409, 409` (sesudah).
+    - **Aturan:** setiap perpindahan status (setujui/tolak/batal) menulis `WHERE id = X AND status = 'pending_approval'`, lalu `affectedRows` diperiksa. `0` → balas **409** ("sudah diproses, muat ulang").
+    - **URUTAN WAJIB: kunci status DULU, baru sentuh stok.** Di `/api/user/.../cancel` dulu stok dikembalikan lebih dulu dan penandaan status baru di akhir; dua permintaan paralel sama-sama lewat pengembalian stok sebelum salah satunya menandai. Menandai di akhir TIDAK menyelamatkan.
+    - Untuk pembatalan yang menghapus baris (belum ada dokumen), penandanya `status = "rejected"` + `rejectionReason = "Dibatalkan oleh peminjam"` — **dipakai lebih dulu** lalu baris dihapus, supaya kalau penghapusan gagal di tengah, sisanya tetap konsisten. Jangan mengarang nilai status baru (`"cancelled"` bukan nilai yang dikenal skema).
+    - Setujui serah terima: kalau pengurangan stok gagal (stok tak cukup), **jangan** biarkan status terkunci `completed` — kembalikan ke `pending_approval` dan balas 409.
+    - **Empat berkas yang wajib seragam polanya:** `transactions/[id]/approve`, `admin/handovers/[id]`, `user/transactions/[id]/cancel`, `user/handovers/[id]/cancel`.
+    - Penjaga: **U12** di `scripts/check-unit.ts` (**12 pemeriksaan**) — memeriksa syarat status, `affectedRows`, dan tidak adanya status karangan. Dijalankan lewat `npm run check:unit`.
+    - **Cara mengujinya:** kirim 3 permintaan yang SAMA bersamaan (`Promise.all`), pastikan tepat satu balas `200` dan stok kembali tepat seperti semula — bukan cuma menguji satu permintaan berurutan.
+
 ---
 
 ## 11. Fitur yang Belum Diimplementasi (Backlog)
