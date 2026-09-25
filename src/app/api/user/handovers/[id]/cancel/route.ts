@@ -48,6 +48,26 @@ export async function POST(
       );
     }
 
+    // ── Kunci status DULU, baru sentuh stok ──
+    // Dulu stok dikembalikan lebih dulu; dua pembatalan bersamaan sama-sama
+    // menambah stok. Sekarang hanya satu yang boleh lanjut; yang kalah 409.
+    const kunci = await db
+      .update(handovers)
+      .set({ status: "rejected", rejectionReason: "Dibatalkan oleh pemohon" })
+      .where(
+        and(
+          inArray(handovers.id, semuaId),
+          inArray(handovers.status, ["pending_signature", "pending_approval"])
+        )
+      );
+    const terkunci = (Array.isArray(kunci) ? kunci[0] : kunci) as unknown as { affectedRows?: number };
+    if (Number(terkunci?.affectedRows ?? 0) !== semuaId.length) {
+      return NextResponse.json(
+        { error: "Pengajuan ini sudah dibatalkan/diproses oleh permintaan lain." },
+        { status: 409 }
+      );
+    }
+
     // Kembalikan stok — ATOMIK: penambahan dihitung database.
     const baris = await db
       .select()
@@ -73,11 +93,10 @@ export async function POST(
       return NextResponse.json({ success: true, message: "Permintaan serah terima dibatalkan dan dihapus" });
     }
 
-    // Sudah upload → set rejected; file dihapus (dokumen batal tak disimpan)
+    // Sudah upload → status sudah "rejected" dari penguncian; di sini hanya
+    // membuang berkasnya (dokumen batal tak disimpan).
     for (const p of pecahan) await deleteUploadByUrl(p.signedDocumentUrl);
     await db.update(handovers).set({
-      status: "rejected",
-      rejectionReason: "Dibatalkan oleh pemohon",
       signedDocumentUrl: null,
     }).where(inArray(handovers.id, semuaId));
 

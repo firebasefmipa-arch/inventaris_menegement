@@ -62,8 +62,29 @@ export async function POST(
       );
     }
 
+    // ── Kunci status DULU, baru sentuh stok ──
+    // Urutannya yang penting. Dulu stok dikembalikan lebih dulu dan baris baru
+    // ditandai di akhir; sudah dicoba: dua pembatalan bersamaan sama-sama
+    // menambahkan stok sehingga jumlah tersedia (18) melebihi fisik (10).
+    // Sekarang hanya satu permintaan yang boleh lanjut; yang kalah dapat 409.
+    const kunci = await db
+      .update(transactions)
+      .set({ status: "rejected", rejectionReason: "Dibatalkan oleh peminjam" })
+      .where(
+        and(
+          inArray(transactions.id, semuaId),
+          inArray(transactions.status, ["pending_signature", "pending_approval"])
+        )
+      );
+    const terkunci = (Array.isArray(kunci) ? kunci[0] : kunci) as unknown as { affectedRows?: number };
+    if (Number(terkunci?.affectedRows ?? 0) !== semuaId.length) {
+      return NextResponse.json(
+        { error: "Pengajuan ini sudah dibatalkan/diproses oleh permintaan lain." },
+        { status: 409 }
+      );
+    }
+
     // Kembalikan stok tiap pecahan — ATOMIK: penambahan dihitung database.
-    // Dulu di sini baca-lalu-tulis, dua pembatalan bersamaan bisa saling menimpa.
     const baris = await db
       .select()
       .from(transactionItems)
@@ -96,7 +117,7 @@ export async function POST(
     }
 
     // Jika belum upload dokumen (pending_signature + belum ada file) → hapus transaksi
-    // Jika sudah upload tapi menunggu approval → set rejected agar history tetap ada
+    // Jika sudah upload tapi menunggu approval → simpan rejected agar history tetap ada
     const belumAdaDokumen = pecahan.every(
       (p) => p.status === "pending_signature" && !p.signedDocumentUrl
     );
@@ -107,16 +128,12 @@ export async function POST(
       return NextResponse.json({ success: true, message: "Peminjaman berhasil dibatalkan dan dihapus" });
     }
 
-    // Sudah upload dokumen → simpan sebagai rejected agar history tetap ada;
-    // file dihapus (dokumen batal tak disimpan).
+    // Dokumen dihapus (dokumen batal tak disimpan); status sudah "rejected"
+    // dari penguncian di atas, di sini hanya membuang berkasnya.
     for (const p of pecahan) await deleteUploadByUrl(p.signedDocumentUrl);
     await db
       .update(transactions)
-      .set({
-        status: "rejected",
-        rejectionReason: "Dibatalkan oleh peminjam",
-        signedDocumentUrl: null,
-      })
+      .set({ signedDocumentUrl: null })
       .where(inArray(transactions.id, semuaId));
 
     return NextResponse.json({ success: true, message: "Peminjaman berhasil dibatalkan" });

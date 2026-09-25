@@ -169,5 +169,35 @@ cek(
   "kedua jalur harus menyertakan kolom unit"
 );
 
+// ── Penguncian status (anti stok beranak) ─────────────────────────────────
+// Dulu approve/reject/cancel mengubah baris dengan `WHERE id` saja. Akibatnya
+// tiga permintaan bersamaan sama-sama "berhasil" dan stok dikembalikan berkali-
+// kali: barang 10 unit bisa berubah jadi tersedia 22. Sekarang tiap perubahan
+// wajib menyertakan syarat status dan memeriksa jumlah baris yang kena.
+const berkasKunci: [string, string][] = [
+  ["approve transaksi",      "src/app/api/transactions/[id]/approve/route.ts"],
+  ["approve serah terima",   "src/app/api/admin/handovers/[id]/route.ts"],
+  ["batal transaksi (user)", "src/app/api/user/transactions/[id]/cancel/route.ts"],
+  ["batal serah terima",     "src/app/api/user/handovers/[id]/cancel/route.ts"],
+];
+for (const [nama, berkas] of berkasKunci) {
+  const src = readFileSync(berkas, "utf8");
+  cek(
+    `U12 ${nama} mengunci status di WHERE`,
+    /status,\s*\[?"?(pending_approval|pending_signature)/.test(src),
+    "syarat status harus ada agar tak diproses dua kali"
+  );
+  cek(
+    `U12 ${nama} memeriksa jumlah baris (affectedRows)`,
+    src.includes("affectedRows"),
+    "tanpa affectedRows, kekalahan balapan tidak terdeteksi"
+  );
+  cek(
+    `U12 ${nama} memakai status baru yang sah`,
+    !/status:\s*"cancelled"/.test(src),
+    "'cancelled' bukan nilai yang dikenal skema"
+  );
+}
+
 console.log(`\n  lulus=${lulus} gagal=${gagal}\n`);
 process.exit(gagal > 0 ? 1 : 0);

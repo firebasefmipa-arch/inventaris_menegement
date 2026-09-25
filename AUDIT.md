@@ -16,6 +16,60 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #14 — 25 Sep 2026 — Stok bisa beranak (satu pengajuan diproses berkali-kali)
+
+**Latar.** Audit menyeluruh + simulasi semua skenario (permintaan user). Pola
+yang dicari: tempat yang mengubah data tanpa menyaring status barisnya.
+
+**Temuan (bukti nyata).** Barang stok 10, ditahan 6, lalu penolakan dikirim
+TIGA KALI BERSAMAAN:
+
+```
+stok tersedia: 22   ← dari fisik 10
+status balasan: 200, 200, 200
+```
+
+Ketiga permintaan sama-sama balas "berhasil", `kembalikanKeStok` jalan tiga
+kali. Hal yang sama terjadi pada pembatalan oleh user (10 → 18) dan pada
+serah terima. Persetujuan bersamaan juga tiga kali balas 200 — stok aman
+karena memang atomik, tapi berkas PDF dipindah/dihapus tiga kali.
+
+**Sebab di sourcecode.** `UPDATE` hanya memakai `WHERE id`, tanpa
+`AND status = 'pending_approval'`, dan hasilnya tidak diperiksa jumlah
+barisnya. Di `/api/user/.../cancel` urutannya juga terbalik: stok dikembalikan
+DULU, penandaan status baru di akhir — jadi dua permintaan paralel sama-sama
+melewati pengembalian stok sebelum salah satunya menandai.
+
+**Dampak.** Jumlah "bisa dipinjam" bisa MELEBIHI jumlah fisik barang. Aplikasi
+lalu mengizinkan peminjaman yang secara fisik tidak ada, dan angkanya tidak
+bisa dipulihkan sendiri tanpa hitung ulang manual.
+
+**Perbaikan (`3a2c1e8`).** Keempat berkas disamakan polanya: status ikut
+disyaratkan di `WHERE`, `affectedRows` diperiksa, yang kalah balapan balas
+**409** ("sudah diproses, muat ulang"). Urutan dibalik: **kunci status dulu,
+baru sentuh stok**. Persetujuan serah terima juga tidak lagi mengunci
+"selesai" kalau stok ternyata tak cukup — dikembalikan ke menunggu. Ditambah
+penjaga **U12** (12 pemeriksaan) supaya pola `WHERE id` telanjang tidak
+kembali masuk.
+
+**Verifikasi.** 17/17 lulus di server uji :3001 (`200, 409, 409` di keempat
+jalur; stok pulih tepat 10/10). Regresi utuh tetap hijau: uji-1 25/25,
+uji-2 21/21, uji-super 23/23.
+
+**Sisa dari audit yang sama, BELUM diperbaiki** (prioritas berikutnya):
+
+1. **Masukan angka tidak divalidasi** — `const qty = quantity || 1` di
+   `src/app/api/items/route.ts` dan `bacaKeranjang` di `src/lib/pecah-unit.ts`
+   (`Math.max(1, Number(c.quantity) || 1)`). Akibatnya: barang bisa dibuat
+   dengan jumlah `-5`, `2.5`, `0`, atau `999999999`; pinjam jumlah `0`/`-3`/
+   `"abc"` diam-diam jadi 1; nama 5000 karakter → 500. Pembanding yang sudah
+   benar: `src/app/api/items/[id]/route.ts` (tolak bukan bilangan bulat,
+   tolak negatif, tolak turun ke 0, tolak di bawah yang sedang dipinjam).
+2. **`/api/public/borrow` masih hidup** dan masih baca-lalu-tulis stok.
+   Tidak ada tautan ke sana di katalog, tapi alamatnya masih bisa dibuka.
+
+---
+
 ## Audit #13 — 25 Sep 2026 — Batas unit bocor lewat alamat berkas langsung
 
 **Latar.** Uji hak superadmin (menjawab pertanyaan "superadmin tetap punya semua

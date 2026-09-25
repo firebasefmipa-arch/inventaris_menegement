@@ -45,8 +45,27 @@ export async function PUT(
     const tolak = await periksaAksesUnit(session, hv.unit);
     if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
 
+    // ── Kunci status di WHERE ──
+    // Dulu di sini `WHERE id` saja, jadi tiga klik bersamaan sama-sama lolos:
+    // untuk penolakan berarti stok dikembalikan tiga kali (stok jadi melebihi
+    // fisik barang); untuk persetujuan berarti stok fisik terpotong tiga kali.
+    // Sekarang hanya sah kalau statusnya MASIH `pending_approval`.
+    const kunci = await db
+      .update(handovers)
+      .set({ status: action === "approve" ? "completed" : "rejected" })
+      .where(and(eq(handovers.id, hvId), eq(handovers.status, "pending_approval")));
+
+    const baris = (Array.isArray(kunci) ? kunci[0] : kunci) as unknown as { affectedRows?: number };
+    if (Number(baris?.affectedRows ?? 0) === 0) {
+      return NextResponse.json(
+        { error: "Serah terima ini sudah diproses oleh permintaan lain. Muat ulang halamannya." },
+        { status: 409 }
+      );
+    }
+
     if (action === "approve") {
-      // Pindahkan PDF dari pending/ ke handovers/
+      // Pindahkan PDF dari pending/ ke handovers/. Dikerjakan SETELAH status
+      // terkunci, jadi hanya satu permintaan yang menyentuh berkasnya.
       let finalPdfUrl = hv.signedDocumentUrl;
       if (hv.signedDocumentUrl?.startsWith("/uploads/pending/")) {
         try {
@@ -66,11 +85,11 @@ export async function PUT(
       }
 
       // Kurangi stok permanen — ATOMIK. Syarat "stok cukup" ada di WHERE
-      // supaya dua persetujuan bersamaan tak bisa sama-sama lolos dan
-      // menjadikan stok minus.
+      // supaya stok tak bisa jadi minus.
       const hvItems = await db.select().from(handoverItems).where(eq(handoverItems.handoverId, hvId));
+      let stokGagal = false;
       for (const hvItem of hvItems) {
-        await db
+        const hasilStok = await db
           .update(items)
           .set({
             quantity: sql`${items.quantity} - ${hvItem.quantity}`,
@@ -78,12 +97,28 @@ export async function PUT(
             updatedAt: new Date(),
           })
           .where(and(eq(items.id, hvItem.itemId), gte(items.quantity, hvItem.quantity)));
+
+        const r = (Array.isArray(hasilStok) ? hasilStok[0] : hasilStok) as unknown as { affectedRows?: number };
+        if (Number(r?.affectedRows ?? 0) === 0) stokGagal = true;
       }
 
-      await db.update(handovers).set({
-        status: "completed",
-        signedDocumentUrl: finalPdfUrl,
-      }).where(eq(handovers.id, hvId));
+      // Stok tak cukup → JANGAN biarkan status terkunci "selesai": barang akan
+      // tercatat sudah diserahkan padahal jumlahnya masih penuh. Kembalikan ke
+      // menunggu supaya bisa diperiksa admin.
+      if (stokGagal) {
+        await db
+          .update(handovers)
+          .set({ status: "pending_approval" })
+          .where(eq(handovers.id, hvId));
+        return NextResponse.json(
+          { error: "Stok salah satu barang tidak mencukupi. Periksa jumlah barang lalu setujui ulang." },
+          { status: 409 }
+        );
+      }
+
+      if (finalPdfUrl !== hv.signedDocumentUrl) {
+        await db.update(handovers).set({ signedDocumentUrl: finalPdfUrl }).where(eq(handovers.id, hvId));
+      }
 
       return NextResponse.json({ success: true, message: "Serah terima berhasil disetujui" });
 
@@ -95,16 +130,14 @@ export async function PUT(
       // ditolak tidak disimpan; riwayat tetap ada dengan status rejected.
       await deleteUploadByUrl(hv.signedDocumentUrl);
 
-      // Kembalikan stok — atomik, lihat src/lib/pengembalian.ts. Dulu di sini
-      // baca-lalu-tulis: dua penolakan bersamaan bisa saling menimpa.
-      const hvItems = await db.select().from(handoverItems).where(eq(handoverItems.handoverId, hvId));
-      await kembalikanKeStok(hvItems.map((i) => ({ itemId: i.itemId, quantity: i.quantity })));
-
       await db.update(handovers).set({
-        status: "rejected",
         rejectionReason: rejectionReason.trim(),
         signedDocumentUrl: null,
       }).where(eq(handovers.id, hvId));
+
+      // Kembalikan stok — atomik, lihat src/lib/pengembalian.ts.
+      const hvItems = await db.select().from(handoverItems).where(eq(handoverItems.handoverId, hvId));
+      await kembalikanKeStok(hvItems.map((i) => ({ itemId: i.itemId, quantity: i.quantity })));
 
       return NextResponse.json({ success: true, message: "Serah terima berhasil ditolak" });
     }

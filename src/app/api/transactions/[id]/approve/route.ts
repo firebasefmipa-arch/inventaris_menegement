@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, transactionItems } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { auth } from "@/auth";
 import { periksaAksesUnit } from "@/lib/akses-unit";
 import { kembalikanKeStok } from "@/lib/pengembalian";
@@ -49,8 +49,35 @@ export async function POST(
 
     const newStatus = action === "approve" ? "active" : "rejected";
 
+    // ── Kunci status di WHERE ──
+    // Dulu di sini hanya `WHERE id`, sehingga tiga klik bersamaan sama-sama
+    // "berhasil": untuk penolakan itu berarti stok dikembalikan tiga kali dan
+    // jumlahnya melebihi fisik barang. Sekarang perubahannya hanya sah kalau
+    // statusnya MASIH `pending_approval`; yang kalah balapan dapat 0 baris.
+    const hasil = await db
+      .update(transactions)
+      .set(
+        action === "approve"
+          ? { status: "active" }
+          : {
+              status: "rejected",
+              rejectionReason: rejectionReason!.trim(),
+              signedDocumentUrl: null,
+            }
+      )
+      .where(and(eq(transactions.id, txId), eq(transactions.status, "pending_approval")));
+
+    const baris = (Array.isArray(hasil) ? hasil[0] : hasil) as unknown as { affectedRows?: number };
+    if (Number(baris?.affectedRows ?? 0) === 0) {
+      return NextResponse.json(
+        { error: "Pengajuan ini sudah diproses oleh permintaan lain. Muat ulang halamannya." },
+        { status: 409 }
+      );
+    }
+
     if (action === "approve") {
-      // Pindahkan PDF dari pending/ ke signed_forms/
+      // Pindahkan PDF dari pending/ ke signed_forms/. Dikerjakan SETELAH status
+      // terkunci, jadi hanya satu permintaan yang menyentuh berkasnya.
       let finalPdfUrl = tx.signedDocumentUrl;
       if (tx.signedDocumentUrl?.startsWith("/uploads/pending/")) {
         try {
@@ -70,21 +97,13 @@ export async function POST(
         }
       }
 
-      await db.update(transactions).set({
-        status: "active",
-        signedDocumentUrl: finalPdfUrl,
-      }).where(eq(transactions.id, txId));
-
+      if (finalPdfUrl !== tx.signedDocumentUrl) {
+        await db.update(transactions).set({ signedDocumentUrl: finalPdfUrl }).where(eq(transactions.id, txId));
+      }
     } else {
       // Reject — hapus PDF (folder mana pun) dan kembalikan stok.
       // Dokumen pengajuan ditolak tidak disimpan; riwayat tetap ada.
       await deleteUploadByUrl(tx.signedDocumentUrl);
-
-      await db.update(transactions).set({
-        status: "rejected",
-        rejectionReason: rejectionReason.trim(),
-        signedDocumentUrl: null,
-      }).where(eq(transactions.id, txId));
 
       // Kembalikan stok. Transaksi baru memakai pivot transaction_items;
       // transaksi lama (sebelum multi-item) menautkan barangnya lewat
