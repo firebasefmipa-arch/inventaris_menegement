@@ -1029,6 +1029,17 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - Penjaga: **U12** di `scripts/check-unit.ts` (**12 pemeriksaan**) — memeriksa syarat status, `affectedRows`, dan tidak adanya status karangan. Dijalankan lewat `npm run check:unit`.
     - **Cara mengujinya:** kirim 3 permintaan yang SAMA bersamaan (`Promise.all`), pastikan tepat satu balas `200` dan stok kembali tepat seperti semula — bukan cuma menguji satu permintaan berurutan.
 
+22. **ANGKA & PANJANG TEKS DARI KLIEN WAJIB DIPERIKSA DULU — jangan "dibetulkan diam-diam"** (Audit #14 temuan kedua, commit `cf9b889`).
+    - **Akar bug:** pola `quantity || 1` dan `Math.max(1, Number(x) || 1)` memaksa angka ngawur jadi 1 TANPA memeriksa. Akibatnya `-5`, `2.5`, `0`, `"abc"` diterima — bukan ditolak. Lebih buruk lagi `0`: karena `0 || 1` bernilai 1, jumlah 0 pun lolos (padahal 0 = barang tersembunyi permanen).
+    - **Aturan:** memaksa nilai jadi "masuk akal" lebih berbahaya daripada menolaknya. Kalau ada yang salah kirim, pemakainya harus TAHU. Periksa dulu, baru pakai.
+    - **Satu tempat pemeriksaan: `src/lib/validasi.ts`** — `pesanJumlahTidakValid(nilai)` (bilangan bulat, minimal 1, maksimal `JUMLAH_MAKS = 1_000_000`), `cekPanjangTeks({Nama: [nilai, 255], ...})`, dan `JUMLAH_MAKS`. **Jangan** menulis pemeriksaan serupa di route baru — pakai yang ini.
+    - `JUMLAH_MAKS` ada karena kolom `quantity` bertipe `int`; tanpa batas atas, penambahan berikutnya (pengembalian) bisa melewati batas kolom dan gagal simpan.
+    - **Delapan titik pemakaian:** tambah barang (`items/route.ts`), edit barang (`items/[id]/route.ts`), 4 jalur keranjang (`pinjam`, `handovers`, `transactions`, `admin/handovers` — lewat `pesanKeranjangTidakValid(cart)` sebelum `bacaKeranjang`), dan 2 jalur koreksi (`transactions/[id]/correct`, `admin/handovers/[id]/correct`).
+    - **Jalur koreksi paling rawan:** dulu jumlah hanya dibandingkan dengan stok tersedia (`dbItem.availableQuantity < ni.quantity`). Untuk negatif dan `NaN` perbandingan itu SELALU `false` → lolos, dan stok baru ikut dikurangi `-5` (stok BERTAMBAH). Periksa bentuk angkanya lebih dulu, sebelum apa pun diubah.
+    - **Panjang teks wajib diperiksa** sebelum INSERT/UPDATE, disamakan lebar kolom (`name` 255, `category` 100, `image_url` 500, `description` TEXT bebas). Tanpa itu MySQL membalas error dan pemakai hanya melihat "500 Terjadi kesalahan" tanpa tahu bagian mana.
+    - `null` DITOLAK, bukan diartikan 1 — `Number(null)` = 0.
+    - Penjaga: **U13** di `scripts/check-unit.ts` (**14 pemeriksaan**). Cek nyata: `scripts/uji-masukan2.ts` (23) & `scripts/uji-koreksi.ts` (13) di `/root/audit-20260924/skrip-uji/`.
+
 ---
 
 ## 11. Fitur yang Belum Diimplementasi (Backlog)
