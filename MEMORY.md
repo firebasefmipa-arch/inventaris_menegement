@@ -777,8 +777,13 @@ Pemakai: impor barang, TTD user, unggah transaksi, unggah serah terima.
   folder upload jangan pernah ada di dalam `public/`, dan nginx jangan
   `alias` `/uploads/` — dulu keduanya membuat PDF bertanda tangan bisa
   diunduh siapa saja tanpa login. Sekarang penyajiannya lewat
-  `src/app/uploads/[...path]/route.ts`: wajib login, admin boleh semua,
-  pemilik berkas boleh berkasnya sendiri, selain itu 403.
+  `src/app/uploads/[...path]/route.ts`: wajib login. **super_admin** boleh semua
+  berkas; **pemiliknya** boleh berkasnya sendiri; **admin** hanya dokumen
+  **unit yang dikelolanya** (unit dibaca dari `transactions.unit` /
+  `handovers.unit`); admin unit lain 403; anonim 401. TTD hanya pemiliknya +
+  superadmin. (Aturan ini WAJIB sejalan dengan `/api/grup/[grupId]/dokumen` —
+  kalau tidak, pembatasan di situ bisa dilewati dengan mengetik alamat
+  berkasnya langsung. Dijaga `check:unit` U10/U11.)
   (Tidak perlu bind mount lagi; symlink tetap dilarang Turbopack.)
 - **`uploads/` DILARANG masuk git.** Isinya tanda tangan asli + dokumen
   bertanda tangan peminjam = data pribadi.

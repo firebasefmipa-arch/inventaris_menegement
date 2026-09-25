@@ -144,5 +144,30 @@ cek(
   "pemeriksaan pemilik harus ada"
 );
 
+// ── Berkas unggahan: batas unit juga berlaku di sini ──────────────────────
+// Pembatasan di /api/grup/[grupId]/dokumen bisa dilewati dengan mengetik alamat
+// berkasnya langsung, jadi aturan yang sama harus dijaga di penyaji berkas.
+const uploadSrc = readFileSync("src/app/uploads/[...path]/route.ts", "utf8");
+cek(
+  "U11 berkas unggahan memakai batas unit, bukan 'admin boleh semua'",
+  uploadSrc.includes("bolehKelolaUnit") && uploadSrc.includes("unitDikelola"),
+  "harus memakai bolehKelolaUnit + unitDikelola"
+);
+cek(
+  "U11 admin biasa tidak lagi otomatis boleh semua berkas",
+  !/isAdmin\s*=\s*role\s*===\s*"admin"/.test(uploadSrc),
+  "pola lama masih ada"
+);
+cek(
+  "U11 superadmin tetap boleh semua berkas",
+  uploadSrc.includes('isSuper = role === "super_admin"'),
+  "pengecualian superadmin harus tetap ada"
+);
+cek(
+  "U11 unit berkas diambil dari transaksi & serah terima",
+  (uploadSrc.match(/unit: (transactions|handovers)\.unit/g) ?? []).length === 2,
+  "kedua jalur harus menyertakan kolom unit"
+);
+
 console.log(`\n  lulus=${lulus} gagal=${gagal}\n`);
 process.exit(gagal > 0 ? 1 : 0);

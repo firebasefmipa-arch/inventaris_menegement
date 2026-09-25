@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { transactions, handovers, users } from "@/db/schema";
 import { uploadPath, isInsideUploadRoot } from "@/lib/upload-dir";
+import { unitDikelola, bolehKelolaUnit } from "@/lib/akses-unit";
 
 const TIPE: Record<string, string> = {
   ".pdf": "application/pdf",
@@ -21,8 +22,12 @@ const TIPE: Record<string, string> = {
  *
  * Aturan akses:
  * - wajib login;
- * - admin/super_admin boleh semua berkas;
- * - pemilik berkas (peminjam / penerima / pemilik TTD) boleh berkasnya sendiri;
+ * - super_admin boleh semua berkas;
+ * - berkas DOKUMEN (peminjaman / serah terima): pemiliknya, atau admin yang
+ *   mengelola unit barang itu. Admin unit lain TIDAK boleh — kalau tidak,
+ *   pembatasan di /api/grup/[grupId]/dokumen bisa dilewati dengan mengetik
+ *   alamat berkasnya langsung;
+ * - berkas TTD: hanya pemiliknya (+ super_admin);
  * - selain itu 403.
  */
 export async function GET(
@@ -46,12 +51,15 @@ export async function GET(
   }
 
   const role = (session.user as any).role;
-  const isAdmin = role === "admin" || role === "super_admin";
+  const isSuper = role === "super_admin";
   const url = `/uploads/${segmen.join("/")}`;
 
-  if (!isAdmin) {
+  if (!isSuper) {
     const [folder] = segmen;
     let milikSendiri = false;
+    // Admin yang mengelola unit barang ini — diperiksa dari unit yang tercatat
+    // di transaksi/serah terima, bukan dari folder.
+    let unitBerkas: string | null = null;
 
     // Folder dokumen (bukan TTD). Ada TIGA: `pending` sebelum disetujui,
     // `signed_forms` setelah pinjam disetujui, dan `handovers` setelah serah
@@ -62,20 +70,22 @@ export async function GET(
     if (FOLDER_DOKUMEN.includes(folder)) {
       // Dokumen bisa milik transaksi peminjaman atau serah terima.
       const [tx] = await db
-        .select({ userId: transactions.userId })
+        .select({ userId: transactions.userId, unit: transactions.unit })
         .from(transactions)
         .where(eq(transactions.signedDocumentUrl, url))
         .limit(1);
       const [hv] = tx
         ? []
         : await db
-            .select({ userId: handovers.userId })
+            .select({ userId: handovers.userId, unit: handovers.unit })
             .from(handovers)
             .where(eq(handovers.signedDocumentUrl, url))
             .limit(1);
       milikSendiri = tx?.userId === session.user.id || hv?.userId === session.user.id;
+      unitBerkas = tx?.unit ?? hv?.unit ?? null;
     } else if (folder === "signatures") {
       // TTD: pemiliknya user itu sendiri. Dipakai pratinjau di halaman profil.
+      // Admin unit mana pun TIDAK boleh — tanda tangan itu milik pribadi.
       const [u] = await db
         .select({ id: users.id })
         .from(users)
@@ -84,7 +94,14 @@ export async function GET(
       milikSendiri = u?.id === session.user.id;
     }
 
-    if (!milikSendiri) {
+    // Admin yang mengelola unit dokumen ini boleh membukanya.
+    let bolehSebagaiAdmin = false;
+    if (!milikSendiri && role === "admin" && unitBerkas !== null) {
+      const daftar = (await unitDikelola(session.user.id)) ?? [];
+      bolehSebagaiAdmin = bolehKelolaUnit(role, daftar, unitBerkas);
+    }
+
+    if (!milikSendiri && !bolehSebagaiAdmin) {
       return NextResponse.json({ error: "Tidak memiliki akses" }, { status: 403 });
     }
   }

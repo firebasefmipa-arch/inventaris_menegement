@@ -16,6 +16,53 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #13 — 25 Sep 2026 — Batas unit bocor lewat alamat berkas langsung
+
+**Latar.** Uji hak superadmin (menjawab pertanyaan "superadmin tetap punya semua
+akses kan?") menemukan hal lain: perbaikan `e9ce9c7` baru menutup pintu DEPAN
+(`/api/grup/[grupId]/dokumen`), sementara pintu SAMPING masih terbuka.
+
+**Cara menemukannya:** setelah memastikan superadmin memang masih punya seluruh
+akses lamanya (23/23 lulus), pertanyaan lanjutannya: "kalau begitu, apakah
+pembatasan unit bisa dilewati dengan cara lain?" Berkas PDF-nya juga bisa dibuka
+langsung dari `/uploads/...`, dan di situ aturannya masih lama — *admin/superadmin
+boleh semua berkas*.
+
+**Bukti (sebelum diperbaiki):** dokumen milik unit Kimia dibuka langsung dari
+alamat berkasnya:
+
+| Peran | Status |
+|---|---|
+| admin TI (unit lain) | **200** ← bocor |
+| admin Farmasi (unit lain) | **200** ← bocor |
+| pemiliknya | 200 |
+| tanpa login | 401 (aman) |
+
+Berlaku juga untuk berkas **tanda tangan pribadi** user lain di
+`/uploads/signatures/...`.
+
+**Perbaikan** (`src/app/uploads/[...path]/route.ts`):
+
+| Peran | Aturan baru |
+|---|---|
+| superadmin | semua berkas (tidak berubah) |
+| pemiliknya | berkasnya sendiri |
+| admin | hanya dokumen **unit yang dikelolanya** (unit dibaca dari transaksi/serah terima) |
+| admin lain | 403 |
+| anonim | 401 |
+
+Tanda tangan hanya untuk pemiliknya + superadmin — admin unit mana pun tidak.
+
+**Keputusan user:** pilih opsi 1 — **tutup juga**, bukan membiarkannya.
+
+**Penjaga:** `check:unit` naik ke **35** (U10 dokumen gabungan, U11 berkas
+unggahan). Verifikasi lapangan di server uji :3001: **14/14 lulus**
+(superadmin/pemilik/admin unit boleh; admin unit lain 403; anonim 401).
+
+**Status:** DIPERBAIKI. Deploy menyusul menunggu persetujuan user.
+
+---
+
 ## Audit #12 — 25 Sep 2026 — Fitur Unit: batas kelola per unit + sisa pola stok lama
 
 **Latar.** Fitur baru: barang punya **Unit** (pemilik: divisi/prodi), berbeda
