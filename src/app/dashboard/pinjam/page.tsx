@@ -4,6 +4,7 @@ import { gt, asc, and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { UserPinjamFlow } from "./UserPinjamFlow";
+import { KONDISI_BAIK } from "@/lib/kondisi";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,16 @@ export default async function DashboardPinjamPage() {
       imageUrl: items.imageUrl,
     })
     .from(items)
-    .where(and(gt(items.availableQuantity, 0), eq(items.canBorrow, true)))
+    .where(
+      and(
+        gt(items.availableQuantity, 0),
+        eq(items.canBorrow, true),
+        // Hanya barang berkondisi tepat "Baik" yang boleh terlihat user.
+        // Memeriksa gembok saja TIDAK cukup: barang lama dengan kondisi kosong
+        // lahir dari default `can_borrow = 1`, jadi ikut bocor ke daftar ini.
+        eq(items.condition, KONDISI_BAIK)
+      )
+    )
     .orderBy(asc(items.category), asc(items.name));
 
   return (

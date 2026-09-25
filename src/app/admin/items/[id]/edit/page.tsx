@@ -34,6 +34,7 @@ export default function EditItemPage() {
     assetNumber: "",
     lastCheckDate: "",
     condition: "",
+    catatanKerusakan: "",
     quantity: "1",
     unit: "",
     location: "",
@@ -57,6 +58,7 @@ export default function EditItemPage() {
           assetNumber: data.assetNumber || "",
           lastCheckDate: data.lastCheckDate || "",
           condition: data.condition || "",
+          catatanKerusakan: data.catatanKerusakan || "",
           quantity: String(data.quantity),
           unit: data.unit || "",
           location: data.location || "",
@@ -93,7 +95,8 @@ export default function EditItemPage() {
           inventoryNumber: form.inventoryNumber?.trim() || null,
           assetNumber: form.assetNumber?.trim() || null,
           lastCheckDate: form.lastCheckDate?.trim() || null,
-          condition: form.condition?.trim() || null,
+          condition: form.condition,
+          catatanKerusakan: form.catatanKerusakan?.trim() || null,
           quantity: parseInt(form.quantity),
           unit: form.unit || null,
           location: form.location || null,
@@ -260,7 +263,9 @@ export default function EditItemPage() {
           </div>
 
           <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Kondisi</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Kondisi <span className="text-red-500">*</span>
+            </label>
             <select
               value={form.condition}
               onChange={(e) => setForm({ ...form, condition: e.target.value })}
@@ -270,7 +275,39 @@ export default function EditItemPage() {
               <option value="Baik">Baik</option>
               <option value="Rusak">Rusak</option>
             </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Hanya barang berkondisi &quot;Baik&quot; yang bisa dipinjam, diserahterimakan,
+              dan terlihat oleh user.
+            </p>
           </div>
+
+          {/* Catatan kerusakan — hanya muncul saat kondisinya Rusak */}
+          {form.condition === "Rusak" && (
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Catatan Kerusakan <span className="text-gray-400 font-normal">(opsional)</span>
+              </label>
+              <input
+                value={form.catatanKerusakan}
+                onChange={(e) => setForm({ ...form, catatanKerusakan: e.target.value })}
+                maxLength={200}
+                placeholder="Contoh: layar retak bagian kanan"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Hanya terlihat oleh admin. Catatan tetap tersimpan sebagai riwayat
+                walau barangnya nanti diperbaiki.
+              </p>
+            </div>
+          )}
+
+          {/* Riwayat kerusakan — barang sudah Baik lagi, catatannya tetap ada */}
+          {form.condition !== "Rusak" && form.catatanKerusakan && (
+            <div className="col-span-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2">
+              <p className="text-xs font-semibold text-amber-800">Pernah rusak</p>
+              <p className="text-xs text-amber-700 mt-0.5">{form.catatanKerusakan}</p>
+            </div>
+          )}
         </div>
 
         <div className="grid sm:grid-cols-3 gap-4">
@@ -329,13 +366,16 @@ export default function EditItemPage() {
             <select
               value={form.canBorrow}
               onChange={(e) => setForm({ ...form, canBorrow: e.target.value })}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              disabled={form.condition !== "Baik"}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="1">Tersedia</option>
               <option value="0">Tidak Tersedia</option>
             </select>
             <p className="text-xs text-gray-400 mt-1">
-              Jika Tidak Tersedia, barang disembunyikan dari halaman Pinjam user.
+              {form.condition === "Baik"
+                ? "Jika Tidak Tersedia, barang disembunyikan dari halaman Pinjam user."
+                : "Terkunci: hanya barang berkondisi Baik yang bisa dipinjam."}
             </p>
           </div>
 
@@ -346,13 +386,16 @@ export default function EditItemPage() {
             <select
               value={form.canHandover}
               onChange={(e) => setForm({ ...form, canHandover: e.target.value })}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              disabled={form.condition !== "Baik"}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="1">Tersedia</option>
               <option value="0">Tidak Tersedia</option>
             </select>
             <p className="text-xs text-gray-400 mt-1">
-              Jika Tidak Tersedia, barang disembunyikan dari halaman Serah Terima user.
+              {form.condition === "Baik"
+                ? "Jika Tidak Tersedia, barang disembunyikan dari halaman Serah Terima user."
+                : "Terkunci: hanya barang berkondisi Baik yang bisa diserahterimakan."}
             </p>
           </div>
 

@@ -10,6 +10,7 @@ import { batasUnit } from "@/lib/akses-unit";
 import { resolvePrefix, nextSequence, formatCode, catatKodeMassal } from "@/lib/item-code";
 import { IMPORT_COLUMNS, normalizeHeader, pickColumn } from "@/lib/item-import";
 import { formDataAman } from "@/lib/json-body";
+import { rapikanKondisi, bolehJalan } from "@/lib/kondisi";
 
 /**
  * Kunci identitas barang untuk mendeteksi duplikat.
@@ -223,7 +224,7 @@ export async function POST(request: NextRequest) {
         inventoryNumber,
         assetNumber: teks("No. Asset"),
         lastCheckDate: teks("Tanggal Cek"),
-        condition: teks("Kondisi"),
+        condition: rapikanKondisi(teks("Kondisi")),
         quantity,
         unit: unitFinal || null,
         location: normalizeLocation(location || "") || null,
@@ -261,6 +262,12 @@ export async function POST(request: NextRequest) {
         assetNumber: item.assetNumber || null,
         lastCheckDate: item.lastCheckDate || null,
         condition: item.condition || null,
+        // Hanya "Baik" yang boleh dipinjam/diserahterimakan. Barang hasil impor
+        // tanpa kondisi (atau teks "Kondisi" yang tak dikenali) tetap MASUK,
+        // tapi langsung terkunci dan bertanda "data tidak lengkap" di kartu
+        // admin — tidak hilang diam-diam dari pandangan.
+        canBorrow: bolehJalan(item.condition),
+        canHandover: bolehJalan(item.condition),
         imageUrl: item.imageUrl || null,
         quantity: item.quantity,
         availableQuantity: item.quantity,

@@ -10,6 +10,7 @@ import { normalizeLocation } from "@/lib/locations";
 import { normalizeUnit } from "@/lib/units";
 import { cekPanjangTeks, pesanJumlahTidakValid } from "@/lib/validasi";
 import { batasUnit, periksaAksesUnit } from "@/lib/akses-unit";
+import { KONDISI_BAIK, KONDISI_RUSAK, rapikanKondisi, tambahCatatan } from "@/lib/kondisi";
 
 // Semua endpoint /api/items adalah panel admin. Halaman user membaca DB
 // langsung (server component), jadi tidak ada konsumen non-admin.
@@ -67,8 +68,17 @@ export async function GET(request: NextRequest) {
       if (boleh) conditions.push(eq(items.unit, normalizeUnit(unitFilter)));
     }
 
-    if (canBorrow === "1") conditions.push(eq(items.canBorrow, true));
-    if (canHandover === "1") conditions.push(eq(items.canHandover, true));
+    // Pemilih barang di panel admin (meminjamkan/menyerahterimakan) juga tidak
+    // boleh menawarkan barang yang tidak layak — pemeriksaannya sama dengan
+    // yang dipakai halaman user: gembok DAN kondisinya.
+    if (canBorrow === "1") {
+      conditions.push(eq(items.canBorrow, true));
+      conditions.push(eq(items.condition, KONDISI_BAIK));
+    }
+    if (canHandover === "1") {
+      conditions.push(eq(items.canHandover, true));
+      conditions.push(eq(items.condition, KONDISI_BAIK));
+    }
 
     if (search) {
       conditions.push(
@@ -119,11 +129,24 @@ export async function POST(request: NextRequest) {
     if (!body) {
       return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     }
-    const { name, category, description, quantity, unit, location, imageUrl, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } = body;
+    const { name, category, description, quantity, unit, location, imageUrl, sn, inventoryNumber, assetNumber, lastCheckDate, condition, catatanKerusakan, canBorrow, canHandover, isLabelable } = body;
 
     if (!name || !category) {
       return NextResponse.json(
         { error: "Nama dan kategori wajib diisi" },
+        { status: 400 }
+      );
+    }
+
+    // ── Kondisi WAJIB diisi: Baik / Rusak ──
+    // Barang baru tidak boleh lahir dengan kondisi kosong. Aturan mainnya:
+    // HANYA "Baik" yang boleh dipinjam/diserahterimakan dan terlihat user.
+    // Kondisi kosong atau tak dikenali = barang tersembunyi dari user, jadi
+    // lebih baik ditolak di depan daripada hilang diam-diam.
+    const kondisiFinal = rapikanKondisi(condition);
+    if (!kondisiFinal) {
+      return NextResponse.json(
+        { error: 'Kondisi wajib diisi. Pilih "Baik" atau "Rusak".' },
         { status: 400 }
       );
     }
@@ -182,12 +205,19 @@ export async function POST(request: NextRequest) {
         inventoryNumber: inventoryNumber || null,
         assetNumber: assetNumber || null,
         lastCheckDate: lastCheckDate || null,
-        condition: condition || null,
+        condition: kondisiFinal,
+        // Catatan hanya bermakna saat Rusak. Barang baru berkondisi "Baik"
+        // tidak mungkin punya riwayat kerusakan.
+        catatanKerusakan:
+          kondisiFinal === KONDISI_RUSAK ? tambahCatatan(null, String(catatanKerusakan ?? "")) : null,
         imageUrl: imageUrl || null,
         quantity: qty,
         availableQuantity: qty,
-        canBorrow: canBorrow === undefined ? true : toBool(canBorrow),
-        canHandover: canHandover === undefined ? true : toBool(canHandover),
+        // Hanya "Baik" yang boleh dipinjam/diserahterimakan. Dikunci di server,
+        // bukan cuma disembunyikan di layar — supaya tak bisa dinyalakan lewat
+        // permintaan yang dibuat manual.
+        canBorrow: kondisiFinal === KONDISI_BAIK ? (canBorrow === undefined ? true : toBool(canBorrow)) : false,
+        canHandover: kondisiFinal === KONDISI_BAIK ? (canHandover === undefined ? true : toBool(canHandover)) : false,
         isLabelable: isLabelable === undefined ? true : toBool(isLabelable),
         unit: unitFinal || null,
         // Lokasi bebas diketik → hanya dirapikan kapitalisasinya.

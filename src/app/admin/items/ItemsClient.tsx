@@ -10,6 +10,7 @@ import { ItemModal } from "./ItemModal";
 import { ImportModal } from "./ImportModal";
 import { AVAILABLE_ICONS_MAP } from "@/lib/iconMap";
 import { useToast } from "@/components/Toaster";
+import { bolehJalan, rapikanKondisi, KONDISI_RUSAK } from "@/lib/kondisi";
 
 type Item = {
   id: number;
@@ -22,6 +23,7 @@ type Item = {
   assetNumber: string | null;
   lastCheckDate: string | null;
   condition: string | null;
+  catatanKerusakan: string | null;
   imageUrl: string | null;
   quantity: number;
   availableQuantity: number;
@@ -295,6 +297,34 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
       Tidak bisa dilabeli
     </span>
   );
+
+  // Penanda kondisi barang (hanya terlihat di panel admin — user tidak pernah
+  // melihat ini). Barang berkondisi bukan "Baik" otomatis tersembunyi dari
+  // user, jadi admin perlu tahu ADA barang yang perlu diperiksa.
+  const kondisiBadge = (item: Item) => {
+    if (!bolehJalan(item.condition)) {
+      const rusak = rapikanKondisi(item.condition) === KONDISI_RUSAK;
+      return (
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-red-50 text-red-700 border-red-200"
+          title={item.catatanKerusakan || undefined}
+        >
+          {rusak ? "Rusak" : "Data tidak lengkap"}
+        </span>
+      );
+    }
+    if (item.catatanKerusakan) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-amber-50 text-amber-700 border-amber-200"
+          title={item.catatanKerusakan}
+        >
+          Pernah rusak
+        </span>
+      );
+    }
+    return null;
+  };
 
   const statusBadge = (item: { status: string; quantity: number }) => {
     // Stok fisik 0 = habis diserahkan (barangnya sudah keluar semua, mungkin
@@ -652,11 +682,21 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
                   ? AVAILABLE_ICONS_MAP[item.imageUrl]
                   : Package;
                 const percentage = Math.min(100, Math.max(0, (item.availableQuantity / item.quantity) * 100));
+                // Barang berkondisi bukan "Baik" disembunyikan dari user —
+                // kartunya diberi border merah supaya admin sadar ada yang
+                // perlu diperiksa.
+                const perluPerhatian = !bolehJalan(item.condition);
 
                 return (
                   <div
                     key={item.id}
-                    className={`group rounded-2xl shadow-sm border-2 overflow-hidden hover:shadow-lg transition-all flex flex-col relative h-full ${selectedIds.has(item.id) ? 'border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-200'}`}
+                    className={`group rounded-2xl shadow-sm border-2 overflow-hidden hover:shadow-lg transition-all flex flex-col relative h-full ${
+                      selectedIds.has(item.id)
+                        ? 'border-indigo-500'
+                        : perluPerhatian
+                        ? 'bg-white border-red-300 hover:border-red-400'
+                        : 'bg-white border-gray-100 hover:border-indigo-200'
+                    }`}
                   >
                     {/* Checkbox Overlay */}
                     {selectMode && (
@@ -695,8 +735,17 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
                             )}
                             {availabilityBadge("Pinjam", item.canBorrow)}
                             {availabilityBadge("Serah Terima", item.canHandover)}
+                            {kondisiBadge(item)}
                             {item.quantity === 0 && statusBadge(item)}
                             {!item.isLabelable && tidakBisaDilabeliBadge}
+                            {item.catatanKerusakan && (
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 max-w-full truncate"
+                                title={item.catatanKerusakan}
+                              >
+                                {item.catatanKerusakan}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0 z-20">
@@ -807,7 +856,13 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
                 const percentage = Math.min(100, Math.max(0, (item.availableQuantity / item.quantity) * 100));
 
                 return (
-                  <div key={item.id} className={`group rounded-2xl border-2 hover:shadow-md transition-all relative ${selectedIds.has(item.id) ? 'border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-100'}`}>
+                  <div key={item.id} className={`group rounded-2xl border-2 hover:shadow-md transition-all relative ${
+                    selectedIds.has(item.id)
+                      ? 'border-indigo-500'
+                      : !bolehJalan(item.condition)
+                      ? 'bg-white border-red-300 hover:border-red-400'
+                      : 'bg-white border-gray-100 hover:border-indigo-100'
+                  }`}>
                     {/* ── Mobile: baris ringkas horizontal ── */}
                     <div className="flex md:hidden items-center gap-3 p-3">
                       {selectMode && (
@@ -820,7 +875,12 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{item.name}</p>
                         <p className="text-xs text-gray-400">{item.category} · {item.availableQuantity}/{item.quantity} unit</p>
-                        {!item.isLabelable && <div className="mt-1">{tidakBisaDilabeliBadge}</div>}
+                        {(!item.isLabelable || !bolehJalan(item.condition)) && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {!item.isLabelable && tidakBisaDilabeliBadge}
+                            {kondisiBadge(item)}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {statusBadge(item)}
@@ -884,8 +944,20 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
                           <div className="col-span-4 flex flex-col gap-1 text-xs text-gray-600">
                             <div className="flex gap-2 font-mono"><span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">SN:</span><span className="truncate">{item.sn || '-'}</span></div>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700">{item.condition || 'Tidak diketahui'}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                bolehJalan(item.condition)
+                                  ? 'bg-gray-200 text-gray-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                {bolehJalan(item.condition) ? item.condition : 'Data tidak lengkap'}
+                              </span>
                               <span className="text-[10px] text-gray-400">{item.lastCheckDate || 'Belum dicek'}</span>
+                              {kondisiBadge(item)}
+                              {item.catatanKerusakan && (
+                                <span className="text-[10px] text-red-600 truncate" title={item.catatanKerusakan}>
+                                  {item.catatanKerusakan}
+                                </span>
+                              )}
                               {!item.isLabelable && tidakBisaDilabeliBadge}
                             </div>
                           </div>

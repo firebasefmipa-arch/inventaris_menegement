@@ -44,6 +44,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
     noasset: "",
     tanggalcek: "",
     kondisi: "",
+    catatanKerusakan: "",
     canBorrow: "1",
     canHandover: "1",
     isLabelable: "1",
@@ -80,6 +81,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
       noasset: "",
       tanggalcek: "",
       kondisi: "",
+      catatanKerusakan: "",
       canBorrow: "1",
       canHandover: "1",
       isLabelable: "1",
@@ -115,6 +117,14 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
         return;
       }
 
+      // Kondisi wajib diisi: HANYA "Baik" yang boleh dipinjam/diserahterimakan
+      // dan terlihat user. Barang berkondisi kosong akan hilang dari layar user.
+      if (!form.kondisi) {
+        toast("Kondisi wajib dipilih: Baik atau Rusak", "error");
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch("/api/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -126,7 +136,8 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
           inventoryNumber: form.noinvdti?.trim() || null,
           assetNumber: form.noasset?.trim() || null,
           lastCheckDate: form.tanggalcek?.trim() || null,
-          condition: form.kondisi?.trim() || null,
+          condition: form.kondisi,
+          catatanKerusakan: form.catatanKerusakan?.trim() || null,
           quantity: parseInt(form.quantity),
           unit: form.unit || null,
           location: form.location || null,
@@ -339,7 +350,9 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
               </div>
 
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Kondisi</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Kondisi <span className="text-red-500">*</span>
+                </label>
                 <select
                   value={form.kondisi}
                   onChange={(e) => setForm({ ...form, kondisi: e.target.value })}
@@ -349,7 +362,31 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
                   <option value="Baik">Baik</option>
                   <option value="Rusak">Rusak</option>
                 </select>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Hanya barang berkondisi &quot;Baik&quot; yang bisa dipinjam, diserahterimakan,
+                  dan terlihat oleh user.
+                </p>
               </div>
+
+              {/* Catatan kerusakan — hanya muncul saat kondisinya Rusak */}
+              {form.kondisi === "Rusak" && (
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Catatan Kerusakan <span className="text-gray-400">(opsional)</span>
+                  </label>
+                  <input
+                    value={form.catatanKerusakan}
+                    onChange={(e) => setForm({ ...form, catatanKerusakan: e.target.value })}
+                    maxLength={200}
+                    placeholder="Contoh: layar retak bagian kanan"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Hanya terlihat oleh admin. Catatan tetap tersimpan sebagai riwayat
+                    walau barangnya nanti diperbaiki.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

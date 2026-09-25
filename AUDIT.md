@@ -16,6 +16,84 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #15 — 25 Sep 2026 — Barang rusak masih bisa dipinjam & diserahterimakan
+
+**Kesempatan:** user menyadari data barang sudah punya kolom kondisi (Baik/Rusak),
+tapi bertanya apa gunanya — karena barang rusak tetap muncul dan tetap bisa
+dipinjam.
+
+**Temuan:** kolom `condition` **tidak pernah dipakai sebagai penyaring** di mana
+pun. Satu-satunya penjaga adalah `can_borrow`/`can_handover` yang harus
+dicentang manual, dan keduanya **terbuka secara default** (`DEFAULT 1`).
+
+Bukti (sebelum perbaikan):
+
+```
+grep -rn "condition" src/app/api src/lib src/app/dashboard | grep -iE "eq\(|where|filter"
+→ (kosong)   ← kondisi tidak pernah jadi penyaring
+
+halaman pinjam user menyaring dengan:
+  available_quantity > 0  DAN  can_borrow = 1
+```
+
+Akibatnya barang berkondisi "Rusak" tetap tampil di daftar pinjam user dan tetap
+bisa dipinjam — hanya gembok manual yang menahannya, dan gembok itu bisa saja
+lupa dinyalakan.
+
+**Kedua:** teks kondisi dari impor Excel dipakai **mentah**. Template impor
+sendiri mencontohkan `"Rusak Ringan"` / `"Rusak Berat"`, jadi file yang mengikuti
+template menghasilkan kondisi yang tak dikenali aturan mana pun.
+
+### Perbaikan
+
+Aturan ditulis di **satu tempat** (`src/lib/kondisi.ts`), dipakai 5 pintu:
+
+| Aturan | Wujudnya |
+|---|---|
+| Hanya `"Baik"` yang boleh dipinjam/diserahterimakan | `bolehJalan()` |
+| Kondisi wajib diisi saat menambah barang | `POST /api/items` menolak 400 |
+| Kembali ke "Baik" membuka gemboknya lagi | jangan "mengingat" nilai lama |
+| Catatan kerusakan = riwayat, tidak dihapus | `tambahCatatan()` |
+| Sedang dipinjam → tidak bisa ditandai rusak | `barangSedangDipakai()` |
+| `"Kurang Baik"` → **Rusak**, bukan Baik | teks buruk diperiksa lebih dulu |
+
+Pintu yang diperiksa: halaman Pinjam user, halaman Serah Terima user, filter
+barang admin, `POST /api/pinjam`, `POST /api/handovers`.
+
+### Dua bug yang ketahuan saat pengujian sendiri
+
+Keduanya **baru muncul setelah diuji dengan data sungguhan**, bukan dari membaca
+kode:
+
+1. **Barang yang sudah diperbaiki tetap terkunci selamanya.** Perbaikan pertama
+   "mengingat" nilai gembok terakhir — padahal nilai itu `false` hasil paksaan
+   saat barang ditandai rusak. Akibatnya laptop yang sudah diperbaiki tidak bisa
+   dipinjam lagi. Diperbaiki: saat kondisi kembali "Baik", gembok dibuka lagi.
+
+2. **Memeriksa gembok saja tidak cukup.** Barang lama lahir dengan
+   `can_borrow = 1` dari nilai bawaan kolom, sehingga barang berkondisi kosong
+   tetap bocor ke daftar user. Diperbaiki: kondisi diperiksa **langsung**, tidak
+   lewat gembok.
+
+Bukti uji (server uji :3001, 33/33 lulus): barang Rusak hilang dari kedua halaman
+user; dipinjam lewat alamat langsung tetap **ditolak**; kondisi kosong + gembok
+terbuka tetap ditolak; barang sedang dipinjam tidak bisa ditandai rusak; setelah
+diperbaiki muncul lagi sementara catatannya tetap ada; rusak lagi menambahi
+catatan alih-alih menimpa.
+
+Uji logika tebakan kondisi: **39/39 lulus** — termasuk `Kurang Baik` → Rusak,
+`Tidak lengkap` → Rusak, `Baik Sekali` → Baik, `ada` → data tidak lengkap.
+
+Dijaga oleh penjaga `check:unit` **U15** (17 pemeriksaan baru, total **81**).
+
+**Status:** diperbaiki. Commit `<diisi saat commit>`.
+
+**Belum dikerjakan (sengaja):** barang lama berkondisi kosong dibiarkan, tidak
+diisi otomatis — admin mengisi kapan sempat, dan selama itu barangnya
+disembunyikan dari user dengan tanda "data tidak lengkap" di kartunya.
+
+---
+
 ## Audit #14 — 25 Sep 2026 — Stok bisa beranak (satu pengajuan diproses berkali-kali)
 
 **Latar.** Audit menyeluruh + simulasi semua skenario (permintaan user). Pola

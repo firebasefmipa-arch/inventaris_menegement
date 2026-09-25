@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { items } from "@/db/schema";
 import { eq, gt, and } from "drizzle-orm";
 import { UserSerahTerimaFlow } from "./UserSerahTerimaFlow";
+import { KONDISI_BAIK } from "@/lib/kondisi";
 
 export default async function SerahTerimaPage() {
   const session = await auth();
@@ -33,7 +34,10 @@ export default async function SerahTerimaPage() {
         eq(items.status, "available"),
         eq(items.canHandover, true),
         gt(items.availableQuantity, 0),
-        gt(items.quantity, 0)
+        gt(items.quantity, 0),
+        // Hanya barang berkondisi tepat "Baik". Memeriksa gembok saja tidak
+        // cukup — lihat catatan yang sama di halaman Pinjam.
+        eq(items.condition, KONDISI_BAIK)
       )
     );
 

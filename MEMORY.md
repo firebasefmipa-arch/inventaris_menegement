@@ -1035,6 +1035,21 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - `null` DITOLAK, bukan diartikan 1 — `Number(null)` = 0.
     - Penjaga: **U13** di `scripts/check-unit.ts` (**14 pemeriksaan**). Cek nyata: `scripts/uji-masukan2.ts` (23) & `scripts/uji-koreksi.ts` (13) di `/root/audit-20260924/skrip-uji/`.
 
+23. **KONDISI BARANG MENENTUKAN SEGALANYA — hanya `"Baik"` yang boleh jalan** (Audit #15).
+    - **Aturan:** barang boleh dipinjam, diserahterimakan, dan terlihat oleh user **hanya kalau** `condition` tepat bernilai `"Baik"`. Selain itu (Rusak, kosong, teks tak dikenali) → **disembunyikan dari user**, tak bisa dipinjam, tak bisa diserahterimakan.
+    - **Satu tempat: `src/lib/kondisi.ts`** — `bolehJalan(kondisi)`, `rapikanKondisi(teks)`, `dataTidakLengkap()`, `pernahRusak()`, `tambahCatatan()`, `KONDISI_BAIK`, `KONDISI_RUSAK`. **Jangan** menyalin logikanya ke route baru.
+    - **Akar bug (Audit #15):** kolom `condition` dulu **tidak pernah** dipakai sebagai penyaring. Penyaringnya cuma `can_borrow`/`can_handover` yang **terbuka secara default** — jadi barang rusak tetap tampil dan tetap bisa dipinjam kalau gemboknya lupa ditutup.
+    - **Memeriksa gembok SAJA TIDAK CUKUP.** Barang lama lahir dengan `can_borrow = 1` dari nilai bawaan kolom, jadi barang berkondisi kosong tetap bocor ke daftar user. **Kondisi harus diperiksa langsung.**
+    - **Lima pintu yang wajib memeriksa kondisi:** halaman Pinjam user, halaman Serah Terima user, `GET /api/items` saat filter `canBorrow=1`/`canHandover=1`, `POST /api/pinjam`, `POST /api/handovers`.
+    - **Kondisi WAJIB diisi saat menambah barang baru** (`POST /api/items` menolak 400). Ini yang bikin perubahan `ItemModal` penting — tanpa pilihan kondisi, barang tak bisa dibuat.
+    - **Kembali ke `"Baik"` MEMBUKA gemboknya lagi — jangan "mengingat" nilai lama.** Nilai lama itu justru `false` hasil paksaan saat barang ditandai rusak; kalau diingat, barang yang sudah diperbaiki tak bisa dipinjam selamanya. (Bug ini muncul di percobaan pertama dan ketahuan dari uji, bukan dari membaca kode.)
+    - **Gembok ditutup di server, bukan cuma di layar:** `canBorrow`/`canHandover` dipaksa `false` saat kondisi bukan `"Baik"`, sehingga tak bisa dinyalakan lewat permintaan yang dibuat manual.
+    - **Sedang dipegang → tidak bisa ditandai rusak** (`barangSedangDipakai()` dari `src/lib/item-in-use.ts`). Tanpa itu, unit yang sedang di luar lenyap dari layar user padahal peminjamnya masih memegang. Berlaku juga untuk barang stok 0.
+    - **Catatan kerusakan (`items.catatan_kerusakan`, varchar 255) = LOG, bukan status.** Hanya diisi saat menandai Rusak, **TIDAK dihapus** saat barang kembali "Baik". Rusak lagi → **ditambahi** lewat `tambahCatatan()`, bukan ditimpa, dengan format `"Layar retak (25 Sep 2026) • Baterai kembung (12 Nov 2026)"`. **Hanya terlihat admin** — user tak pernah melihatnya.
+    - **Impor Excel (`item-import.ts` + `items/import/route.ts`):** kolom `Kondisi` tidak wajib di file, tapi isinya **dinormalkan** lewat `rapikanKondisi()`. Urutannya penting — **teks buruk diperiksa LEBIH DULU**, karena `"Kurang Baik"` mengandung kata `"baik"`; kalau dibalik, barang cacat lolos jadi Baik. Barang impor yang kondisinya tak dikenali **tetap masuk** tapi langsung terkunci + bertanda "data tidak lengkap" di kartu admin (jangan hilang diam-diam).
+    - **Sisi admin:** kartu berkondisi bukan "Baik" → **border merah** (dua tempat: tampilan grid & daftar), badge `Rusak` / `Data tidak lengkap`, dan badge `Pernah rusak` kalau sudah Baik lagi tapi catatannya ada. Kondisi kosong **tidak diisi otomatis** — admin mengisi kapan sempat.
+    - Penjaga: **U15** di `scripts/check-unit.ts` (**17 pemeriksaan**, total 81). Uji nyata: `uji-kondisi-http.ts` (33, di `/root/audit-20260925/`) & uji logika `uji-kondisi.ts` (39, di `/root/audit-20260925/`).
+
 ---
 
 ## 11. Fitur yang Belum Diimplementasi (Backlog)

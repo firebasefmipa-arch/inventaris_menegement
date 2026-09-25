@@ -24,6 +24,9 @@ export const items = mysqlTable("items", {
   assetNumber: varchar("asset_number", { length: 255 }),
   lastCheckDate: varchar("last_check_date", { length: 255 }),
   condition: varchar("condition", { length: 255 }),
+  // Catatan kerusakan — hanya diisi saat kondisi "Rusak", TIDAK dihapus saat
+  // barang kembali "Baik" (jadi log kerusakan). Lihat src/lib/kondisi.ts.
+  catatanKerusakan: varchar("catatan_kerusakan", { length: 255 }),
   imageUrl: varchar("image_url", { length: 500 }),
   quantity: int("quantity").notNull().default(1),
   availableQuantity: int("available_quantity").notNull().default(1),

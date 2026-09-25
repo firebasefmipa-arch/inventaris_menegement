@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { uploadPath } from "@/lib/upload-dir";
 import { jsonBody } from "@/lib/json-body";
 import { bacaKeranjang, pecahPerUnit, pesanKeranjangTidakValid, type Keranjang } from "@/lib/pecah-unit";
+import { bolehJalan } from "@/lib/kondisi";
 import { unitCode } from "@/lib/units";
 
 // GET /api/handovers — daftar serah terima milik user yang login
@@ -140,6 +141,9 @@ export async function POST(req: NextRequest) {
       const dbItem = itemMap.get(c.itemId);
       if (!dbItem) return NextResponse.json({ error: `Barang ID ${c.itemId} tidak ditemukan` }, { status: 404 });
       if (!dbItem.canHandover)
+        return NextResponse.json({ error: `Barang "${dbItem.name}" tidak tersedia untuk diserahterimakan.` }, { status: 400 });
+      // Sama seperti peminjaman: kondisinya diperiksa langsung.
+      if (!bolehJalan(dbItem.condition))
         return NextResponse.json({ error: `Barang "${dbItem.name}" tidak tersedia untuk diserahterimakan.` }, { status: 400 });
       if (dbItem.availableQuantity < c.quantity)
         return NextResponse.json({ error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` }, { status: 400 });

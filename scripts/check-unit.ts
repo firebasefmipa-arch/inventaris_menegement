@@ -295,5 +295,105 @@ cek(
   "sudah tidak dirujuk siapa pun"
 );
 
+// ── U15: aturan kondisi barang ──
+// Hanya barang berkondisi tepat "Baik" yang boleh dipinjam, diserahterimakan,
+// dan terlihat user. Aturan ini gampang bocor karena ada 5 pintu yang harus
+// memeriksanya — dan satu pintu yang terlewat membuat barang rusak bisa
+// dipinjam lagi.
+const kondisi = existsSync("src/lib/kondisi.ts")
+  ? readFileSync("src/lib/kondisi.ts", "utf8")
+  : "";
+cek(
+  "U15 aturan kondisi ada di satu tempat (src/lib/kondisi.ts)",
+  kondisi.includes("export function bolehJalan") && kondisi.includes("export function rapikanKondisi"),
+  "semua pintu harus memakai berkas ini, bukan menyalin logikanya"
+);
+cek(
+  "U15 teks buruk diperiksa SEBELUM teks baik",
+  // "Kurang Baik" mengandung kata "baik" — kalau urutannya terbalik, barang
+  // cacat akan lolos jadi "Baik" dan bisa dipinjam.
+  kondisi.indexOf("TANDA_BURUK.some") < kondisi.indexOf("TANDA_BAIK.some") &&
+    kondisi.indexOf("TANDA_BURUK.some") >= 0,
+  "kalau dibalik, \"Kurang Baik\" jadi Baik"
+);
+cek(
+  "U15 daftar kata buruk memuat 'kurang' dan 'tidak'",
+  kondisi.includes('"kurang"') && kondisi.includes('"tidak"'),
+  "keduanya pernyataan negatif yang paling sering muncul di file impor"
+);
+
+const pintuKondisi: [string, string][] = [
+  ["halaman pinjam user", "src/app/dashboard/pinjam/page.tsx"],
+  ["halaman serah terima user", "src/app/dashboard/serah-terima/page.tsx"],
+  ["API peminjaman", "src/app/api/pinjam/route.ts"],
+  ["API serah terima", "src/app/api/handovers/route.ts"],
+  ["filter barang di panel admin", "src/app/api/items/route.ts"],
+];
+for (const [nama, berkas] of pintuKondisi) {
+  const isi = existsSync(berkas) ? readFileSync(berkas, "utf8") : "";
+  cek(
+    `U15 ${nama} memeriksa kondisi`,
+    isi.includes("KONDISI_BAIK") || isi.includes("bolehJalan"),
+    "tanpa ini barang rusak bisa lolos ke user"
+  );
+}
+
+const tambahBarang = readFileSync("src/app/api/items/route.ts", "utf8");
+cek(
+  "U15 tambah barang mewajibkan kondisi",
+  tambahBarang.includes("Kondisi wajib diisi"),
+  "barang baru tidak boleh lahir tanpa kondisi"
+);
+cek(
+  "U15 gembok ikut ditutup saat kondisi bukan Baik",
+  tambahBarang.includes("kondisiFinal === KONDISI_BAIK ?"),
+  "kondisi dan gembok pinjam/serah-terima harus bergerak bersama"
+);
+
+const ubahBarang = readFileSync("src/app/api/items/[id]/route.ts", "utf8");
+cek(
+  "U15 barang sedang dipinjam tidak bisa ditandai rusak",
+  // Yang penting: pemeriksaan "sedang dipegang" harus ada, dan hasilnya
+  // menolak sebelum perubahan disimpan.
+  ubahBarang.includes("barangSedangDipakai([existing.id])") &&
+    ubahBarang.includes("Barang tidak bisa ditandai rusak karena masih dipegang"),
+  "tanpa ini unit yang sedang di luar lenyap dari layar user"
+);
+cek(
+  "U15 barang diperbaiki ke Baik membuka gemboknya lagi",
+  // Kalau memakai `existing.canBorrow`, nilainya justru `false` hasil paksaan —
+  // barang yang sudah diperbaiki akan tetap tak bisa dipinjam selamanya.
+  ubahBarang.includes("canBorrow === undefined ? true : toBool(canBorrow)"),
+  "jangan 'mengingat' nilai lama saat kondisi kembali Baik"
+);
+cek(
+  "U15 catatan kerusakan ditambahkan, bukan ditimpa",
+  ubahBarang.includes("tambahCatatan(existing.catatanKerusakan"),
+  "itulah yang menjadikannya log riwayat"
+);
+
+const impor = readFileSync("src/app/api/items/import/route.ts", "utf8");
+cek(
+  "U15 impor menormalkan kondisi dari Excel",
+  impor.includes("rapikanKondisi(teks(\"Kondisi\"))"),
+  "\"Rusak Ringan\"/\"Kurang Baik\" harus masuk Rusak, bukan tersimpan mentah"
+);
+cek(
+  "U15 impor menutup gembok barang yang kondisinya tak dikenali",
+  impor.includes("canBorrow: bolehJalan(item.condition)"),
+  "barang impor tanpa kondisi harus langsung terkunci, bukan bocor ke user"
+);
+
+cek(
+  "U15 kartu admin menandai barang bermasalah (border merah)",
+  readFileSync("src/app/admin/items/ItemsClient.tsx", "utf8").includes("border-red-300"),
+  "admin harus bisa melihat barang mana yang perlu diperiksa"
+);
+cek(
+  "U15 halaman tambah barang sisa lama tidak ada lagi",
+  !existsSync("src/app/admin/items/add"),
+  "pintu kedua dengan aturan berbeda — gunakan ItemModal"
+);
+
 console.log(`\n  lulus=${lulus} gagal=${gagal}\n`);
 process.exit(gagal > 0 ? 1 : 0);

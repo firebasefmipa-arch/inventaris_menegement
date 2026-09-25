@@ -10,6 +10,7 @@ import { uploadPath } from "@/lib/upload-dir";
 import { jsonBody } from "@/lib/json-body";
 import { unitCode } from "@/lib/units";
 import { bacaKeranjang, pecahPerUnit, pesanKeranjangTidakValid, type Keranjang } from "@/lib/pecah-unit";
+import { bolehJalan } from "@/lib/kondisi";
 
 type CartItem = { itemId: number; quantity: number; notes?: string };
 
@@ -81,6 +82,10 @@ export async function POST(request: NextRequest) {
       const dbItem = itemMap.get(c.itemId);
       if (!dbItem) return NextResponse.json({ error: `Barang ID ${c.itemId} tidak ditemukan.` }, { status: 404 });
       if (!dbItem.canBorrow)
+        return NextResponse.json({ error: `Barang "${dbItem.name}" tidak tersedia untuk dipinjam.` }, { status: 400 });
+      // Kondisinya diperiksa langsung, bukan hanya lewat gembok: barang lama
+      // bisa punya `can_borrow = 1` dari default sementara kondisinya kosong.
+      if (!bolehJalan(dbItem.condition))
         return NextResponse.json({ error: `Barang "${dbItem.name}" tidak tersedia untuk dipinjam.` }, { status: 400 });
       if (dbItem.availableQuantity < c.quantity)
         return NextResponse.json({ error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` }, { status: 400 });

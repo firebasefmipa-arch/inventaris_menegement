@@ -11,6 +11,7 @@ import { cekPanjangTeks, JUMLAH_MAKS } from "@/lib/validasi";
 import { periksaAksesUnit } from "@/lib/akses-unit";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
 import { barangSedangDipakai, pesanBarangDipakai } from "@/lib/item-in-use";
+import { KONDISI_BAIK, KONDISI_RUSAK, rapikanKondisi, tambahCatatan, bolehJalan } from "@/lib/kondisi";
 
 // Panel admin saja — halaman user membaca DB langsung (server component).
 async function requireAdmin() {
@@ -90,7 +91,7 @@ export async function PUT(
     if (!body) {
       return NextResponse.json({ error: "Body permintaan tidak valid" }, { status: 400 });
     }
-    const { name, category, description, quantity, unit, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, canBorrow, canHandover, isLabelable } =
+    const { name, category, description, quantity, unit, location, imageUrl, status, sn, inventoryNumber, assetNumber, lastCheckDate, condition, catatanKerusakan, canBorrow, canHandover, isLabelable } =
       body;
 
     // ── Panjang teks disesuaikan lebar kolom ──
@@ -108,6 +109,39 @@ export async function PUT(
       "URL gambar": [imageUrl, 500],
     });
     if (tolakPanjang) return NextResponse.json({ error: tolakPanjang }, { status: 400 });
+
+    // ── Kondisi: "Baik" atau "Rusak" ──
+    // Menandai barang RUSAK sementara unitnya masih di tangan orang membuat
+    // barang yang sedang dipinjam lenyap dari layar user — padahal peminjamnya
+    // masih memegang. Karena itu barang yang sedang dipakai harus dikembalikan
+    // dulu. Sebaliknya, mengubah Rusak → Baik selalu boleh.
+    let kondisiFinal: string | null | undefined;
+    if (condition !== undefined) {
+      const kondisiBaru = rapikanKondisi(condition);
+      if (!kondisiBaru) {
+        return NextResponse.json(
+          { error: 'Kondisi harus "Baik" atau "Rusak".' },
+          { status: 400 }
+        );
+      }
+      // Diperiksa hanya saat perubahannya Baik → Rusak. Kalau barangnya memang
+      // sudah Rusak, tidak ada yang berubah.
+      if (kondisiBaru === KONDISI_RUSAK && bolehJalan(existing.condition)) {
+        const dipakai = await barangSedangDipakai([existing.id]);
+        if (dipakai.length > 0) {
+          const rinci = dipakai.map((d) => `${d.kode} (${d.jenis})`).join(", ");
+          return NextResponse.json(
+            {
+              error:
+                `Barang tidak bisa ditandai rusak karena masih dipegang: ${rinci}. ` +
+                `Kembalikan atau selesaikan transaksinya dulu.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+      kondisiFinal = kondisiBaru;
+    }
 
     // Pindah unit = menyerahkan barang ke pengelola lain. Hanya boleh kalau
     // pemakai berhak atas unit LAMA (sudah diperiksa di atas) DAN unit BARU.
@@ -179,7 +213,31 @@ export async function PUT(
         ...(inventoryNumber !== undefined && { inventoryNumber }),
         ...(assetNumber !== undefined && { assetNumber }),
         ...(lastCheckDate !== undefined && { lastCheckDate }),
-        ...(condition !== undefined && { condition }),
+        // Kondisi + catatan kerusakan + gembok pinjam/serah-terima bergerak
+        // bersama — semuanya ditentukan oleh satu nilai: kondisi.
+        ...(kondisiFinal !== undefined && {
+          condition: kondisiFinal,
+          // Catatan kerusakan hanya DITAMBAH, tidak pernah dihapus: itulah yang
+          // menjadikannya log riwayat saat barang kembali ke "Baik".
+          ...(kondisiFinal === KONDISI_RUSAK &&
+            catatanKerusakan !== undefined && {
+              catatanKerusakan: tambahCatatan(existing.catatanKerusakan, String(catatanKerusakan)),
+            }),
+          // Hanya "Baik" yang boleh dipinjam/diserahterimakan. Dikunci di server
+          // supaya tak bisa dinyalakan lewat permintaan yang dibuat manual —
+          // dan supaya semua penyaring yang sudah ada ikut bekerja tanpa diubah.
+          //
+          // Saat kembali ke "Baik", gemboknya DIBUKA LAGI — jangan "mengingat"
+          // nilai lama. Nilai lama itu justru `false` hasil paksaan saat barang
+          // ditandai rusak, sehingga barang yang sudah diperbaiki akan tetap
+          // tak bisa dipinjam.
+          canBorrow: kondisiFinal === KONDISI_BAIK
+            ? (canBorrow === undefined ? true : toBool(canBorrow))
+            : false,
+          canHandover: kondisiFinal === KONDISI_BAIK
+            ? (canHandover === undefined ? true : toBool(canHandover))
+            : false,
+        }),
         ...(quantityNum !== undefined && {
           quantity: quantityNum,
           // availableQuantity ikut bertambah/berkurang sebesar selisih perubahan quantity
