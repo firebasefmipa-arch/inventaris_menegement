@@ -82,7 +82,8 @@ skrip yang dibuat setelah Audit #18.
 
 **Perbaikan:** `cabut-hapus-register.py` mencabut penghapus register dari
 **12 berkas** sekaligus; `/root/audit-20260925/pulih-register.sql` dijalankan →
-register **50 baris**, `0` kode barang yang tak tercatat, nomor berikutnya TI = 072.
+register **50 baris** saat itu (setelah pembersihan uji berikutnya menjadi **119** — register
+memang hanya bertambah), `0` kode barang yang tak tercatat, nomor berikutnya TI = 072.
 
 ### Temuan D — dua skrip audit mengosongkan SELURUH tabel produksi
 
@@ -118,25 +119,36 @@ harfiah data uji; tiga skrip ber-ID-keras dipindah ke `arsip/`.
 disuntik yang lebih halus `DELETE FROM transactions WHERE created_at < "2026-01-01"`
 → GAGAL; dipulihkan → 97 lulus.
 
-**Sisa yang dibersihkan:** 6 barang `UJI KOREKSI` + 6 transaksi + 5 akun
-`@uji.local`. Setelah bersih: **13 barang sungguhan, 0 transaksi, 0 serah terima,
-50 baris register, 14 akun** (9 asli + 5 uji yang dihapus setelah verifikasi).
+**Sisa yang dibersihkan:** 6 barang `UJI KOREKSI` + 8 barang uji unit
+(KIM/FAR/LAIN) + 6 transaksi + 3 PDF uji + 5 akun `@uji.local`. Dua pola
+pembersih ternyata **meleset** dan ikut dibetulkan: `name LIKE 'UJI-%'` tak
+menangkap `UJI KOREKSI` (pakai spasi), dan `PB_Uji_*` tak menangkap
+`PB_Peminjam_Uji_*`. Berkas PDF bersisa itu tetap terbaca walau transaksinya
+sudah dihapus — `check-berkas-tak-terpakai` yang menemukannya.
+
+**Keadaan akhir terverifikasi:** **13 barang sungguhan, 0 transaksi, 0 serah
+terima, 119 baris register, 9 akun asli, 4 penugasan unit** — `0` kode barang
+yang tak tercatat, `0` berkas tak terpakai.
 
 **Pelajarannya:** (1) perbaikan yang menambah informasi baru wajib diuji ulang
 terhadap batas unit — menambah kolom laporan = menambah jalan bocor;
 (2) memindai **satu** berkas bukan penjagaan; kelas bug harus dijaga pemindai
 yang menyapu seluruh ruang lingkupnya.
 
-**Perbaikan (commit penutup: `d46ce0b`):**
+**Perbaikan (commit penutup: `69db70d`):**
 - `src/app/api/items/import/route.ts` — `dengan` disamarkan lintas unit
 - `src/app/api/items/bulk-delete/route.ts` — cek unit didahulukan; pesan 403 tanpa nama
 - `src/app/api/items/labels/route.ts` — sama
 - `src/app/api/transactions/route.ts` — cek unit didahulukan
 - `src/app/api/admin/handovers/route.ts` — sama
 - `scripts/check-unit.ts` — **U18** (urutan pemeriksa unit), **U18b** (pesan 403
-  tanpa nama), **U18c** (impor menyamarkan) → **97 penjaga**
-- `MEMORY.md` aturan 25 diperluas (berlaku untuk **semua** berkas audit, bukan
-  satu skrip) + aturan pesan galat
+  tanpa nama), **U18c** (impor menyamarkan), **U19** (skrip audit tak
+  menghancurkan data sungguhan, memindai SELURUH skrip) → **97 penjaga**
+- `scripts/check-kode-barang.ts` — B9 tak lagi mengandaikan database kosong
+  (`"belum ada barang Kimia"` → gagal begitu barang uji Kimia pernah dibuat);
+  kini menguji **pemisahan urutan antar unit**, bukan angka mulainya
+- `MEMORY.md` aturan 25 diperluas (berlaku untuk **semua** berkas audit) +
+  aturan 26 baru (pesan galat tanpa nama barang unit lain)
 - Skrip audit dirapikan; tiga dipindah ke `arsip/`
 
 ---

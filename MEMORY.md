@@ -1098,7 +1098,7 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - **Kolom status `"overdue"` TIDAK PERNAH ditulis siapa pun.** Selamanya kosong. "Terlambat" **dihitung dari tanggal** — satu-satunya definisi `sqlTerlambat()` (`src/lib/tanggal.ts`) untuk query, dan `hariTerlambat()` untuk di layar. Jangan menulis `status === "overdue"` di mana pun.
     - **`unitDiLuar()` menerima batas unit sebagai argumen kedua** (`unitDiLuar(itemId?, batasUnit?)`). Halaman yang memanggilnya tanpa argumen itu membocorkan hitungan unit lain.
     - **Riwayat pengembalian (`item_returns`) tidak menyimpan unit** — saring lewat unit barangnya (peta `id → unit` dari tabel `items`, diambil sekali, bukan per baris).
-    - Penjaga: **U16** di `scripts/check-unit.ts` (**6 pemeriksaan**, total 87): halaman baca-langsung wajib memanggil `batasUnit`, halaman detail wajib `periksaAksesUnit`, `transactions.itemId` tak boleh dibaca, dan `status === "overdue"` tak boleh dipakai.
+    - Penjaga: **U16** di `scripts/check-unit.ts` (**6 pemeriksaan**). Total `check:unit` kini **97** (U16 + U17/U17b register + U18/U18b/U18c pesan galat + U19 skrip audit): halaman baca-langsung wajib memanggil `batasUnit`, halaman detail wajib `periksaAksesUnit`, `transactions.itemId` tak boleh dibaca, dan `status === "overdue"` tak boleh dipakai.
     - **Cara menemukannya (ulangi tiap kali menambah halaman admin):** untuk tiap berkas di `src/app/admin/**/page.tsx`, periksa apakah ia memanggil `batasUnit`/`periksaAksesUnit`. Yang tidak memanggil padahal menampilkan data = kandidat kebocoran. Ujilah dengan **dua akun admin beda unit** lalu cari nama barang unit lain di HTML yang benar-benar terkirim.
 
 25. **SKRIP AUDIT TIDAK BOLEH MENYENTUH DATA SUNGGUHAN** (insiden 28 Sep 2026, diperluas audit #19).
@@ -1117,6 +1117,7 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - **Aturan:** di setiap rute yang memuat pesan bernama barang, pemeriksa unit (`batasUnit`/`periksaAksesUnit`) WAJIB berjalan **paling awal** di antara pemeriksaan barang. Pesan "bukan unit Anda" hanya menyebut **jumlah**, bukan nama. Untuk laporan lintas-unit yang memang perlu menyebut keberadaan kembar (impor), samarkan nama: `"barang unit lain"` — kecuali unitnya termasuk yang dikelola admin itu.
     - **Jangan batasi pencariannya:** deteksi kembar impor HARUS membaca seluruh tabel (kalau dibatasi per unit, admin unit A bisa membuat barang dobel dengan barang unit B). Yang disamarkan cuma **nama** di laporan.
     - **Penjaganya `check-unit` U18** — tiga pemeriksaan: urutan kode (bukan komentar) `batasUnit`/`periksaAksesUnit` mendahului pesan bernama; pesan 403 tak memuat nama; impor menyamarkan.
+    - **Hati-hati saat mengubah penjaga berangka:** `check-kode-barang` B9 dulu menuntut urutan Kimia = 1 ("belum ada barang Kimia"). Itu hanya sah di database kosong — begitu ada barang uji Kimia, penjaganya gagal padahal aplikasinya benar. Uji **cabangnya** (unit berbeda → urutan terpisah), bukan angkanya.
     - **Cara menguji:** pasang barang unit B sebagai superadmin, lalu sebagai admin unit A panggil rutenya dengan **ID barang itu** dan cari namanya di balasan. Jangan lupa menguji **sisi sebaliknya** — pesan untuk barang unit sendiri harus tetap menyebut namanya, supaya perbaikan tidak merusak kegunaan.
 
 ---
