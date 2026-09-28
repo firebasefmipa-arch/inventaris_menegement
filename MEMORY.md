@@ -661,6 +661,11 @@ Dipakai bersama oleh parser, pembuat template, dan modal petunjuk — jangan
 menduplikasi nama kolom di tempat lain. Kalau daftar berubah, template dan
 petunjuk ikut berubah sendiri.
 
+**KunciBarang versi lama sudah tidak ada.** Kalau menemukan `function
+kunciBarang(` atau variabel `kunciAda`/`kunciFile` di `route.ts`, itu sisa
+penggabungan yang gagal — yang berlaku `kunciSemua()` + `petaAda`/`petaFile`.
+Penjaga memeriksa ini (`check-import-fix.ts`, 20 pemeriksaan).
+
 | Kolom (tulisan di file) | Wajib | Alias yang juga diterima |
 |---|---|---|
 | Nama Barang | ya | nama, name |
@@ -681,17 +686,41 @@ Normalisasi nama kolom: huruf kecil, spasi/titik/strip/underscore dibuang
 **Perbedaan penting:** header lama hanya menerima `noinvdti` untuk nomor
 inventaris, sehingga "No Inventaris" dibuang diam-diam. Sekarang pakai alias.
 
-**Duplikat** (`kunciBarang()`): kunci = `No. Inv DTI` → kalau kosong `SN` →
-kalau dua-duanya kosong `Nama + Lokasi`. Dinormalisasi huruf kecil + spasi
-dipadatkan. Barang yang sudah ada di DB, ATAU kembar di dalam file yang sama,
-**DILEWATI** (tidak diimpor ulang, tidak menimpa). Dilaporkan di
-`duplicateRows` + `duplicates[]`.
+**Baris mirip TIDAK lagi langsung dibuang** (Audit #17). Nomor inventaris yang
+sama untuk banyak unit fisik itu **wajar** — 10 laptop dengan satu nomor
+inventaris adalah 10 barang. Dulu kuncinya cuma satu (berhenti di kunci pertama
+yang ada), jadi 9 dari 10 baris dibuang **tanpa jejak** dan barangnya benar-benar
+hilang dari daftar.
 
-**Balasan route** `POST /api/items/import`:
-`{ importedCount, skippedRows, duplicateRows, duplicates[], warnings[] }`.
-`skippedRows` = baris tanpa nama; `warnings` = baris yang tetap masuk tapi ada
-kolom bermasalah (mis. lokasi salah ketik). Kalau semua baris dilewati → 400
-dengan pesan sebabnya.
+Sekarang impor **dua langkah**:
+
+| Langkah | Metode | Yang terjadi |
+|---|---|---|
+| Pratinjau | `POST` | Membaca berkas, **tidak menulis apa pun** ke DB. Mengembalikan `dibaca`, `akanMasuk`, `mirip[]`, `duplicates[]`, `warnings[]`. |
+| Simpan | `PUT` | Membaca berkas lagi lalu menyimpan. `sertakanMirip=1` → baris mirip IKUT masuk; tanpa itu → dilewati (perilaku lama). |
+
+Pemakainya yang memutuskan di layar pratinjau: tombol **"Impor semua (N)"** atau
+**"Lewati yang mirip (N)"**. Kalau semua baris langsung masuk tanpa bertanya,
+sekali salah unggah = ratusan barang dobel, dan impor tidak punya tombol undo.
+
+**`kunciSemua()` mengembalikan SEMUA kunci**, bukan berhenti di yang pertama:
+`inv:<No.Inv DTI>` · `sn:<SN>` · `nama:<nama>|<lokasi>` (yang terakhir selalu ada).
+Dulu baris yang sama bisa lolos jadi dua kalau kolom isiannya beda — mis. satu
+baris mengisi No.Inv DTI dan baris kembarnya tidak (kunci `inv:…` vs `nama:…`).
+Sekarang kecocokan di kunci **mana pun** sudah cukup untuk menandainya mirip.
+
+**Balasan route** `POST/PUT /api/items/import`:
+`{ importedCount, dibaca, akanMasuk, skippedRows, duplicateRows, duplicates[],
+mirip[], warnings[] }`.
+`dibaca` = baris bernama yang terbaca; `skippedRows` = baris tanpa nama;
+`mirip[]` = `{ baris, nama, sebab, dengan }`, `sebab` berbunyi
+_"No. Inv sama"_ / _"SN sama"_ / _"nama & lokasi sama"_, dan `dengan` = nama
+barang lama yang diserupainya. Kalau semua baris dilewati saat **menyimpan** → 400
+dengan pesan sebabnya. Mode hitung **selalu 200**.
+
+**Memeriksa mode baca-saja itu murah, tapi wajib:** di `route.ts`, `if
+(!options.simpan)` harus berada **SEBELUM** `await db.insert(items)`. Tanpa itu,
+sekadar membuka pratinjau sudah menulis ke database.
 
 **WAJIB `raw: true` saat `sheet_to_json()`.** `raw: false` mengambil TAMPILAN
 sel, dan Excel menampilkan angka 12+ digit sebagai notasi ilmiah —
@@ -1071,6 +1100,14 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - **Riwayat pengembalian (`item_returns`) tidak menyimpan unit** — saring lewat unit barangnya (peta `id → unit` dari tabel `items`, diambil sekali, bukan per baris).
     - Penjaga: **U16** di `scripts/check-unit.ts` (**6 pemeriksaan**, total 87): halaman baca-langsung wajib memanggil `batasUnit`, halaman detail wajib `periksaAksesUnit`, `transactions.itemId` tak boleh dibaca, dan `status === "overdue"` tak boleh dipakai.
     - **Cara menemukannya (ulangi tiap kali menambah halaman admin):** untuk tiap berkas di `src/app/admin/**/page.tsx`, periksa apakah ia memanggil `batasUnit`/`periksaAksesUnit`. Yang tidak memanggil padahal menampilkan data = kandidat kebocoran. Ujilah dengan **dua akun admin beda unit** lalu cari nama barang unit lain di HTML yang benar-benar terkirim.
+
+25. **SKRIP PEMBERSIH AUDIT TIDAK BOLEH MENYENTUH DATA SUNGGUHAN** (insiden 28 Sep 2026).
+    - **Apa yang terjadi:** `uji-hapus.sh` memuat `DELETE FROM kode_terpakai;` **tanpa syarat**. Register nomor barang terhapus seluruhnya — termasuk milik 9 barang sungguhan yang baru diimpor pemilik produk. Barangnya tidak hilang, tapi **buku register penomornya kosong**: begitu salah satu barang dihapus, nomornya bebas lagi dan bisa diberikan ke barang lain. Persis bug lama yang register ini diciptakan untuk mencegah.
+    - **Aturan:** setiap `DELETE` di skrip audit WAJIB punya `WHERE` yang menyasar **ciri data uji saja** (`email LIKE '%@uji.local'`, `name LIKE 'UJI %'`). Dilarang menghapus tabel penuh dengan alasan "supaya penomoran mulai dari 001 lagi" — itu menghapus riwayat orang lain.
+    - **Register `kode_terpakai` JANGAN dihapus sama sekali** dari skrip pembersih. Ia memang dirancang hanya bertambah; nomor uji yang menganggur tidak merugikan, sedangkan menghapusnya melepas nomor bekas untuk dipakai ulang. (`DELETE ... WHERE sumber = 'uji'` **tidak menyelesaikan apa pun** — nilai `sumber` cuma `barang`/`impor`/`awal`, tak ada penulisnya.)
+    - **Cara memulihkan kalau terlanjur:** (a) baris dari backup terakhir, (b) **setiap** `item_code` yang sekarang dipakai tabel `items` — `INSERT IGNORE INTO kode_terpakai (...) SELECT item_code, … , id, 'barang' FROM items WHERE item_code LIKE 'FMIPA-%'`. Lihat `/root/audit-20260925/pulih-register.sql`.
+    - **Nomor urut aman walau register kosong** — `nextSequence()` mengambil `GREATEST(MAX(kode_terpakai.urut), MAX(angka di items))`. Yang hilang bukan penomoran berikutnya, melainkan **perlindungan nomor bekas barang yang sudah dihapus**.
+    - **Periksa sebelum & sesudah menjalankan skrip pembersih apa pun:** `SELECT COUNT(*) FROM items;` — kalau angkanya turun tanpa kamu sengaja, ada `DELETE` yang terlalu luas.
 
 ---
 

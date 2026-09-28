@@ -437,5 +437,31 @@ cek(
   "kolom status 'overdue' tak punya penulis — badge Terlambat tak pernah muncul"
 );
 
+// ── U17: skrip pembersih audit tak boleh menghapus register nomor ──────────
+// Insiden 28 Sep 2026: `DELETE FROM kode_terpakai;` tanpa syarat menghapus
+// riwayat penomoran 9 barang sungguhan. Nomor bekas jadi bebas dipakai ulang.
+// Berkasnya ada di luar repo → dilewati kalau tidak ada (mis. mesin lain).
+const berkasPembersih = "/root/audit-20260924/uji-hapus.sh";
+if (existsSync(berkasPembersih)) {
+  // Baris komentar dibuang dulu — komentar memuat kutipan perintah lama.
+  const hapusSkrip = readFileSync(berkasPembersih, "utf8")
+    .split("\n")
+    .filter((b) => !/^\s*--/.test(b))
+    .join("\n");
+  cek(
+    "U17 skrip pembersih tidak menghapus register kode_terpakai",
+    !/DELETE\s+FROM\s+kode_terpakai/i.test(hapusSkrip),
+    "register nomor dirancang hanya bertambah — menghapusnya melepas nomor bekas"
+  );
+  cek(
+    "U17b setiap DELETE di skrip pembersih punya WHERE",
+    hapusSkrip
+      .split(";")
+      .filter((s) => /^\s*DELETE\s/im.test(s))
+      .every((s) => /\bWHERE\b/i.test(s)),
+    "DELETE tanpa WHERE di skrip pembersih menghapus data sungguhan"
+  );
+}
+
 console.log(`\n  lulus=${lulus} gagal=${gagal}\n`);
 process.exit(gagal > 0 ? 1 : 0);

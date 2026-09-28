@@ -13,11 +13,21 @@ interface ImportModalProps {
 }
 
 /** Ringkasan hasil impor: berapa masuk, berapa dilewati, dan sebabnya. */
+type BarisMirip = {
+  baris: number;
+  nama: string;
+  sebab: string;
+  dengan: string;
+};
+
 type HasilImpor = {
   importedCount: number;
+  akanMasuk: number;
+  dibaca: number;
   skippedRows: number;
   duplicateRows: number;
   duplicates: string[];
+  mirip: BarisMirip[];
   warnings: string[];
 };
 
@@ -28,11 +38,14 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [seret, setSeret] = useState(false);
   const [hasil, setHasil] = useState<HasilImpor | null>(null);
+  /** true = hasil yang tampil adalah hasil penyimpanan, bukan pratinjau. */
+  const [sudahSimpan, setSudahSimpan] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const tutup = () => {
     setFile(null);
     setHasil(null);
+    setSudahSimpan(false);
     setSeret(false);
     onClose();
   };
@@ -51,30 +64,41 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
     };
   }, [isOpen]);
 
-  async function kirim(f: File) {
+  async function kirim(f: File, sertakanMirip = false, simpan = false) {
     setLoading(true);
-    setHasil(null);
+    if (simpan) setHasil(null);
     try {
       const formData = new FormData();
       formData.append("file", f);
+      if (sertakanMirip) formData.append("sertakanMirip", "1");
 
-      const res = await fetch("/api/items/import", { method: "POST", body: formData });
+      // POST = hitung saja (pratinjau, tak menulis apa pun).
+      // PUT  = benar-benar menyimpan.
+      const res = await fetch("/api/items/import", {
+        method: simpan ? "PUT" : "POST",
+        body: formData,
+      });
       const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        // Duplikat/skip tetap dilaporkan lewat toast walau permintaan ditolak
-        throw new Error(data.error || "Gagal mengimpor file");
-      }
+      if (!res.ok) throw new Error(data.error || "Gagal mengimpor file");
 
       setHasil({
         importedCount: data.importedCount ?? 0,
+        akanMasuk: data.akanMasuk ?? 0,
+        dibaca: data.dibaca ?? 0,
         skippedRows: data.skippedRows ?? 0,
         duplicateRows: data.duplicateRows ?? 0,
         duplicates: data.duplicates ?? [],
+        mirip: data.mirip ?? [],
         warnings: data.warnings ?? [],
       });
-      toast(`Berhasil mengimpor ${data.importedCount} barang.`, "success");
-      router.refresh();
+      if (simpan) {
+        setSudahSimpan(true);
+        toast(`Berhasil mengimpor ${data.importedCount} barang.`, "success");
+        router.refresh();
+      } else {
+        setSudahSimpan(false);
+      }
     } catch (error) {
       toast(error instanceof Error ? error.message : "Gagal mengimpor file", "error");
     } finally {
@@ -173,12 +197,51 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
             <p className="px-4 py-2.5 text-[11px] text-gray-500 bg-gray-50/50 border-t border-gray-100">
               <span className="text-red-500">*</span> wajib diisi. Kolom lain boleh dikosongkan.
               Barang yang sudah ada di daftar (nomor inventaris / SN / nama+lokasi sama) akan
-              dilewati agar tidak dobel.
+              ditandai <b>mirip</b> — kamu pilih sendiri mau dilewati atau tetap diimpor.
             </p>
           </div>
 
-          {/* Hasil impor */}
-          {hasil && (
+          {/* Hasil impor — dua rupa: PRATINJAU (belum tersimpan) & SELESAI */}
+          {hasil && !sudahSimpan && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <p className="text-sm font-semibold text-amber-900">
+                  Pratinjau — belum ada yang disimpan
+                </p>
+              </div>
+              <p className="text-sm text-amber-900 pl-6">
+                {hasil.dibaca} baris terbaca · <b>{hasil.akanMasuk} barang baru</b>
+                {hasil.mirip.length > 0 && (
+                  <> · <b>{hasil.mirip.length} mirip dengan yang sudah ada</b></>
+                )}
+              </p>
+              <ul className="text-xs text-amber-800 space-y-0.5 pl-6">
+                {hasil.skippedRows > 0 && <li>{hasil.skippedRows} baris dilewati karena nama kosong</li>}
+                {hasil.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+
+              {hasil.mirip.length > 0 && (
+                <details open className="text-xs text-amber-800 pl-6">
+                  <summary className="cursor-pointer font-medium">
+                    {hasil.mirip.length} baris mirip dengan yang sudah ada
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 max-h-40 overflow-y-auto">
+                    {hasil.mirip.map((m) => (
+                      <li key={m.baris}>
+                        Baris {m.baris}: &ldquo;{m.nama}&rdquo; — {m.sebab}
+                        {m.dengan && m.dengan !== m.nama ? ` dengan "${m.dengan}"` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
+
+          {hasil && sudahSimpan && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -255,8 +318,8 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
 
           <p className="text-[11px] text-gray-500 flex items-start gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-            Impor tidak bisa dibatalkan. Periksa file dulu — barang yang sudah masuk harus
-            dihapus manual kalau salah.
+            Langkah pertama hanya <b>menghitung</b> — belum ada yang tersimpan. Setelah
+            melihat ringkasannya, kamu yang memutuskan baris mirip ikut masuk atau tidak.
           </p>
         </div>
 
@@ -267,17 +330,37 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
             onClick={tutup}
             className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 text-sm font-medium transition-colors"
           >
-            {hasil ? "Selesai" : "Batal"}
+            {sudahSimpan ? "Selesai" : "Batal"}
           </button>
-          {file && !hasil && (
+          {file && !sudahSimpan && !loading && (
             <button
               type="button"
-              onClick={() => void kirim(file)}
+              onClick={() => void kirim(file, true, true)}
               disabled={loading}
               className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               <Upload className="w-4 h-4" />
-              {loading ? "Memproses..." : "Unggah Ulang"}
+              Impor semua{hasil ? ` (${hasil.dibaca - hasil.skippedRows})` : ""}
+            </button>
+          )}
+          {file && hasil && !sudahSimpan && hasil.mirip.length > 0 && !loading && (
+            <button
+              type="button"
+              onClick={() => void kirim(file, false, true)}
+              className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 text-sm font-medium transition-colors inline-flex items-center justify-center gap-2"
+            >
+              Lewati yang mirip ({hasil.akanMasuk})
+            </button>
+          )}
+          {file && !hasil && !loading && (
+            <button
+              type="button"
+              onClick={() => void kirim(file, false, false)}
+              disabled={loading}
+              className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Lihat pratinjau
             </button>
           )}
         </div>

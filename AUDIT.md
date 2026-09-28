@@ -16,6 +16,132 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #18 — 28 Sep 2026 — Skrip pembersih audit menghapus buku register nomor barang
+
+**Kesempatan:** saat membersihkan sisa data uji setelah Audit #17, terlihat
+`kode_terpakai` berisi **0 baris** padahal tabel `items` berisi **9 barang
+sungguhan** (impor pemilik produk, 28 Sep 2026 02:12). Tidak masuk akal — setiap
+barang baru mencatat nomornya ke register.
+
+**Temuan:** penyebabnya skrip pembersih audit sendiri, `/root/audit-20260924/uji-hapus.sh`:
+
+```sql
+-- Nomor barang yang sempat terpakai selama uji ikut dilepas, supaya penomoran
+-- barang sungguhan mulai dari 001 lagi.
+DELETE FROM kode_terpakai;      ← TANPA SYARAT
+```
+
+Komplain lamanya sah, tapi obatnya salah: yang ingin dibuang hanya nomor **uji**,
+yang dihapus **seluruh riwayat penomoran**, termasuk milik barang sungguhan yang
+baru saja diimpor. Skrip ini sudah dipakai berkali-kali sebelumnya (saat tabel
+`items` masih kosong, jadi tidak kelihatan).
+
+**Dampak:** barangnya tidak hilang — 9 barang utuh, transaksi 0, serah terima 0.
+Yang hilang **perlindungan nomor bekas**: begitu salah satu barang dihapus,
+nomornya bebas lagi dan bisa diberikan ke barang lain. Persis bug lama yang
+register ini diciptakan untuk mencegah.
+
+**Bukti (sebelum pemulihan):**
+
+```
+SELECT COUNT(*) FROM items;         → 9
+SELECT COUNT(*) FROM kode_terpakai; → 0
+SELECT item_code FROM items;        → FMIPA-TI-2026-029 … 037
+```
+
+**Perbaikan:**
+
+- `/root/audit-20260924/uji-hapus.sh` — baris `DELETE FROM kode_terpakai;`
+  **dibuang sama sekali** (bukan diberi syarat). Register memang dirancang hanya
+  bertambah; nomor uji yang menganggur tidak merugikan. Percobaan pertama
+  (`WHERE sumber = 'uji'`) tidak menyelesaikan apa pun — nilai `sumber` hanya
+  `barang`/`impor`/`awal`, tak ada penulisnya, jadi barisnya tak pernah cocok.
+- `/root/audit-20260925/pulih-register.sql` **baru** — memulihkan register:
+  baris dari backup 24 Sep + `INSERT IGNORE ... SELECT item_code, …, id, 'barang'
+  FROM items WHERE item_code LIKE 'FMIPA-%'`.
+- `MEMORY.md` aturan 25 — larangan `DELETE` tabel penuh di skrip audit.
+
+**Verifikasi sesudah pemulihan:** register 18 baris (9 dari backup + 9 milik
+barang), `FMIPA-TI-2026-029 … 037` masing-masing menunjuk `item_id` 461–469,
+nomor berikutnya untuk TI = **038**, `GROUP BY item_code HAVING n>1` kosong
+(tidak ada kode kembar), 9 barang kondisi & gemboknya benar (satu berkondisi
+`Rusak` tergembok, sebagaimana mestinya).
+
+**Pelajarannya:** skrip pembersih adalah kode produksi yang menyentuh data orang
+lain. Setiap `DELETE` wajib menyasar ciri data uji (`%@uji.local`, `UJI %`,
+`sumber = 'uji'`) — bukan nama tabel. Hitung `SELECT COUNT(*) FROM items` sebelum
+dan sesudah menjalankannya.
+
+---
+
+## Audit #17 — 25 Sep 2026 — Impor membuang barang tanpa jejak saat nomor inventarisnya sama
+
+**Kesempatan:** pemilik produk bertanya apa benar baris yang terdeteksi sama
+langsung dilewati — lalu menyebut kasus nyatanya: *"kalau misalkan ada kasus yang
+dilabel nomor inventarisnya ternyata banyak yang sama padahal barang fisiknya ada
+banyak, yang ter skip banyak dong"*.
+
+**Temuan:** benar, dan lebih buruk dari dugaan. Kunci identitas ditentukan
+**berhenti di kunci pertama yang ada**:
+
+```
+dulu:  if (inventoryNumber) return `inv:${...}`;
+       if (sn)              return `sn:${...}`;
+                            return `nama:${...}|${...}`;
+```
+
+Akibatnya:
+
+```
+10 laptop FISIK, semuanya bernomor inventaris 409010025366
+  Baris 2  → kunci inv:409010025366   MASUK
+  Baris 3  → kunci sama               DILEWATI
+  ... baris 11                        DILEWATI
+Hasil: 1 barang masuk, 9 barang FISIK hilang dari daftar.
+```
+
+Nomor inventaris yang sama untuk banyak unit fisik itu **wajar** (satu nomor
+untuk satu batch pembelian). Jadi perilaku lama salah untuk kasus yang justru
+umum.
+
+**Temuan kedua (lebih halus):** karena kuncinya tunggal dan dipilih berlapis,
+dua baris yang sebenarnya sama bisa **lolos jadi dua barang** kalau kolom
+isiannya beda:
+
+```
+Baris 2  No.Inv 555000111222  "Laptop"  → kunci inv:555000111222
+Baris 3  (No.Inv kosong)      "Laptop"  → kunci nama:laptop|ruang 1
+→ keduanya MASUK, padahal barangnya cuma satu
+```
+
+Ini kebalikan dari temuan pertama, dan muncul dari sebab yang sama: kunci
+identitasnya cuma satu.
+
+**Perbaikan (commit penutup: `4da54e8`):**
+
+- `src/app/api/items/import/route.ts` — `kunciBarang()` (satu kunci) diganti
+  `kunciSemua()` yang mengembalikan **semua** kunci (No.Inv + SN + nama|lokasi).
+  Cocok di kunci mana pun = mirip.
+- Impor jadi **dua langkah**: `POST` = hitung saja (tidak menulis apa pun),
+  `PUT` = simpan. Field `sertakanMirip=1` membuat baris mirip ikut masuk.
+- Baris mirip tidak lagi dibuang — **dilaporkan** (`mirip[]`) dengan nomor baris,
+  sebab, dan nama barang lama yang diserupainya.
+- `src/app/admin/items/ImportModal.tsx` — layar pratinjau + dua tombol
+  ("Impor semua" / "Lewati yang mirip").
+- `scripts/check-import-fix.ts` — **13 pemeriksaan baru** (total 20).
+
+**Verifikasi:** `cek-tipe.sh` bersih · `npm run build` sukses · uji impor nyata
+(`uji-impor.ts`, **19/19**): pratinjau tidak menulis apa pun; 10 laptop bernomor
+inventaris sama benar-benar masuk semua (10 baris di DB, 10 kode barang berbeda);
+mode lama masih 1 masuk; baris kembar beda isian terdeteksi; kembar lawan DB
+terdeteksi; baris tanpa nama tetap dibuang; tanpa sesi 401.
+
+**Yang sengaja TIDAK ditambahkan:** kolom penanda "kembar" permanen di daftar
+barang. Tanda kembar hanya muncul di layar pratinjau — cukup untuk memutuskan
+saat impor. Kalau kelak perlu mencari kembar lama-lama, baru tambah kolom.
+
+---
+
 ## Audit #16 — 25 Sep 2026 — Halaman admin membaca database langsung, batas unit tidak dipasang
 
 **Kesempatan:** setelah Audit #15 ditutup, diminta audit menyeluruh lagi

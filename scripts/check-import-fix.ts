@@ -44,5 +44,32 @@ const keTeks = (v: unknown): string | null => {
 cek("raw:true + String() → utuh", keTeks(nilai), "409010025366");
 cek("BUKAN notasi ilmiah", keTeks(nilai)?.includes("E+"), false);
 
+console.log("\n=== impor dua langkah (pratinjau → pilih) ===");
+const rute = fs.readFileSync("src/app/api/items/import/route.ts", "utf8");
+const modal = fs.readFileSync("src/app/admin/items/ImportModal.tsx", "utf8");
+
+// POST harus mode hitung — kalau tidak, membuka pratinjau saja sudah menulis.
+cek("POST memakai simpan=false", /POST[\s\S]{0,200}simpan:\s*false/.test(rute), true);
+cek("PUT memakai simpan=true", /PUT[\s\S]{0,200}simpan:\s*true/.test(rute), true);
+cek("mode hitung berhenti SEBELUM penulisan",
+  rute.indexOf("if (!options.simpan)") < rute.indexOf("await db.insert(items)"), true);
+cek("mode hitung tak memakai db.insert", /if \(!options\.simpan\)/.test(rute), true);
+
+// Kunci identitas harus dikembalikan SEMUA, bukan berhenti di yang pertama —
+// di sinilah dulu baris kembar dengan kolom isian berbeda lolos jadi dua.
+cek("kunciSemua mengembalikan daftar kunci", /function kunciSemua\([\s\S]*?kunci\.push/.test(rute), true);
+cek("kunciSemua punya kunci nama+lokasi (selalu)", /kunci\.push\(`nama:/.test(rute), true);
+cek("tak ada sisa kunciBarang versi lama", rute.includes("function kunciBarang("), false);
+
+// Pilihan pemakai harus benar-benar dibaca dari form.
+cek("sertakanMirip dibaca dari form", rute.includes('formData.get("sertakanMirip")'), true);
+cek("modal mengirim sertakanMirip", modal.includes('formData.append("sertakanMirip", "1")'), true);
+cek("modal memakai POST untuk pratinjau & PUT untuk simpan",
+  /simpan \? "PUT" : "POST"/.test(modal), true);
+cek("modal punya tombol 'Impor semua'", modal.includes("Impor semua"), true);
+cek("modal punya tombol 'Lewati yang mirip'", modal.includes("Lewati yang mirip"), true);
+cek("pratinjau diberi tanda 'belum ada yang disimpan'",
+  modal.includes("belum ada yang disimpan"), true);
+
 console.log(`\n  lulus=${lulus} gagal=${gagal}`);
 process.exit(gagal ? 1 : 0);

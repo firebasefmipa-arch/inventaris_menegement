@@ -13,17 +13,34 @@ import { formDataAman } from "@/lib/json-body";
 import { rapikanKondisi, bolehJalan } from "@/lib/kondisi";
 
 /**
- * Kunci identitas barang untuk mendeteksi duplikat.
+ * Semua kunci yang bisa dipakai mengenali sebuah baris.
  *
- * Urutan prioritas: No. Inv DTI (paling unik) → SN → Nama + Lokasi.
- * Dinormalisasi huruf kecil & spasi berlebih supaya " Laptop 10 " dan
- * "laptop 10" dianggap sama.
+ * Dikembalikan SEMUANYA — bukan berhenti di kunci pertama yang ada — supaya
+ * baris yang sama tetap ketahuan walau kolom isiannya beda (mis. satu baris
+ * mengisi "No. Inv DTI" dan baris kembarnya tidak; dulu ini lolos jadi dua
+ * barang).
+ *
+ * Dinormalisasi huruf kecil & spasi berlebih: " Laptop 10 " = "laptop 10".
  */
-function kunciBarang(nama: string, inventoryNumber: string | null, sn: string | null, lokasi: string | null): string {
+function kunciSemua(
+  nama: string,
+  inventoryNumber: string | null,
+  sn: string | null,
+  lokasi: string | null
+): string[] {
   const bersih = (v: string | null) => (v || "").trim().toLowerCase().replace(/\s+/g, " ");
-  if (inventoryNumber) return `inv:${bersih(inventoryNumber)}`;
-  if (sn) return `sn:${bersih(sn)}`;
-  return `nama:${bersih(nama)}|${bersih(lokasi)}`;
+  const kunci: string[] = [];
+  if (inventoryNumber) kunci.push(`inv:${bersih(inventoryNumber)}`);
+  if (sn) kunci.push(`sn:${bersih(sn)}`);
+  kunci.push(`nama:${bersih(nama)}|${bersih(lokasi)}`);
+  return kunci;
+}
+
+/** Terjemahan kunci jadi kalimat, untuk ditampilkan ke pemakai. */
+function jelasKunci(k: string): string {
+  if (k.startsWith("inv:")) return "No. Inv sama";
+  if (k.startsWith("sn:")) return "SN sama";
+  return "nama & lokasi sama";
 }
 
 /**
@@ -33,15 +50,35 @@ function kunciBarang(nama: string, inventoryNumber: string | null, sn: string | 
  * dengan template unduhan). Kode barang dari file SELALU diabaikan — dibuat
  * ulang di server.
  *
- * Barang yang sudah ada di database (atau kembar di dalam file yang sama)
- * DILEWATI, tidak diimpor ulang.
+ * Dua langkah:
+ *   POST = HITUNG SAJA. Membaca berkas, melaporkan apa yang akan terjadi,
+ *          tanpa menulis apa pun ke database. Ini yang dipakai layar pratinjau.
+ *   PUT  = SIMPAN. Membaca berkas lagi lalu menyimpan.
+ *          `sertakanMirip` (form field) menentukan baris yang mirip dengan
+ *          yang sudah ada IKUT masuk atau dilewati. Bawaannya DILEWATI
+ *          (perilaku lama).
  *
  * Balasan:
- *   { importedCount, skippedRows, duplicateRows, duplicates[], warnings[] }
+ *   { importedCount, dibaca, skippedRows, duplicateRows, duplicates[],
+ *     mirip[], warnings[] }
+ * `dibaca`      = baris berisi nama yang terbaca dari berkas.
  * `skippedRows` = baris tanpa nama (tidak bisa dibuatkan barang).
+ * `mirip[]`     = baris yang menyerupai barang yang sudah ada / kembar di
+ *                 berkas ini. Saat mode hitung, ini daftar yang ditawarkan.
  * `warnings[]`  = baris yang tetap masuk tapi ada kolom bermasalah.
  */
 export async function POST(request: NextRequest) {
+  return proses(request, { simpan: false, sertakanMirip: false });
+}
+
+export async function PUT(request: NextRequest) {
+  return proses(request, { simpan: true, sertakanMirip: false });
+}
+
+async function proses(
+  request: NextRequest,
+  options: { simpan: boolean; sertakanMirip: boolean }
+) {
   try {
     const session = await auth();
     const role = (session?.user as any)?.role;
@@ -57,6 +94,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Berkas tidak ditemukan" }, { status: 400 });
     }
     const file = formData.get("file");
+
+    // Pemakai memutuskan baris mirip ikut masuk atau tidak. Hanya berlaku saat
+    // menyimpan — mode hitung tidak menyimpan apa pun.
+    const sertakanMirip = String(formData.get("sertakanMirip") ?? "") === "1";
 
     if (!file || typeof file === "string") {
       return NextResponse.json({ error: "File tidak ditemukan" }, { status: 400 });
@@ -120,14 +161,32 @@ export async function POST(request: NextRequest) {
         location: items.location,
       })
       .from(items);
-    const kunciAda = new Set(
-      existing.map((e) => kunciBarang(e.name, e.inventoryNumber, e.sn, e.location))
-    );
+    // Peta kunci → nama barang yang SUDAH ada di database. Dipakai untuk
+    // mengenali baris kembar sekaligus menjelaskan kembarnya dengan siapa.
+    const petaAda = new Map<string, string>();
+    for (const e of existing) {
+      for (const k of kunciSemua(e.name, e.inventoryNumber, e.sn, e.location)) {
+        if (!petaAda.has(k)) petaAda.set(k, e.name);
+      }
+    }
 
-    // Kunci yang sudah dipakai baris sebelumnya DI FILE INI, supaya file
-    // dengan baris kembar tak menggandakan barang.
-    const kunciFile = new Set<string>();
+    // Kunci yang sudah dipakai baris sebelumnya DI FILE INI → nomor barisnya.
+    const petaFile = new Map<string, number>();
+
+    // Baris yang mirip dengan yang sudah ada. TIDAK langsung dibuang: dihitung
+    // dulu, lalu pemakainya yang memutuskan mau dilewati atau tetap masuk.
+    // (Nomor inventaris yang sama untuk banyak unit fisik itu wajar — kalau
+    // langsung dibuang, 9 dari 10 barang hilang tanpa jejak.)
+    const mirip: Array<{ baris: number; nama: string; sebab: string; dengan: string }> = [];
+
+    // Nama barang yang akan MASUK. Diisi dalam mode hitung supaya kembar
+    // antar-baris berkas ini tetap ketahuan walau barisnya tidak jadi disimpan.
+    const petaRencana = new Map<string, number>();
+
+    // duplicateRows/duplicates lama tetap diisi saat barisnya benar-benar
+    // dilewati — supaya bentuk balasan lama tak rusak.
     const duplicates: string[] = [];
+    let dibaca = 0;
 
     // Penomoran per lokasi, dihitung sekali lalu ditambah di memori
     // supaya barang dalam satu file tidak berebut nomor yang sama.
@@ -173,13 +232,33 @@ export async function POST(request: NextRequest) {
       // Lokasi: tempat/ruangan, bebas diketik → hanya dirapikan kapitalisasinya.
       const location = teks("Lokasi");
 
-      // Duplikat: sudah ada di database, atau kembar di file ini.
-      const kunci = kunciBarang(name, inventoryNumber, sn, location);
-      if (kunciAda.has(kunci) || kunciFile.has(kunci)) {
-        duplicates.push(`Baris ${barisKe}: "${name}" sudah ada — dilewati.`);
-        continue;
+      dibaca++;
+
+      // Mirip dengan yang sudah ada (di database) atau kembar di file ini.
+      // Saat mode hitung, petaRencana yang dipakai; saat menyimpan, petaFile —
+      // supaya laporan mode hitung sama persis dengan hasil penyimpanan.
+      const kunci = kunciSemua(name, inventoryNumber, sn, location);
+      const petaAcuan = options.simpan ? petaFile : petaRencana;
+      let sebab: string | null = null;
+      let dengan = "";
+      for (const k of kunci) {
+        const dariDb = petaAda.get(k);
+        if (dariDb !== undefined) { sebab = jelasKunci(k); dengan = dariDb; break; }
+        const dariFile = petaAcuan.get(k);
+        if (dariFile !== undefined) {
+          sebab = `${jelasKunci(k)} dengan baris ${dariFile} di berkas ini`;
+          dengan = name;
+          break;
+        }
       }
-      kunciFile.add(kunci);
+      if (sebab) {
+        mirip.push({ baris: barisKe, nama: name, sebab, dengan });
+        if (!sertakanMirip) {
+          duplicates.push(`Baris ${barisKe}: "${name}" ${sebab.toLowerCase()} — dilewati.`);
+          continue;
+        }
+      }
+      for (const k of kunci) if (!petaAcuan.has(k)) petaAcuan.set(k, barisKe);
 
       // Jumlah harus bilangan bulat >= 1; kalau tidak, kembali ke 1 + peringatan
       const jumlahRaw = teks("Jumlah");
@@ -232,6 +311,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ── Mode hitung (POST): laporkan saja, JANGAN menulis apa pun ──
+    if (!options.simpan) {
+      const akanMasuk = dibaca - duplicates.length - dilewatiUnit;
+      return NextResponse.json({
+        importedCount: 0,
+        akanMasuk,
+        dibaca,
+        skippedRows,
+        duplicateRows: duplicates.length,
+        duplicates,
+        mirip,
+        warnings,
+      });
+    }
+
     if (!newItems.length) {
       const sebab = [
         skippedRows ? `${skippedRows} baris dilewati karena kolom "Nama Barang" kosong` : "",
@@ -246,6 +340,7 @@ export async function POST(request: NextRequest) {
           skippedRows,
           duplicateRows: duplicates.length,
           duplicates,
+          mirip,
         },
         { status: 400 }
       );
@@ -286,9 +381,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       importedCount: newItems.length,
+      dibaca,
       skippedRows,
       duplicateRows: duplicates.length,
       duplicates,
+      mirip,
       warnings,
     });
   } catch (error) {
