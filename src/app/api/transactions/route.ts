@@ -172,6 +172,17 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
+      // Admin hanya boleh mencatat barang dari unit yang ditugaskan padanya.
+      // Diperiksa PALING AWAL di antara pemeriksaan barang — pesan stok &
+      // ketersediaan di atasnya menyebut NAMA barang, sehingga admin unit lain
+      // bisa menebaknya lewat pesan penolakan (Audit #19).
+      const tolak = await periksaAksesUnit(session, dbItem.unit);
+      if (tolak) {
+        return NextResponse.json(
+          { error: tolak.pesan },
+          { status: tolak.status }
+        );
+      }
       if (dbItem.availableQuantity < cartItem.quantity) {
         return NextResponse.json(
           { error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` },
@@ -182,14 +193,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { error: `Barang "${dbItem.name}" tidak tersedia untuk dipinjam.` },
           { status: 400 }
-        );
-      }
-      // Admin hanya boleh mencatat barang dari unit yang ditugaskan padanya.
-      const tolak = await periksaAksesUnit(session, dbItem.unit);
-      if (tolak) {
-        return NextResponse.json(
-          { error: `${tolak.pesan} (barang "${dbItem.name}")` },
-          { status: tolak.status }
         );
       }
     }

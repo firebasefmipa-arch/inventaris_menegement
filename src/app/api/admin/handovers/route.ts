@@ -152,6 +152,16 @@ export async function POST(req: NextRequest) {
       if (!dbItem) {
         return NextResponse.json({ error: `Barang ID ${c.itemId} tidak ditemukan` }, { status: 404 });
       }
+      // Batas unit diperiksa PALING AWAL, sebelum pesan yang menyebut nama
+      // barang — kalau tidak, admin unit lain bisa menebak nama barang unit
+      // lain dari pesan penolakan stok/ketersediaan (Audit #19).
+      const tolak = await periksaAksesUnit(session, dbItem.unit);
+      if (tolak) {
+        return NextResponse.json(
+          { error: tolak.pesan },
+          { status: tolak.status }
+        );
+      }
       if (dbItem.availableQuantity < c.quantity) {
         return NextResponse.json(
           { error: `Stok "${dbItem.name}" tidak mencukupi. Tersisa ${dbItem.availableQuantity} unit.` },
@@ -162,14 +172,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           { error: `Barang "${dbItem.name}" tidak tersedia untuk diserahterimakan.` },
           { status: 400 }
-        );
-      }
-      // Admin hanya boleh menyerahkan barang dari unit yang ditugaskan padanya.
-      const tolak = await periksaAksesUnit(session, dbItem.unit);
-      if (tolak) {
-        return NextResponse.json(
-          { error: `${tolak.pesan} (barang "${dbItem.name}")` },
-          { status: tolak.status }
         );
       }
     }

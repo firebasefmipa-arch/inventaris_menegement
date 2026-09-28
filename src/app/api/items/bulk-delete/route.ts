@@ -38,9 +38,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: pesanBarangDipakai(dipakai) }, { status: 400 });
     }
 
+    // ── F3 (DIDAHULUKAN): batas unit ──
+    // Diperiksa PALING AWAL, sebelum pemeriksaan lain yang menyebut nama barang.
+    // Kalau stok-0 diperiksa lebih dulu, admin unit lain bisa menebak nama
+    // barang unit lain lewat pesan penolakannya (Audit #19).
+    //
+    // Pesannya sengaja TIDAK menyebut nama barang: yang di luar wewenang justru
+    // barang yang tidak boleh ia ketahui. Cukup jumlahnya — ia bisa melihat
+    // barang mana yang ia pilih di layar.
+    const batas = await batasUnit(session);
+    if (batas !== null) {
+      const rows = await db
+        .select({ id: items.id, unit: items.unit })
+        .from(items)
+        .where(inArray(items.id, angka));
+      const luar = rows.filter(
+        (r) => !batas.some((u) => normalizeUnit(u) === normalizeUnit(r.unit))
+      );
+      if (luar.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              `Ada ${luar.length} barang yang bukan unit Anda — seluruh permintaan dibatalkan. Tidak ada yang dihapus.`,
+            bukanUnitAnda: luar.length,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // ── F2: barang stok 0 (habis diserahkan) TERKUNCI ──
     // Unitnya bisa kembali sewaktu-waktu; barangnya harus tetap ada supaya bisa
     // dicari lewat kode saat dikembalikan.
+    // Aman menyebut nama: seluruh barang di sini sudah terbukti unitnya sendiri.
     const adaStokNol = await db
       .select({ id: items.id, name: items.name })
       .from(items)
@@ -50,26 +80,6 @@ export async function POST(request: NextRequest) {
         { error: `Barang stok 0 tidak bisa dihapus (unitnya mungkin kembali): ${adaStokNol.map((i) => i.name).join(", ")}.` },
         { status: 400 }
       );
-    }
-
-    // ── F3: batas unit ──
-    // Admin hanya boleh menghapus barang unit yang dikelolanya. Seluruh
-    // permintaan ditolak kalau ada satu saja di luar wewenangnya.
-    const batas = await batasUnit(session);
-    if (batas !== null) {
-      const rows = await db
-        .select({ id: items.id, name: items.name, unit: items.unit })
-        .from(items)
-        .where(inArray(items.id, angka));
-      const luar = rows.filter(
-        (r) => !batas.some((u) => normalizeUnit(u) === normalizeUnit(r.unit))
-      );
-      if (luar.length > 0) {
-        return NextResponse.json(
-          { error: `Barang pilihan ada yang bukan unit Anda: ${luar.map((r) => r.name).join(", ")}.` },
-          { status: 403 }
-        );
-      }
     }
 
     // Salin identitas barang terakhir ke baris riwayat SEBELUM barang dihapus,

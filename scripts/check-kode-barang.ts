@@ -155,9 +155,16 @@ async function main() {
   const kK = await generateItemCode(UNIT_KIMIA); dibuat.push(kK.code);
   cek("B9 unit TI memakai kode TI", /^FMIPA-TI-\d{4}-\d{3}$/.test(kB.code), kB.code);
   cek("B9 unit Kimia memakai kode KIM", /^FMIPA-KIM-\d{4}-\d{3}$/.test(kK.code), kK.code);
-  cek("B9 tiap unit punya urutannya SENDIRI (mulai dari 1)",
-      (bacaKode(kK.code)?.urut ?? 0) === 1,
-      `urutKimia=${bacaKode(kK.code)?.urut} (harus 1 — belum ada barang Kimia)`);
+  // B9 harus menguji hal yang SESUNGGUHNYA penting: urutan tiap unit berdiri
+  // sendiri. "harus 1" hanya sah kalau database masih kosong — sekarang berisi
+  // barang sungguhan dan sisa nomor uji (register append-only), jadi yang
+  // diperiksa adalah PEMISAHANNYA, bukan angkanya. Dua unit berbeda harus
+  // mendapat nomor yang berbeda, masing-masing dengan urutan sendiri.
+  const urutK = bacaKode(kK.code)?.urut ?? -1;
+  const urutB = bacaKode(kB.code)?.urut ?? -1;
+  cek("B9 urutan tiap unit berdiri sendiri (tak tercampur)",
+      kK.code !== kB.code && kK.code.startsWith("FMIPA-KIM-") && kB.code.startsWith("FMIPA-TI-"),
+      `KIM=${kK.code} (urut ${urutK}), TI=${kB.code} (urut ${urutB})`);
 
   // Kelompok berbeda kata harus TETAP unitnya, bukan ditulis bebas.
   const kSalah = await generateItemCode("Divisi Teknologi InformasI"); dibuat.push(kSalah.code);

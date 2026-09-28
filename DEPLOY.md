@@ -624,6 +624,8 @@ Perubahan schema DB → tambahkan kolom manual (Langkah 2), jangan
 
 | Tanggal | Commit | Isi |
 |---|---|---|
+| 28 Sep 2026 | `d46ce0b` | **Pesan galat tak lagi membocorkan barang unit lain** (Audit #19) — pratinjau impor menyebut `"barang unit lain"` untuk kode milik unit yang tidak dikelola admin itu; pemeriksa unit di `bulk-delete`, `labels`, `transactions`, dan `admin/handovers` dipindah ke **paling awal** supaya pesan seperti `Stok "<nama>" tidak mencukupi` tak bisa dipakai membaca nama barang unit lain lewat menebak ID. **Buku register dipulihkan** setelah skrip uji impor sendiri menghapusnya (kode 038–050 milik 13 barang baru kini tercatat; register 50 baris). Skrip audit dirapikan dari ranjau penghapus data (`TRUNCATE` seluruh tabel di `reset-nomor.sh`/`verif-akhir-hapus.sh`, `DELETE` longgar di `bersih.sh`, 3 skrip ber-ID-keras ke `arsip/`). Penjaga `check-unit`: **97** (+U18/U18b/U18c/U19). |
+| 28 Sep 2026 | `6079eaf` | **Impor dua langkah** (Audit #17) — pratinjau dulu (menghitung, tidak menulis DB), lalu pilih "Impor semua (N)" / "Lewati yang mirip (X)". Baris mirip tak lagi dibuang diam-diam: nomor inventaris sama untuk banyak unit fisik itu wajar. Register `kode_terpakai` dipulihkan setelah `uji-hapus.sh` menghapusnya (Audit #18). |
 | 25 Sep 2026 | `edec98d` | **Batas unit pada halaman yang membaca DB langsung** (Audit #16) — daftar barang, detail barang, dashboard, dan halaman pengembalian disaring `batasUnit`/`periksaAksesUnit`. Sebelumnya API menolak 403, tapi halaman server tidak lewat API sehingga seluruh baris terkirim ke browser. Sekaligus: riwayat transaksi per barang dibaca lewat tabel penghubung `transaction_items` (kolom `transactions.item_id` selalu NULL), dan badge **"Terlambat"** dihitung dari tanggal (`status = 'overdue'` tak pernah ditulis siapa pun). Tanpa perubahan schema. |
 | 25 Sep 2026 | `6393a84` | **Kondisi barang menentukan segalanya** — hanya `condition = "Baik"` yang boleh dipinjam, diserahterimakan, dan terlihat user. Barang Rusak / berkondisi kosong disembunyikan dari user, dikunci di 5 pintu, dan diberi border merah di kartu admin. Kolom baru: `items.catatan_kerusakan varchar(255)` (lihat `scripts/sql/catatan_kerusakan.sql`) — log kerusakan, tidak dihapus saat barang kembali Baik. |
 | 25 Sep 2026 | `5079dbc` | Hapus katalog publik (`/katalog` + `/api/public/borrow`) — jalur itu menerima peminjaman tanpa kolom `unit`. |
@@ -642,12 +644,12 @@ npx tsc --noEmit                      # harus 0 error
 npm run check:pdf                     # tata letak tabel PDF
 npm run check:label                   # label barang
 npm run check:snapshot                # pemakaian snapshot identitas barang
-npx tsx scripts/check-import-fix.ts   # impor Excel (7 pemeriksaan)
+npx tsx scripts/check-import-fix.ts   # impor Excel (20 pemeriksaan)
 npx tsx scripts/check-terlambat.ts    # satu definisi "Terlambat" (7 pemeriksaan)
 npm run check:habis                   # barang habis diserahkan: tetap ada, tersembunyi (15)
 npm run check:kembali                 # pengembalian: "di luar" = keluar−kembali, stok nambah (22)
 npm run check:kode                    # buku register: nomor bekas tak dipakai ulang + bentrok (22)
-npm run check:unit                    # fitur Unit + kondisi barang + batas unit halaman (87)
+npm run check:unit                    # fitur Unit + kondisi barang + batas unit + pesan galat & skrip audit (97)
 npx tsx scripts/check-berkas-tak-terpakai.ts   # berkas unggahan tanpa rujukan
 ```
 

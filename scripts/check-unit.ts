@@ -29,7 +29,7 @@ import {
 } from "@/lib/units";
 import { bolehKelolaUnit } from "@/lib/akses-unit";
 import { pecahPerUnit, type Keranjang } from "@/lib/pecah-unit";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, readdirSync } from "fs";
 
 let lulus = 0;
 let gagal = 0;
@@ -460,6 +460,122 @@ if (existsSync(berkasPembersih)) {
       .filter((s) => /^\s*DELETE\s/im.test(s))
       .every((s) => /\bWHERE\b/i.test(s)),
     "DELETE tanpa WHERE di skrip pembersih menghapus data sungguhan"
+  );
+}
+
+// ── U18: pesan galat tak boleh menyebut nama barang unit lain ───────────────
+// Audit #19: rute memeriksa "bukan unit Anda" PALING AKHIR, sesudah pesan yang
+// memuat nama barang (stok, ketersediaan, stok 0). Admin unit A cukup menebak
+// ID barang unit B lalu membaca namanya dari pesan penolakan.
+//
+// Yang diperiksa: URUTAN KODE, bukan komentar. Pemeriksa unit harus muncul
+// sebelum pesan pertama yang menyebut nama barang.
+for (const berkas of [
+  "src/app/api/items/bulk-delete/route.ts",
+  "src/app/api/items/labels/route.ts",
+  "src/app/api/transactions/route.ts",
+  "src/app/api/admin/handovers/route.ts",
+]) {
+  const isi = readFileSync(berkas, "utf8");
+  const nama = berkas.split("/").slice(-2).join("/");
+
+  const kode = isi
+    .split("\n")
+    .filter((b) => !/^\s*(\/\/|\*|\/\*)/.test(b))
+    .join("\n");
+
+  const posUnit = Math.min(
+    ...["batasUnit(", "periksaAksesUnit("]
+      .map((s) => kode.indexOf(s))
+      .filter((i) => i >= 0)
+  );
+  // Pesan pertama yang menyisipkan NAMA barang.
+  const posNama = Math.min(
+    ...[kode.indexOf("${dbItem.name}"), kode.indexOf("=> i.name)"), kode.indexOf("=> r.name)")]
+      .filter((i) => i >= 0)
+  );
+
+  cek(
+    `U18 ${nama} — pemeriksa unit mendahului pesan bernama barang`,
+    !Number.isFinite(posUnit) || !Number.isFinite(posNama) || posUnit < posNama,
+    `unit@${posUnit} nama@${posNama} — nama barang unit lain bisa terbaca dari pesan galat`
+  );
+}
+
+// Pesan "bukan unit Anda" tidak boleh lagi menyisipkan nama barang.
+for (const berkas of [
+  "src/app/api/items/bulk-delete/route.ts",
+  "src/app/api/items/labels/route.ts",
+]) {
+  const isi = readFileSync(berkas, "utf8");
+  cek(
+    `U18b ${berkas.split("/").slice(-2).join("/")} — pesan 403 tak memuat nama`,
+    !/bukan unit Anda[^`]*\$\{[^}]*\.name/.test(isi),
+    "pesan 403 menyebut nama barang unit lain"
+  );
+}
+
+// Impor: nama barang unit lain harus disamarkan.
+const imporSrc = readFileSync("src/app/api/items/import/route.ts", "utf8");
+cek(
+  "U18c impor menyamarkan nama barang unit lain",
+  imporSrc.includes('"barang unit lain"'),
+  "pratinjau impor bisa dipakai mengintip nama barang unit lain"
+);
+
+// ── U19: skrip audit tak boleh menghancurkan data sungguhan ────────────────
+// Audit #19: penjaga lama (U17) hanya memeriksa SATU berkas (`uji-hapus.sh`),
+// jadi sepuluh ranjau lain lolos — termasuk `uji-impor.ts` yang berulang kali
+// menghapus kode 038–050 milik 13 barang sungguhan, dan `verif-akhir-hapus.sh`
+// yang meng-TRUNCATE seluruh tabel produksi.
+//
+// Sekarang SELURUH skrip audit dipindai.
+const DIR_AUDIT = ["/root/audit-20260924", "/root/audit-20260925"];
+const TABEL_PRODUKSI = [
+  "items", "transactions", "transaction_items", "handovers", "handover_items",
+  "item_returns", "kode_terpakai", "user", "account", "session",
+];
+const CIRI_UJI = /@uji\.local|UJI[ _%-]|'UJI|ZZ[ _%-]|AUDIT19|'uji-|uji-|_tmp/i;
+
+if (existsSync(DIR_AUDIT[0])) {
+  const ranjau: string[] = [];
+  for (const dir of DIR_AUDIT) {
+    for (const nama of readdirSync(dir)) {
+      if (!/\.(sh|ts|py)$/.test(nama)) continue;
+      if (nama === "pindai-ranjau.py" || nama === "cabut-hapus-register.py") continue;
+      const isi = readFileSync(`${dir}/${nama}`, "utf8");
+      const hidup = isi
+        .split("\n")
+        .filter((b) => !/^\s*(\/\/|#|--|\*)/.test(b))
+        .join("\n");
+      for (const tabel of TABEL_PRODUKSI) {
+        // Register tak pernah boleh dihapus, dalam bentuk apa pun.
+        if (tabel === "kode_terpakai") {
+          const m = new RegExp(`(TRUNCATE\\s+TABLE\\s+\`?${tabel}|DELETE\\s+FROM\\s+\`?${tabel})`, "i");
+          if (m.test(hidup)) ranjau.push(`${nama}: menghapus buku register`);
+          continue;
+        }
+        if (new RegExp(`TRUNCATE\\s+TABLE\\s+\`?${tabel}\`?`, "i").test(hidup)) {
+          // TRUNCATE masih boleh ADA, tapi hanya di skrip yang punya penjaga
+          // "berhenti kalau tabel tidak kosong" (mis. reset-nomor.sh).
+          if (!/PENJAGA|DIBATALKAN/.test(isi) || !/COUNT\(\*\)\s+FROM\s+items/i.test(isi)) {
+            ranjau.push(`${nama}: TRUNCATE ${tabel} tanpa penjaga`);
+          }
+          continue;
+        }
+        const m = new RegExp(`DELETE\\s+FROM\\s+\`?${tabel}\`?([^;]*)`, "gi");
+        for (const hit of hidup.matchAll(m)) {
+          const sisa = hit[1] ?? "";
+          if (!/\bWHERE\b/i.test(sisa)) ranjau.push(`${nama}: DELETE ${tabel} tanpa WHERE`);
+          else if (!CIRI_UJI.test(sisa)) ranjau.push(`${nama}: DELETE ${tabel} — WHERE tak menyasar data uji`);
+        }
+      }
+    }
+  }
+  cek(
+    "U19 skrip audit tidak menghancurkan data sungguhan",
+    ranjau.length === 0,
+    ranjau.slice(0, 4).join(" | ")
   );
 }
 

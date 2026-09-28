@@ -153,20 +153,38 @@ async function proses(
     let barisKe = 1; // baris 1 = header
 
     // Kunci identitas barang yang SUDAH ada di database.
+    //
+    // SENGAJA seluruh tabel (tanpa saring unit): kalau dibatasi, admin unit A
+    // bisa membuat barang dobel dengan barang unit B yang memakai nomor
+    // inventaris sama. Yang dijaga bukan SIAPA yang terlihat, melainkan bahwa
+    // nama & nomor barang unit lain TIDAK ikut terkirim — itu tugas `petaAda`
+    // di bawah.
     const existing = await db
       .select({
         name: items.name,
         inventoryNumber: items.inventoryNumber,
         sn: items.sn,
         location: items.location,
+        unit: items.unit,
       })
       .from(items);
+
+    // Unit yang boleh disebutkan namanya ke pemakai ini.
+    const bolehSebutNama = (unitBarang: string | null) => {
+      if (batas === null) return true; // superadmin melihat semua
+      if (!unitBarang) return false; // barang tanpa unit hanya superadmin
+      const u = normalizeUnit(unitBarang);
+      return batas.some((b) => normalizeUnit(b) === u);
+    };
+
     // Peta kunci → nama barang yang SUDAH ada di database. Dipakai untuk
     // mengenali baris kembar sekaligus menjelaskan kembarnya dengan siapa.
+    // Nama unit lain DISAMARKAN — yang perlu diketahui cuma "sudah ada".
     const petaAda = new Map<string, string>();
     for (const e of existing) {
+      const sebut = bolehSebutNama(e.unit) ? e.name : "barang unit lain";
       for (const k of kunciSemua(e.name, e.inventoryNumber, e.sn, e.location)) {
-        if (!petaAda.has(k)) petaAda.set(k, e.name);
+        if (!petaAda.has(k)) petaAda.set(k, sebut);
       }
     }
 

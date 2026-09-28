@@ -16,6 +16,131 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #19 — 28 Sep 2026 — Pesan galat membocorkan barang unit lain · skrip audit masih menyimpan ranjau penghapus data
+
+**Kesempatan:** permintaan pemilik produk — "audit menyeluruh dan simulasi lagi"
+setelah mengganti 9 barang lama dengan **13 barang baru** (impor 28 Sep 2026
+02:53, kode `FMIPA-TI-2026-038 … 050`).
+
+### Temuan A — pratinjau impor bisa dipakai mengintip barang unit lain
+
+Perbaikan Audit #17 menambahkan `mirip[] = {baris, nama, sebab, dengan}`, dan
+`dengan` diisi **nama barang yang sudah ada di database**. Sumbernya `items`
+tanpa saring unit — memang disengaja, supaya admin unit A tidak bisa membuat
+barang dobel dengan barang unit B. Tapi akibatnya:
+
+```
+balasan pratinjau (admin Kimia, mengunggah nomor inventaris milik Farmasi):
+  "dengan": "AUDIT19 RAHASIA FARMASI"     ← nama barang unit lain
+```
+
+Barang yang sama **tidak** muncul di daftar barang biasa (batas unit bekerja),
+jadi celah ini satu-satunya jalan mengintip. Bukti: skrip
+`/root/audit-20260925/uji-bocor-impor.ts`.
+
+**Perbaikan:** `dengan` menyebut nama barang **hanya kalau unitnya termasuk yang
+dikelola admin itu**; kalau bukan, ditulis `"barang unit lain"`. Deteksi kembar
+lintas unit tetap jalan — yang disamarkan cuma namanya.
+
+### Temuan B — kelas bug yang sama, di tempat lain
+
+Setelah menemukan A, pattern serupa disisir: rute yang memeriksa "bukan unit
+Anda" **sesudah** pemeriksaan yang pesannya memuat nama barang. Admin unit A
+cukup menebak ID barang unit B, lalu membaca namanya dari pesan penolakan.
+
+| Rute | Pesan yang membocorkan | Urutan lama |
+|---|---|---|
+| `/api/items/bulk-delete` | `Barang stok 0 … : "<nama>"` | cek unit di F3, pesan di F2 |
+| `/api/items/labels` | `Barang "…" tidak punya unit` | cek unit setelahnya |
+| `/api/transactions` | `Stok "<nama>" tidak mencukupi` | cek unit setelahnya |
+| `/api/admin/handovers` | `Barang "<nama>" tidak tersedia` | cek unit setelahnya |
+
+**Perbaikan:** pemeriksa unit dipindah ke **paling awal** di antara pemeriksaan
+barang; pesan "bukan unit Anda" tak lagi menyebut nama (hanya jumlah).
+
+**Bukti:** `/root/audit-20260925/uji-bocor-unit.ts` — **14/14 lulus**, termasuk
+sisi sebaliknya (pesan untuk barang **unit sendiri** tetap menyebut namanya,
+supaya perbaikannya tidak merusak kegunaan). Ditambah
+`/root/audit-20260925/uji-tebak-id.ts` — 14 titik masuk GET disisir
+(id, pencarian nama/nomor inventaris/SN, `?unit=`, `?canBorrow=`, stats,
+returns, transactions, handovers) → tak ada yang bocor.
+
+### Temuan C — skrip audit sendiri masih menghapus buku register
+
+`kode_terpakai` kehilangan **seluruh** baris lama: isi tinggal 29 baris, semuanya
+kode ≥ 051, sedangkan 13 barang baru bernomor **038–050** → tidak tercatat.
+Penyebabnya skrip uji impor yang **ditulis di sesi ini**:
+
+```ts
+// /root/audit-20260925/uji-impor.ts:82
+"DELETE FROM items WHERE name LIKE 'UJI-IMPOR%'; DELETE FROM kode_terpakai WHERE kode LIKE 'FMIPA-%';"
+```
+
+Setiap kali dijalankan, buku register dihapus **seluruhnya** (semua kode berawalan
+`FMIPA-`, bukan cuma milik data uji). Insiden yang sama terulang, kali ini karena
+skrip yang dibuat setelah Audit #18.
+
+**Perbaikan:** `cabut-hapus-register.py` mencabut penghapus register dari
+**12 berkas** sekaligus; `/root/audit-20260925/pulih-register.sql` dijalankan →
+register **50 baris**, `0` kode barang yang tak tercatat, nomor berikutnya TI = 072.
+
+### Temuan D — dua skrip audit mengosongkan SELURUH tabel produksi
+
+Pemindai baru (`/root/audit-20260925/pindai-ranjau.py`) menemukan:
+
+- `reset-nomor.sh` — `TRUNCATE` pada `items`, `transactions`, `handovers`,
+  `transaction_items`, `handover_items`, `item_returns`
+- `verif-akhir-hapus.sh` — `TRUNCATE` yang sama, ditulis dalam satu blok
+- `bersih.sh` — `DELETE FROM transactions WHERE id NOT IN (SELECT DISTINCT
+  transaction_id FROM transaction_items)` → membuang **semua** transaksi tanpa
+  baris pivot, tanpa mengenal data uji
+- `uji-alur-penuh2.sh`, `bersih-uji66.sh`, `bersih-uji-akhir.sh` — DELETE dengan
+  **ID keras** (66, 9, 67–70). ID itu sekarang milik data lain.
+
+**Perbaikan:** `reset-nomor.sh` diberi penjaga "berhenti kalau tabel tidak
+kosong" (diuji: menolak walau ada 19 barang); blok `TRUNCATE` di
+`verif-akhir-hapus.sh` dinonaktifkan; `bersih.sh` ditulis ulang dengan syarat
+harfiah data uji; tiga skrip ber-ID-keras dipindah ke `arsip/`.
+
+### Penjaga baru (bukan lagi per berkas)
+
+`check-unit` U17 lama hanya memeriksa **satu** berkas, jadi 10 ranjau lolos.
+**U19** memindai **seluruh** skrip di `/root/audit-20260924` +
+`/root/audit-20260925`:
+
+- `TRUNCATE` tabel produksi → curiga, kecuali skripnya punya penjaga "tabel kosong"
+- `DELETE FROM` tabel produksi tanpa `WHERE` → curiga
+- `DELETE` dengan `WHERE` yang tak menyasar ciri data uji (`@uji.local`, `UJI%`,
+  `ZZ%`, `AUDIT19`, `uji-`) → curiga
+- `kode_terpakai` tak boleh dihapus dalam bentuk apa pun
+
+**Dibuktikan menangkap:** disuntik `DELETE FROM items WHERE id=9` → GAGAL;
+disuntik yang lebih halus `DELETE FROM transactions WHERE created_at < "2026-01-01"`
+→ GAGAL; dipulihkan → 97 lulus.
+
+**Sisa yang dibersihkan:** 6 barang `UJI KOREKSI` + 6 transaksi + 5 akun
+`@uji.local`. Setelah bersih: **13 barang sungguhan, 0 transaksi, 0 serah terima,
+50 baris register, 14 akun** (9 asli + 5 uji yang dihapus setelah verifikasi).
+
+**Pelajarannya:** (1) perbaikan yang menambah informasi baru wajib diuji ulang
+terhadap batas unit — menambah kolom laporan = menambah jalan bocor;
+(2) memindai **satu** berkas bukan penjagaan; kelas bug harus dijaga pemindai
+yang menyapu seluruh ruang lingkupnya.
+
+**Perbaikan (commit penutup: `d46ce0b`):**
+- `src/app/api/items/import/route.ts` — `dengan` disamarkan lintas unit
+- `src/app/api/items/bulk-delete/route.ts` — cek unit didahulukan; pesan 403 tanpa nama
+- `src/app/api/items/labels/route.ts` — sama
+- `src/app/api/transactions/route.ts` — cek unit didahulukan
+- `src/app/api/admin/handovers/route.ts` — sama
+- `scripts/check-unit.ts` — **U18** (urutan pemeriksa unit), **U18b** (pesan 403
+  tanpa nama), **U18c** (impor menyamarkan) → **97 penjaga**
+- `MEMORY.md` aturan 25 diperluas (berlaku untuk **semua** berkas audit, bukan
+  satu skrip) + aturan pesan galat
+- Skrip audit dirapikan; tiga dipindah ke `arsip/`
+
+---
+
 ## Audit #18 — 28 Sep 2026 — Skrip pembersih audit menghapus buku register nomor barang
 
 **Kesempatan:** saat membersihkan sisa data uji setelah Audit #17, terlihat

@@ -43,6 +43,9 @@ export async function POST(req: NextRequest) {
     // ── Batas unit ──
     // Admin hanya boleh melabeli barang unit yang dikelolanya. Diperiksa di
     // server, bukan cuma disembunyikan di layar.
+    //
+    // Pesannya sengaja TIDAK menyebut nama barang: yang di luar wewenang justru
+    // barang yang tidak boleh ia ketahui (Audit #19).
     const batas = await batasUnit(session);
     if (batas !== null) {
       const luar = rows.filter(
@@ -50,7 +53,10 @@ export async function POST(req: NextRequest) {
       );
       if (luar.length > 0) {
         return NextResponse.json(
-          { error: `Barang pilihan ada yang bukan unit Anda: ${luar.map((r) => r.name).join(", ")}.` },
+          {
+            error: `Ada ${luar.length} barang pilihan yang bukan unit Anda — batalkan pilihan itu lalu coba lagi.`,
+            bukanUnitAnda: luar.length,
+          },
           { status: 403 }
         );
       }
