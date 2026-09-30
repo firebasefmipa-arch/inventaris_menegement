@@ -1120,6 +1120,17 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - **Hati-hati saat mengubah penjaga berangka:** `check-kode-barang` B9 dulu menuntut urutan Kimia = 1 ("belum ada barang Kimia"). Itu hanya sah di database kosong — begitu ada barang uji Kimia, penjaganya gagal padahal aplikasinya benar. Uji **cabangnya** (unit berbeda → urutan terpisah), bukan angkanya.
     - **Cara menguji:** pasang barang unit B sebagai superadmin, lalu sebagai admin unit A panggil rutenya dengan **ID barang itu** dan cari namanya di balasan. Jangan lupa menguji **sisi sebaliknya** — pesan untuk barang unit sendiri harus tetap menyebut namanya, supaya perbaikan tidak merusak kegunaan.
 
+27. **JANGAN BERI ANIMASI PADA PEMBUNGKUS YANG BERISI ELEMEN `fixed`** (30 Sep 2026).
+    - **Apa yang terjadi:** bar "Lanjut" di halaman pinjam sudah `position:fixed` tapi tetap ikut menggulung bersama daftar barang — user harus menggulung jauh ke bawah untuk menemukan tombolnya. Sebabnya pembungkus langkah memakai `animate-slide-in`, dan animasi dengan `both` meninggalkan `transform` pada elemen. **Elemen ber-`transform` menjadi acuan posisi bagi `fixed` di dalamnya**, jadi bar-nya menempel ke pembungkus itu, bukan ke jendela.
+    - **Aturan:** elemen `fixed` harus berada di luar pembungkus ber-animasi. Pindahkan animasinya ke elemen lain (mis. daftar barangnya) — asal di dalam elemen itu tidak ada `fixed`. Ingat juga `filter`, `perspective`, dan `backdrop-filter` punya efek sama seperti `transform`.
+    - **Penjaganya:** diukur di browser sungguhan (`getBoundingClientRect` pada 3 posisi gulung), bukan dari kelas CSS. Di localhost, `bottom` bar harus tetap ~`innerHeight` di gulungan 0%, 50%, dan 100%.
+
+28. **MODE GELAP: `globals.css` MENIMPA PER KELAS LITERAL — jangan menganggapnya menangkap segalanya** (30 Sep 2026).
+    - **Dua jebakan yang sudah nyata terjadi:**
+      - **Varian ber-opasitas tidak ikut.** `bg-white/90`, `bg-gray-50/50`, dst. punya token CSS **berbeda** dari `bg-white`/`bg-gray-50`, jadi aturan `.dark .bg-white` TIDAK kena. Akibatnya kartu melayang "Lanjut" tetap putih menyala di mode gelap. Setiap varian `/NN` yang dipakai harus didaftarkan sendiri.
+      - **Menimpa `box-shadow` utuh menghapus lapis cincin.** Tailwind menyusun `box-shadow` dari beberapa lapis (`--tw-inset-shadow`, `--tw-inset-ring-shadow`, `--tw-ring-offset-shadow`, `--tw-ring-shadow`, `--tw-shadow`). Aturan `.dark .shadow-lg { box-shadow: … !important }` menimpa **semuanya**, sehingga cincin penanda barang terpilih (`ring-2 ring-indigo-600`) hilang — kartu yang dipilih tampak tak bertanda. **Ganti `--tw-shadow`-nya saja**, jangan `box-shadow` utuh.
+    - **Cara memastikan (jangan menebak):** di localhost, set `localStorage.theme='dark'` **lalu muat ulang halaman** (ThemeProvider membaca localStorage saat mount — menambah kelas `dark` secara manual hilang begitu halaman dimuat ulang), lalu baca `getComputedStyle(el).boxShadow` dan `backgroundColor`. Cincin tergambar bila polanya memuat `0px 0px 0px 2px`.
+
 ---
 
 ## 11. Fitur yang Belum Diimplementasi (Backlog)
