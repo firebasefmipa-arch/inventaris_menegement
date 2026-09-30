@@ -16,6 +16,104 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #20 — 30 Sep 2026 — Dokumen tidak membuktikan siapa yang menyetujui (dan dua bug yang ditemukan sambil mengerjakannya)
+
+**Kesempatan:** pertanyaan pemilik produk — *"apakah sudah ada system ketika admin
+menyetujui transaksi otomatis di dokumentnya tergenerate ttd dan nama admin yang
+menyetujui?"*
+
+Jawabannya **belum ada**, dan sebabnya lebih dalam daripada sekadar "belum
+dibuat".
+
+### Temuan A — kolom "Yang menyerahkan" SELAMANYA kosong
+
+`src/app/api/transactions/[id]/approve/route.ts` (6.219 byte) **tidak menyentuh
+PDF sama sekali**. Yang dikerjakan hanya dua hal: mengubah status
+`pending_approval` → `active`, dan memindahkan berkas PDF dari `pending/` ke
+`signed_forms/`. Sama di `src/app/api/admin/handovers/[id]/route.ts` untuk serah
+terima.
+
+Akibatnya dokumen resmi yang dipegang peminjam hanya bertanda tangan **peminjam**:
+
+```
+Yang menyerahkan,          Peminjam,
+  (garis kosong            <TTD peminjam>
+   tanpa nama)             Sabil Hudek
+   Divisi Informasi         ────────────
+   Teknologi
+```
+
+Tabel `transactions` & `handovers` juga tidak punya kolom pencatat penyetuju
+(`approved_by` / `approved_at` tidak ada di `src/db/schema.ts`).
+
+**Dampak:** tidak ada bukti sah siapa yang menyetujui sebuah peminjaman. Kalau
+suatu saat dipersoalkan, dokumennya tidak bisa menjawab.
+
+**Perbaikan (`97db540`):**
+- Kolom baru di `transactions` & `handovers`: `approved_by`, `approved_at`,
+  `approved_signature_url` — migrasi manual `scripts/sql/persetujuan_admin.sql`.
+  `approved_signature_url` menyimpan **salinan** TTD saat menyetujui, supaya
+  dokumen lama tidak berubah kalau admin mengganti TTD profilnya.
+- Admin **wajib** sudah unggah TTD untuk boleh menyetujui. Diperiksa di server
+  (`src/lib/penyetuju.ts` → `tentukanPenyetuju()`) → 403 dengan pesan yang
+  mengarahkan ke halaman Profil. Tombol di halaman admin juga dimatikan
+  (`cekBolehSetujui` → prop `bolehSetujui`). **Dua lapis** — menyembunyikan tombol
+  saja tidak cukup, URL bisa diketik langsung.
+- Dokumen **dicetak ulang** saat disetujui (`src/lib/dokumen-persetujuan.ts`),
+  memuat gambar TTD + nama admin bergaris bawah; tanggal memakai tanggal
+  persetujuan.
+- Superadmin diloloskan tanpa TTD, tetapi namanya **tidak** dicetak — dokumen
+  hanya menulis "Disetujui oleh Admin" (keputusan pemilik produk).
+- Pengajuan yang disetujui **sebelum** fitur ini (`approved_at` NULL) dibiarkan:
+  dokumennya tetap tercetak tanpa nama, tidak menebak siapa pun. Tombol "Generate
+  Ulang" yang sudah ada memakai data penyetuju tersimpan.
+
+### Temuan B — catatan penyetuju bisa tertinggal saat stok kurang
+
+Di rute serah terima, kalau stok ternyata tidak mencukupi, status dikembalikan
+`completed` → `pending_approval` supaya admin bisa memeriksa ulang. Tetapi
+`approved_by` / `approved_at` / `approved_signature_url` yang sudah ditulis
+**ikut tertinggal**.
+
+**Dampak:** baris yang statusnya "menunggu persetujuan" membawa catatan "sudah
+disetujui oleh <admin>". Dokumen yang dicetak ulang berikutnya akan mengaku sudah
+disetujui padahal belum.
+
+**Perbaikan:** saat status dikembalikan, ketiga kolom itu ikut dibersihkan.
+
+### Temuan C — dokumen baru terhapus sendiri kalau namanya sama dengan lama
+
+Rute persetujuan menulis dokumen baru lalu menghapus berkas lama
+(`deleteUploadByUrl`). Nama berkas ditentukan dari nama peminjam + tanggal + id.
+Kalau kebetulan nama berkas baru **sama persis** dengan lama, yang terhapus
+adalah berkas yang baru saja ditulisnya.
+
+**Perbaikan:** `deleteUploadIfDifferent(urlBaru, urlLama)` di
+`src/lib/delete-upload.ts` — bandingkan path dulu, hapus hanya bila beda.
+
+### Bukti
+
+| Uji | Hasil |
+|---|---|
+| `scripts/check-persetujuan.ts` (`npm run check:setuju`) | 9/9 — membaca ISI PDF |
+| `/root/audit-20260925/uji-persetujuan.ts` (HTTP, peminjaman) | 19/19 |
+| `/root/audit-20260925/uji-setuju-serah.ts` (HTTP, serah terima) | 18/18 |
+| `/root/audit-20260925/uji-tombol-setujui.mjs` (Chromium) | 5/5 |
+| Regresi lama (`uji-regresi.sh`) | 120/120 |
+
+Uji tombol di Chromium membuktikan: tombol benar-benar `disabled`, keterangannya
+ada, dan **klik paksa tidak mengubah status** — dua lapis pertahanannya bekerja.
+
+### Pelajaran
+
+**Isi PDF termampatkan (Flate).** Pemeriksaan
+`buf.toString("latin1").includes("<nama>")` **selalu gagal** pada dokumen yang
+benar, karena teksnya tidak tersimpan apa adanya. Dua pemeriksaan sempat "gagal
+palsu" karena ini. Harus `inflateSync()` dulu, baru regex `Tj`. Sudah dicatat di
+`MEMORY.md`.
+
+---
+
 ## Audit #19 — 28 Sep 2026 — Pesan galat membocorkan barang unit lain · skrip audit masih menyimpan ranjau penghapus data
 
 **Kesempatan:** permintaan pemilik produk — "audit menyeluruh dan simulasi lagi"

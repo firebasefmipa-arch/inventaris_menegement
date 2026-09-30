@@ -99,6 +99,7 @@ sehingga aman diulang di database produksi):
 | `check-barang-habis.ts` | barang habis diserahkan: tetap ada, tersembunyi, terkunci (`npm run check:habis`) |
 | `check-barang-kembali.ts` | pengembalian: "di luar" = keluar−kembali, stok nambah (`npm run check:kembali`) |
 | `check-kode-barang.ts` | buku register: nomor bekas TIDAK dipakai ulang (`npm run check:kode`) |
+| `check-persetujuan.ts` | isi dokumen saat disetujui: TTD+nama admin, superadmin tanpa nama, dokumen lama kosong (`npm run check:setuju`) |
 | `check-berkas-tak-terpakai.ts` | berkas unggahan tanpa rujukan DB (`--hapus` = buang) |
 
 ---
@@ -291,6 +292,9 @@ npm run check:label            # Harus "SEMUA LOLOS" setelah mengubah label
 # Uji snapshot identitas barang di riwayat/dokumen
 npm run check:snapshot         # Harus "SEMUA LOLOS"
 
+# Uji dokumen persetujuan (TTD + nama admin tercetak?)
+npm run check:setuju          # Harus "9/9 lulus" setelah mengubah blok TTD
+
 # Uji lain (belum ber-alias npm run):
 npx tsx scripts/check-import-fix.ts            # impor Excel
 npx tsx scripts/check-terlambat.ts             # definisi "Terlambat"
@@ -393,6 +397,21 @@ UPDATE handover_items ri JOIN items i ON i.id = ri.item_id
   SET ri.item_name = i.name, ri.item_code = i.item_code,
       ri.item_inventory_number = i.inventory_number
   WHERE ri.item_name IS NULL;
+
+-- 11. Pencatat penyetuju (30 September 2026)
+--     Dokumen mencetak TTD + nama admin yang menyetujui. Pengajuan lama
+--     dibiarkan NULL → dokumennya tetap tercetak tanpa nama.
+--     approved_signature_url = SALINAN TTD saat menyetujui (bukan rujukan ke
+--     profil), supaya dokumen lama tidak berubah bila TTD profil diganti.
+ALTER TABLE transactions
+  ADD COLUMN approved_by            VARCHAR(255) NULL,
+  ADD COLUMN approved_at            TIMESTAMP    NULL,
+  ADD COLUMN approved_signature_url VARCHAR(500) NULL;
+
+ALTER TABLE handovers
+  ADD COLUMN approved_by            VARCHAR(255) NULL,
+  ADD COLUMN approved_at            TIMESTAMP    NULL,
+  ADD COLUMN approved_signature_url VARCHAR(500) NULL;
 ```
 
 > Catatan tanggal 8: JANGAN pakai `drizzle-kit push` di produksi — pernah
@@ -849,6 +868,60 @@ Pemakai: impor barang, TTD user, unggah transaksi, unggah serah terima.
   peminjaman (`deleteUploadByUrl`). Lewat `DELETE` manual, berkasnya
   **ketinggalan** di disk tanpa rujukan. Pembersihnya:
   `npx tsx scripts/check-berkas-tak-terpakai.ts` (`--hapus` untuk membuang).
+- `deleteUploadIfDifferent(urlBaru, urlLama)` WAJIB dipakai saat mencetak ulang
+  dokumen. Kalau nama berkas baru kebetulan SAMA dengan lama, `deleteUploadByUrl`
+  menghapus berkas yang baru saja ditulis — dokumennya hilang. Sigap: bandingkan
+  path dulu, hapus hanya bila beda.
+
+### Persetujuan admin — TTD & nama di dokumen
+
+Dulu kolom "Yang menyerahkan" di dokumen SELAMANYA kosong: rute persetujuan
+hanya **memindahkan** berkas PDF (`pending/` → `signed_forms/` / `handovers/`),
+tidak pernah mencetaknya ulang. Jadi tidak ada bukti siapa yang menyetujui.
+
+Sekarang berjalan begini:
+
+| Keadaan baris pengajuan | Isi kolom TTD di dokumen |
+|---|---|
+| `approved_at` NULL (pengajuan lama) | garis kosong — perilaku lama, TIDAK menebak |
+| `approved_at` ada, `approved_by` NULL | tulisan "Disetujui oleh Admin" (superadmin) |
+| `approved_at` ada, `approved_by` ada | gambar TTD + nama admin bergaris bawah |
+
+- Kolom baru di `transactions` **dan** `handovers`: `approved_by`,
+  `approved_at`, `approved_signature_url` (migrasi manual:
+  `scripts/sql/persetujuan_admin.sql`; **jangan** `drizzle-kit push`).
+  `approved_signature_url` menyimpan SALINAN TTD saat menyetujui — supaya
+  dokumen lama tidak berubah kalau admin mengganti TTD profilnya.
+- **Admin WAJIB sudah unggah TTD untuk boleh menyetujui.** Diperiksa di SERVER
+  (`tentukanPenyetuju()` di `src/lib/penyetuju.ts`) → 403 + pesan mengarahkan ke
+  halaman Profil. Tombol di halaman admin juga dimatikan
+  (`cekBolehSetujui()` → prop `bolehSetujui`). Dua lapis: sembunyikan tombol
+  saja tidak cukup, URL bisa diketik langsung.
+- **Superadmin DILOLOSKAN tanpa TTD, tapi namanya TIDAK dicetak** — keputusan
+  user. Dokumennya hanya menulis "Disetujui oleh Admin".
+- Pemeriksa TTD dijalankan **SEBELUM** status dikunci, supaya penolakan tidak
+  meninggalkan jejak separuh jadi.
+- Kedua jalan cetak ulang harus memakai **satu** berkas:
+  `src/lib/dokumen-persetujuan.ts` (`buatDokumenPinjam` / `buatDokumenSerahTerima`).
+  Dipakai rute persetujuan **dan** rute `regenerate-doc`. Kalau logikanya
+  disalin, dokumen "buat ulang" akan berbeda dari aslinya.
+- Tanggal baris "Yogyakarta, ..." memakai **tanggal persetujuan** bila sudah
+  disetujui (`tanggalTandaTangan`), bukan tanggal pengajuan.
+- Rute `regenerate-doc` memakai data penyetuju TERSIMPAN (`penyetujuDari(baris)`),
+  jadi pengajuan lama tetap tercetak tanpa nama.
+- Koreksi barang (`correct/route.ts`) **tidak** perlu data penyetuju: rute itu
+  menolak bila status bukan `pending_approval`, jadi penyetuju tak pernah ada.
+- Kalau stok kurang saat menyetujui serah terima, status dikembalikan ke
+  `pending_approval` → **catatan penyetuju IKUT dibersihkan** (kalau tertinggal,
+  dokumen berikutnya mengaku sudah disetujui padahal belum).
+- Penjaga: `npm run check:setuju` (`scripts/check-persetujuan.ts`, 9 pemeriksaan)
+  — membaca ISI DOKUMEN, bukan kode. Uji alur:
+  `/root/audit-20260925/uji-persetujuan.ts` (peminjaman, 19) ·
+  `uji-setuju-serah.ts` (serah terima, 18) ·
+  `uji-tombol-setujui.mjs` (tombol di Chromium, 5).
+- **Isi PDF termampatkan (Flate)** — teksnya TIDAK bisa dicari dengan
+  `buf.toString().includes()`. Uji harus `inflateSync` dulu, baru regex `Tj`.
+
 
 ### Ketersediaan Barang (`can_borrow` / `can_handover`)
 
