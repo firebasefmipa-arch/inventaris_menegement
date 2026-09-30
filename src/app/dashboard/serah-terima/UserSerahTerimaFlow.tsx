@@ -219,16 +219,6 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
         </div>
       )}
 
-      {/* Banner info */}
-      {step !== "success" && (
-        <div className="flex items-start gap-3 bg-teal-50 border border-teal-200 rounded-xl p-3.5">
-          <ShieldCheck className="w-4 h-4 text-teal-600 mt-0.5 shrink-0" />
-          <p className="text-xs text-teal-800">
-            <strong>Serah Terima Permanen</strong> — Barang yang diserahkan akan dikeluarkan dari inventaris secara permanen. Pastikan kebutuhan sudah benar sebelum mengajukan.
-          </p>
-        </div>
-      )}
-
       {/* ─── STEP 1: PILIH BARANG ─── */}
       {step === "item" && (
         <div className="space-y-4">
