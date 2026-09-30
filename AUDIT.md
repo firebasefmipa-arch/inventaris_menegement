@@ -165,6 +165,38 @@ kotak QR menembus apa pun atau label Admin tidak sebaris dengan nama
 penandatangan. **Sebelumnya penjaga ini buta** terhadap tata letak — itulah
 sebab cacat ini bisa lolos meski 33 pemeriksaan "lulus".
 
+### Temuan lanjutan Audit #22 — tanda tangan peminjam mengambang (dilaporkan pemilik produk)
+
+**Kesempatan:** setelah blok tanda tangan digeser, pemilik produk meminta
+*"sesuaikan juga tandatangan peminjamnya"*.
+
+**Temuan:** tanda tangan peminjam digambar relatif ke TULISAN PERAN
+(`"Peminjam,"`, `y - 60`), bukan relatif ke NAMA peminjam. Sebelum blok digeser
+keduanya kebetulan hampir sejajar, jadi tidak terlihat; begitu blok turun 103pt,
+TTD-nya tertinggal. Terukur di dokumen produksi
+(`signed_forms/PB_Uji_User_30092026_454.pdf`):
+
+```
+TTD admin      bawah = 210,9   nama "Uji Admin TI" = 198,89  ->  celah 12pt
+TTD peminjam   bawah = 241,9   nama "Uji User"     = 198,89  ->  celah 43pt
+```
+
+**Perbaikan:** TTD peminjam digambar dari NAMA, bukan dari tulisan peran —
+`y - JARAK_TTD + 12`, sama seperti TTD admin (`y + 12`) dan TTD penerima di
+serah terima (`signNameY + 12`). Aturannya sekarang seragam: **bawah gambar
+tanda tangan = baris nama + 12pt**. Tidak ada yang berubah pada serah terima —
+di sana TTD penerima sudah benar.
+
+**Bukti:** `check:verifikasi` naik **41 → 47** (celah TTD harus 8..16pt di KEDUA
+dokumen). Penjaganya **diuji balik**: dengan TTD dikembalikan ke `y - 60`,
+uji langsung menangkap *"celah=43.0pt (harus 8..16)"* — jadi bukan lulus palsu.
+Dokumen produksi hasil alur sungguhan:
+
+| Dokumen | bawah TTD | baris nama | celah |
+|---|---|---|---|
+| Peminjaman #446 | 210,89 | 198,89 | **12,00pt** |
+| Serah terima #191 | 150,89 | 138,89 | **12,00pt** |
+
 ---
 
 ## Audit #20 — 30 Sep 2026 — Dokumen tidak membuktikan siapa yang menyetujui (dan dua bug yang ditemukan sambil mengerjakannya)

@@ -168,6 +168,9 @@ async function drawFooter(
   const col2X = MARGIN_LEFT + 190;
   const col3X = PAGE_W - MARGIN_RIGHT - 130;
   const colW = 130;
+  // Jarak dari tulisan "Peminjam," turun ke nama penandatangan. Kotak QR di
+  // kolom tengah butuh ruang ini (lihat blok superadmin di bawah).
+  const JARAK_TTD = 103;
   let y = startY;
 
   const centerText = (text: string, colStart: number, width: number, f: PDFFont, size: number, yPos: number) => {
@@ -198,16 +201,23 @@ async function drawFooter(
         sigImg = await pdfDoc.embedJpg(sigBytes);
       }
       const sigDims = sigImg.scaleToFit(colW - 10, 55);
+      // TTD peminjam duduk 12pt di atas NAMANYA — sama seperti TTD admin di
+      // kolom tengah (lihat `y: y + 12` di bawah). Dulu digambar `y - 60`,
+      // yaitu relatif ke tulisan "Peminjam," yang posisinya lama. Begitu blok
+      // tanda tangan turun 103pt, TTD ini tertinggal dan mengambang 31pt di
+      // atas namanya (terukur di dokumen produksi: celahnya 43pt, sedangkan
+      // TTD admin 12pt).
+      const ttdPeminjamY = y - JARAK_TTD + 12;
       page.drawImage(sigImg, {
         x: col3X + (colW - sigDims.width) / 2,
-        y: y - 60,
+        y: ttdPeminjamY,
         width: sigDims.width,
         height: sigDims.height,
       });
     } catch { /* Jika gagal load TTD, biarkan kosong */ }
   }
 
-  y -= 103;
+  y -= JARAK_TTD;
 
   // Kolom kiri & tengah: garis DI ATAS tulisan (seperti sebelumnya) — blok digeser ke
   // bawah sehingga garisnya (y-2) sejajar dgn underline nama peminjam di kolom kanan.

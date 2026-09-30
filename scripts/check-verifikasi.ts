@@ -333,6 +333,60 @@ async function main() {
   cek("[serah] label Admin sejajar dengan nama penerima", yLabelAdmin === yNamaPenerima,
       `admin=${yLabelAdmin} penerima=${yNamaPenerima}`);
 
+  // ── 11. TATA LETAK: tanda tangan tidak boleh mengambang jauh dari namanya ──
+  // TTD peminjam dulu digambar relatif ke tulisan "Peminjam," (posisi lama).
+  // Begitu blok tanda tangan turun 103pt, TTD-nya tertinggal dan mengambang
+  // 43pt di atas namanya, sedangkan milik admin cuma 12pt. Angka di sourcecode
+  // tidak bisa menangkap ini — yang diperiksa jarak NYATA di PDF.
+  const TTD = "/uploads/signatures/sig_uji_user.png";
+  const berTtdPinjam = await generateBorrowingPDF({
+    borrowerName: "Peminjam Contoh", borrowerId: "12345678", department: "Contoh",
+    phone: "0800000000", purpose: "Contoh", notes: "",
+    borrowDate: new Date("2026-09-30T08:00:00Z"),
+    returnDate: new Date("2026-10-07T08:00:00Z"),
+    items: [{ name: "Barang Contoh", quantity: 1, itemCode: "KODE-1" }],
+    signatureUrl: TTD,
+    penyetuju: { nama: null, tandaTangan: null },
+    kodeVerifikasi: kodeQr,
+    unit: "Divisi Teknologi Informasi",
+    tanggalTandaTangan: new Date("2026-09-30T08:00:00Z"),
+  });
+  const layPinjam = tataLetak(berTtdPinjam);
+  const ttdPinjam = layPinjam.gambar.filter((z) => z.x > 350);
+  // Nama muncul DUA kali (tabel keterangan + blok tanda tangan) — ambil yang
+  // TERDEKAT ke tanda tangan, bukan `find` pertama.
+  const yNamaPinjamTtd = ttdPinjam.length ? cariDekat(layPinjam.teks, "Peminjam Contoh", ttdPinjam[0].y)?.y : undefined;
+  const celahPinjam = ttdPinjam.length && yNamaPinjamTtd !== undefined ? ttdPinjam[0].y - yNamaPinjamTtd : NaN;
+  cek("[pinjam] TTD peminjam tercetak di dokumen", ttdPinjam.length === 1,
+      `jumlah gambar kolom kanan=${ttdPinjam.length}`);
+  cek("[pinjam] TTD peminjam 12pt di atas namanya (tidak mengambang)",
+      celahPinjam >= 8 && celahPinjam <= 16,
+      `celah=${Number.isNaN(celahPinjam) ? "?" : celahPinjam.toFixed(1)}pt (harus 8..16)`);
+  cek("[pinjam] TTD tidak menutupi namanya", !(celahPinjam < 0), `celah=${celahPinjam}`);
+
+  const berTtdSerah = await generateHandoverPDF({
+    receiverName: "Penerima Contoh", receiverNim: "12345678",
+    unitName: "S1 Kimia", department: "Contoh", phone: "0800000000",
+    location: "Ruang Contoh", purpose: "Contoh", notes: "",
+    handoverDate: new Date("2026-09-30T08:00:00Z"),
+    signatureUrl: TTD,
+    penyetuju: { nama: null, tandaTangan: null },
+    kodeVerifikasi: kodeQr,
+    unit: "Divisi Teknologi Informasi",
+    tanggalTandaTangan: new Date("2026-09-30T08:00:00Z"),
+    items: [{ name: "Barang Contoh", quantity: 1, itemCode: "KODE-1" }],
+  });
+  const laySerah = tataLetak(berTtdSerah);
+  const ttdSerah = laySerah.gambar.filter((z) => z.x > 350);
+  const yNamaPenerimaTtd = ttdSerah.length ? cariDekat(laySerah.teks, "Penerima Contoh", ttdSerah[0].y)?.y : undefined;
+  const celahSerah = ttdSerah.length && yNamaPenerimaTtd !== undefined ? ttdSerah[0].y - yNamaPenerimaTtd : NaN;
+  cek("[serah] TTD penerima tercetak di dokumen", ttdSerah.length === 1,
+      `jumlah gambar kolom kanan=${ttdSerah.length}`);
+  cek("[serah] TTD penerima 12pt di atas namanya (tidak mengambang)",
+      celahSerah >= 8 && celahSerah <= 16,
+      `celah=${Number.isNaN(celahSerah) ? "?" : celahSerah.toFixed(1)}pt (harus 8..16)`);
+  cek("[serah] TTD tidak menutupi namanya", !(celahSerah < 0), `celah=${celahSerah}`);
+
   console.log(`\n  lulus=${lulus} gagal=${gagal.length}`);
   if (gagal.length) {
     gagal.forEach((g) => console.log("   - " + g));
