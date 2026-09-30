@@ -14,6 +14,12 @@ import {
 import { generateBorrowingPDF } from "../src/lib/pdf-generator";
 import { generateHandoverPDF } from "../src/lib/handover-pdf-generator";
 import { inflateSync } from "node:zlib";
+import { config } from "dotenv";
+
+// WAJIB: tanpa ini UPLOAD_DIR kosong, berkas tanda tangan gagal dimuat, dan
+// `catch` di generator menelannya diam-diam — penjaga lalu bilang "lulus"
+// padahal tanda tangan TIDAK tergambar sama sekali.
+config({ path: ".env.local" });
 
 let lulus = 0;
 const gagal: string[] = [];
@@ -333,11 +339,13 @@ async function main() {
   cek("[serah] label Admin sejajar dengan nama penerima", yLabelAdmin === yNamaPenerima,
       `admin=${yLabelAdmin} penerima=${yNamaPenerima}`);
 
-  // ── 11. TATA LETAK: tanda tangan tidak boleh mengambang jauh dari namanya ──
-  // TTD peminjam dulu digambar relatif ke tulisan "Peminjam," (posisi lama).
-  // Begitu blok tanda tangan turun 103pt, TTD-nya tertinggal dan mengambang
-  // 43pt di atas namanya, sedangkan milik admin cuma 12pt. Angka di sourcecode
-  // tidak bisa menangkap ini — yang diperiksa jarak NYATA di PDF.
+  // ── 11. TATA LETAK: tanda tangan harus DUDUK DI TENGAH ruangnya ──
+  // Dua cacat berurutan di sini: (a) TTD dulu digambar relatif ke tulisan
+  // "Peminjam," (posisi lama) sehingga mengambang 43pt di atas namanya; (b)
+  // setelah diperbaiki jadi 12pt, ia malah MENEMPEL nama sementara di atasnya
+  // masih ada 36pt kosong — kelihatan tidak di tengah. Sekarang: jarak dari
+  // tulisan peran (atas) dan ke nama (bawah) sama-sama {TTD_NAIK}pt.
+  // Angka di sourcecode tidak bisa menangkap ini — yang diperiksa jarak NYATA.
   const TTD = "/uploads/signatures/sig_uji_user.png";
   const berTtdPinjam = await generateBorrowingPDF({
     borrowerName: "Peminjam Contoh", borrowerId: "12345678", department: "Contoh",
@@ -359,10 +367,28 @@ async function main() {
   const celahPinjam = ttdPinjam.length && yNamaPinjamTtd !== undefined ? ttdPinjam[0].y - yNamaPinjamTtd : NaN;
   cek("[pinjam] TTD peminjam tercetak di dokumen", ttdPinjam.length === 1,
       `jumlah gambar kolom kanan=${ttdPinjam.length}`);
-  cek("[pinjam] TTD peminjam 12pt di atas namanya (tidak mengambang)",
-      celahPinjam >= 8 && celahPinjam <= 16,
-      `celah=${Number.isNaN(celahPinjam) ? "?" : celahPinjam.toFixed(1)}pt (harus 8..16)`);
-  cek("[pinjam] TTD tidak menutupi namanya", !(celahPinjam < 0), `celah=${celahPinjam}`);
+  cek("[pinjam] gambar TTD benar-benar berisi (berkas TTD terbaca)",
+      ttdPinjam.length === 1 && ttdPinjam[0].w > 5 && ttdPinjam[0].h > 5,
+      ttdPinjam.length ? `ukuran=${ttdPinjam[0].w.toFixed(1)}x${ttdPinjam[0].h.toFixed(1)}` : "tidak ada gambar");
+  // TTD duduk di TENGAH: jarak ke atas (tulisan "Yang menyerahkan,"/"Peminjam,")
+  // harus sama dengan jarak ke bawah (nama penandatangan).
+  // Kedua sisi diukur dari KOTAK HURUF, bukan garis dasar. Angkanya dikalibrasi
+  // dari dokumen hasil cetak (PyMuPDF): kotak huruf Helvetica membentang
+  // ~1,07×ukuran di ATAS garis dasar dan ~0,30×ukuran di bawahnya.
+  const peranPin = layPinjam.teks.find((b) => b.isi === "Peminjam,");
+  const namaPin = yNamaPinjamTtd !== undefined
+    ? layPinjam.teks.filter((b) => b.isi === "Peminjam Contoh" && b.y === yNamaPinjamTtd)[0] : undefined;
+  const atasPinjam = ttdPinjam.length && peranPin !== undefined
+    ? (peranPin.y - 0.30 * peranPin.ukuran) - (ttdPinjam[0].y + ttdPinjam[0].h) : NaN;
+  cek("[pinjam] TTD peminjam tidak mengambang jauh dari namanya",
+      celahPinjam >= 20 && celahPinjam <= 28,
+      `jarak ke nama=${Number.isNaN(celahPinjam) ? "?" : celahPinjam.toFixed(1)}pt (harus 20..28)`);
+  cek("[pinjam] TTD peminjam tidak menutupi namanya", !(celahPinjam < 0), `celah=${celahPinjam}`);
+  const bawahTintaPinjam = ttdPinjam.length && namaPin !== undefined
+    ? ttdPinjam[0].y - (namaPin.y + 1.07 * namaPin.ukuran) : NaN;
+  cek("[pinjam] TTD peminjam DUDUK DI TENGAH ruangnya (tepi tinta atas = bawah)",
+      !Number.isNaN(atasPinjam) && !Number.isNaN(bawahTintaPinjam) && Math.abs(atasPinjam - bawahTintaPinjam) <= 4,
+      `atas=${Number.isNaN(atasPinjam) ? "?" : atasPinjam.toFixed(1)}pt bawah=${Number.isNaN(bawahTintaPinjam) ? "?" : bawahTintaPinjam.toFixed(1)}pt (selisih harus <=4)`);
 
   const berTtdSerah = await generateHandoverPDF({
     receiverName: "Penerima Contoh", receiverNim: "12345678",
@@ -382,10 +408,23 @@ async function main() {
   const celahSerah = ttdSerah.length && yNamaPenerimaTtd !== undefined ? ttdSerah[0].y - yNamaPenerimaTtd : NaN;
   cek("[serah] TTD penerima tercetak di dokumen", ttdSerah.length === 1,
       `jumlah gambar kolom kanan=${ttdSerah.length}`);
-  cek("[serah] TTD penerima 12pt di atas namanya (tidak mengambang)",
-      celahSerah >= 8 && celahSerah <= 16,
-      `celah=${Number.isNaN(celahSerah) ? "?" : celahSerah.toFixed(1)}pt (harus 8..16)`);
-  cek("[serah] TTD tidak menutupi namanya", !(celahSerah < 0), `celah=${celahSerah}`);
+  cek("[serah] gambar TTD benar-benar berisi (berkas TTD terbaca)",
+      ttdSerah.length === 1 && ttdSerah[0].w > 5 && ttdSerah[0].h > 5,
+      ttdSerah.length ? `ukuran=${ttdSerah[0].w.toFixed(1)}x${ttdSerah[0].h.toFixed(1)}` : "tidak ada gambar");
+  const peranSerah = laySerah.teks.find((b) => b.isi === "Yang menerima,");
+  const namaSerah = yNamaPenerimaTtd !== undefined
+    ? laySerah.teks.filter((b) => b.isi === "Penerima Contoh" && b.y === yNamaPenerimaTtd)[0] : undefined;
+  const atasSerah = ttdSerah.length && peranSerah !== undefined
+    ? (peranSerah.y - 0.30 * peranSerah.ukuran) - (ttdSerah[0].y + ttdSerah[0].h) : NaN;
+  cek("[serah] TTD penerima tidak mengambang jauh dari namanya",
+      celahSerah >= 20 && celahSerah <= 28,
+      `jarak ke nama=${Number.isNaN(celahSerah) ? "?" : celahSerah.toFixed(1)}pt (harus 20..28)`);
+  cek("[serah] TTD penerima tidak menutupi namanya", !(celahSerah < 0), `celah=${celahSerah}`);
+  const bawahTintaSerah = ttdSerah.length && namaSerah !== undefined
+    ? ttdSerah[0].y - (namaSerah.y + 1.07 * namaSerah.ukuran) : NaN;
+  cek("[serah] TTD penerima DUDUK DI TENGAH ruangnya (tepi tinta atas = bawah)",
+      !Number.isNaN(atasSerah) && !Number.isNaN(bawahTintaSerah) && Math.abs(atasSerah - bawahTintaSerah) <= 4,
+      `atas=${Number.isNaN(atasSerah) ? "?" : atasSerah.toFixed(1)}pt bawah=${Number.isNaN(bawahTintaSerah) ? "?" : bawahTintaSerah.toFixed(1)}pt (selisih harus <=4)`);
 
   console.log(`\n  lulus=${lulus} gagal=${gagal.length}`);
   if (gagal.length) {

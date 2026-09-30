@@ -187,15 +187,51 @@ serah terima (`signNameY + 12`). Aturannya sekarang seragam: **bawah gambar
 tanda tangan = baris nama + 12pt**. Tidak ada yang berubah pada serah terima —
 di sana TTD penerima sudah benar.
 
-**Bukti:** `check:verifikasi` naik **41 → 47** (celah TTD harus 8..16pt di KEDUA
+**Bukti:** `check:verifikasi` naik **41 → 47** (celah TTD harus 20..28pt di KEDUA
 dokumen). Penjaganya **diuji balik**: dengan TTD dikembalikan ke `y - 60`,
-uji langsung menangkap *"celah=43.0pt (harus 8..16)"* — jadi bukan lulus palsu.
+uji langsung menangkap *"celah=43.0pt"* — jadi bukan lulus palsu.
 Dokumen produksi hasil alur sungguhan:
 
 | Dokumen | bawah TTD | baris nama | celah |
 |---|---|---|---|
-| Peminjaman #446 | 210,89 | 198,89 | **12,00pt** |
-| Serah terima #191 | 150,89 | 138,89 | **12,00pt** |
+| Peminjaman #446 | 210,89 | 198,89 | **28,00pt** |
+| Serah terima #191 | 150,89 | 138,89 | **28,00pt** |
+
+### Temuan lanjutan Audit #22 — tanda tangan belum di TENGAH ruangnya
+
+**Kesempatan:** pemilik produk melihat hasil cetak lagi dan bertanya
+*"di tengah kan"*.
+
+**Temuan:** dua hal terpisah, dan yang pertama membuat yang kedua tak terlihat.
+
+1. **Penjaga LULUS PALSU.** `scripts/check-verifikasi.ts` tidak memuat
+   `.env.local`, jadi `UPLOAD_DIR` kosong → berkas tanda tangan gagal dibaca →
+   `catch {}` di generator menelannya diam-diam → PDF terbit **tanpa tanda
+   tangan sama sekali**, tapi penjaganya melaporkan "lulus". Cacat yang sama
+   juga membuat pengukuran tata letak memakai gambar yang salah (kotak QR
+   dianggap TTD). Ini kelas bug paling berbahaya: **alat ukur yang berbohong**.
+2. **TTD menempel ke namanya.** Setelah (a) diperbaiki, terukur: jarak ke
+   tulisan peran di atas **33pt**, jarak ke nama di bawah **12pt**. Kelihatan
+   tidak di tengah.
+
+**Perbaikan:** `TTD_NAIK` dicari dengan MENGUKUR dokumen hasil cetak berulang,
+bukan dihitung di atas kertas — setiap 1pt kenaikan menggeser kedua sisi 1pt
+ke arah berlawanan:
+
+| TTD_NAIK | jarak atas | jarak bawah | selisih |
+|---|---|---|---|
+| 26 | 19,0pt | 15,3pt | 3,7pt |
+| 27 | 22,0pt | 19,3pt | 2,7pt |
+| **28** | **21,0pt** | **20,3pt** | **0,7pt** |
+
+Ukuran yang dipakai adalah **tepi tinta**, bukan garis dasar huruf — itulah
+yang dilihat mata. Di produksi: **atas 17,00pt vs bawah 17,30pt** (selisih
+0,3pt), sekaligus ikut sejajar dengan bawah kotak QR di kolom tengah (227,9).
+
+**Bukti:** `check:verifikasi` **47 → 51**. Penjaganya diuji balik dari dua arah
+(12pt dan 34pt) dan menangkap keduanya. Ditambah penjaga baru: berkas tanda
+tangan **wajib benar-benar terbaca** (gambar >5pt), sehingga `catch` yang
+menelan kegagalan tidak bisa lolos lagi.
 
 ---
 

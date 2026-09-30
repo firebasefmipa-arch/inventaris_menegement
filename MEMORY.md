@@ -976,14 +976,20 @@ elektronik bersertifikat** (itu butuh sertifikat BSSN berbayar) — sifatnya han
   Angka-angka ini **dijaga otomatis** oleh `check:verifikasi`: ia membaca posisi
   nyata tulisan & gambar di PDF lalu memastikan kotak QR tidak menembus apa pun
   dan label Admin sebaris dengan nama penandatangan.
-- **Tanda tangan PENANDATANGAN (peminjam / penerima) harus digambar relatif ke
-  NAMANYA, bukan ke tulisan peran.** Di dokumen peminjaman dulu `y - 60`, yaitu
-  relatif ke tulisan "Peminjam," yang posisinya lama; begitu blok turun 103pt,
-  TTD-nya tertinggal dan **mengambang 43pt** di atas nama peminjam (terukur di
-  dokumen produksi; milik admin cuma 12pt). Sekarang `y - JARAK_TTD + 12`,
-  sama seperti TTD admin (`y + 12`) dan TTD penerima di serah terima
-  (`signNameY + 12`). Rumusnya: **bawah gambar = nama + 12pt**.
-  `check:verifikasi` mengunci ini (celah harus 8..16pt) untuk KEDUA dokumen.
+- **Tanda tangan PENANDATANGAN (peminjam / penerima) digambar relatif ke
+  NAMANYA, bukan ke tulisan peran, dan duduk di TENGAH ruangnya.**
+  Dua cacat berurutan: (a) dulu `y - 60` — relatif ke tulisan "Peminjam," yang
+  posisinya lama — sehingga mengambang 43pt di atas nama; (b) setelah diperbaiki
+  jadi 12pt, TTD malah MENEMPEL nama sementara di atasnya masih ada 33pt kosong,
+  jadi kelihatan tidak di tengah.
+  Sekarang `y - JARAK_TTD + TTD_NAIK` dengan **`TTD_NAIK = 28`** di kedua
+  berkas; rumusnya: bawah gambar = baris nama + TTD_NAIK.
+  **Angka 28 diukur, bukan dihitung di atas kertas** (26 → 19,0/15,3pt;
+  27 → 22,0/19,3pt; **28 → 21,0/20,3pt**). Hasil di produksi: tepi tinta
+  **atas 17,00pt vs bawah 17,30pt** — selisih 0,3pt, dan ikut sejajar dengan
+  bawah kotak QR di kolom tengah (227,9).
+  `check:verifikasi` mengunci ini untuk KEDUA dokumen (celah 20..28pt **dan**
+  selisih tepi tinta atas/bawah ≤4pt).
 - **Membaca posisi gambar di PDF (untuk uji):** pdf-lib menulis TERJEMAHAN dan
   SKALA sebagai **dua operator `cm` terpisah** (`1 0 0 1 x y cm` lalu
   `62 0 0 62 0 0 cm`), operator berlaku **sebelum** matriks terkumpul, dan nama

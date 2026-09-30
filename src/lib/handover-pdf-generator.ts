@@ -337,6 +337,12 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
 
   y -= 103;
 
+  // Jarak dari NAMA penandatangan naik ke bawah gambar tanda tangannya.
+  // 27pt = tepat di tengah ruang antara tulisan peran dan nama; angkanya
+  // diukur dari dokumen hasil cetak (lihat komentar lengkap TTD_NAIK di
+  // pdf-generator.ts).
+  const TTD_NAIK = 28;
+
   // Tanda tangan (TTD) DIGAMBAR DI ATAS NAMA.
   // Tata letak dari bawah ke atas: nama (dengan garis bawah) → TTD di atasnya.
   const signNameY = y;                    // posisi baseline nama penerima
@@ -370,7 +376,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
         const sigDims = sigImg.scaleToFit(colW - 10, 55);
         currentPage.drawImage(sigImg, {
           x: col1X + (colW - sigDims.width) / 2,
-          y: signNameY + 12,
+          y: signNameY + TTD_NAIK,
           width: sigDims.width,
           height: sigDims.height,
         });
@@ -417,9 +423,10 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
         sigImg = await pdfDoc.embedJpg(sigBytes);
       }
       const sigDims = sigImg.scaleToFit(colW - 10, 55);
-      // Bottom TTD tepat di atas nama (nama + 12) — TTD tidak menutupi nama.
+      // Bottom TTD 24pt di atas nama — tidak menutupi nama, dan sama dengan
+      // jarak ke tulisan "Yang menerima," di atasnya.
       // pdf-lib drawImage: y = posisi BOTTOM image (image naik setinggi height dari y).
-      const sigBottomY = signNameY + 12;
+      const sigBottomY = signNameY + TTD_NAIK;
       currentPage.drawImage(sigImg, {
         x: col2X + (colW - sigDims.width) / 2,
         y: sigBottomY,

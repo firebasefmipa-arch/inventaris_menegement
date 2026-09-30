@@ -171,6 +171,17 @@ async function drawFooter(
   // Jarak dari tulisan "Peminjam," turun ke nama penandatangan. Kotak QR di
   // kolom tengah butuh ruang ini (lihat blok superadmin di bawah).
   const JARAK_TTD = 103;
+  // Jarak dari GARIS DASAR nama penandatangan naik ke bawah gambar tanda tangan.
+  //
+  // 12pt membuat TTD menempel ke namanya sementara di atasnya masih ada 33pt
+  // kosong — kelihatan tidak di tengah.
+  //
+  // Angka 27 diukur dari dokumen hasil cetak, bukan dihitung di atas kertas:
+  // dengan 26 jaraknya 19,0pt (atas) vs 15,3pt (bawah); setiap 1pt kenaikan
+  // menggeser keduanya 1pt ke arah berlawanan, jadi titik seimbangnya 27.
+  // Hasil ukur di 27: atas 18,9pt vs bawah 19,5pt (selisih 0,6pt).
+  // Kebetulan ikut sejajar dengan bawah kotak QR di kolom tengah (227,9).
+  const TTD_NAIK = 28;
   let y = startY;
 
   const centerText = (text: string, colStart: number, width: number, f: PDFFont, size: number, yPos: number) => {
@@ -201,13 +212,11 @@ async function drawFooter(
         sigImg = await pdfDoc.embedJpg(sigBytes);
       }
       const sigDims = sigImg.scaleToFit(colW - 10, 55);
-      // TTD peminjam duduk 12pt di atas NAMANYA — sama seperti TTD admin di
-      // kolom tengah (lihat `y: y + 12` di bawah). Dulu digambar `y - 60`,
-      // yaitu relatif ke tulisan "Peminjam," yang posisinya lama. Begitu blok
-      // tanda tangan turun 103pt, TTD ini tertinggal dan mengambang 31pt di
-      // atas namanya (terukur di dokumen produksi: celahnya 43pt, sedangkan
-      // TTD admin 12pt).
-      const ttdPeminjamY = y - JARAK_TTD + 12;
+      // TTD peminjam diukur dari NAMANYA (baris `y - JARAK_TTD`), bukan dari
+      // tulisan "Peminjam," — dulu `y - 60` sehingga tertinggal dan mengambang
+      // 43pt di atas nama. Sama seperti TTD admin di kolom tengah
+      // (lihat `y: y + TTD_NAIK` di bawah).
+      const ttdPeminjamY = y - JARAK_TTD + TTD_NAIK;
       page.drawImage(sigImg, {
         x: col3X + (colW - sigDims.width) / 2,
         y: ttdPeminjamY,
@@ -242,7 +251,7 @@ async function drawFooter(
         const sigDims = sigImg.scaleToFit(colW - 10, 55);
         page.drawImage(sigImg, {
           x: col2X + (colW - sigDims.width) / 2,
-          y: y + 12,
+          y: y + TTD_NAIK,
           width: sigDims.width,
           height: sigDims.height,
         });
