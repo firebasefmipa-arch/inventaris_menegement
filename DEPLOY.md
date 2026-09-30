@@ -139,6 +139,16 @@ mysql -u inventaris -p modern_lending < database/schema_only.sql
 > ALTER TABLE items
 >   ADD COLUMN is_labelable TINYINT(1) NOT NULL DEFAULT 1 AFTER can_handover;
 >
+> -- Kode pemeriksaan dokumen / kotak QR (30 September 2026) — dokumen lama
+> -- dibiarkan NULL; kodenya terbit saat disetujui atau saat dicetak ulang.
+> -- Lihat `scripts/sql/kode_verifikasi.sql` (jalankan berkasnya langsung).
+> ALTER TABLE transactions
+>   ADD COLUMN verification_code VARCHAR(32) NULL,
+>   ADD UNIQUE INDEX transactions_verification_code_unique (verification_code);
+> ALTER TABLE handovers
+>   ADD COLUMN verification_code VARCHAR(32) NULL,
+>   ADD UNIQUE INDEX handovers_verification_code_unique (verification_code);
+>
 > -- Kode barang otomatis (11 September 2026) — barang lama dibiarkan NULL
 > ALTER TABLE items
 >   ADD COLUMN item_code VARCHAR(255) NULL AFTER sn,
@@ -148,6 +158,10 @@ mysql -u inventaris -p modern_lending < database/schema_only.sql
 > UPDATE items SET location = 'Divisi Teknologi Informasi'
 > WHERE UPPER(location) IN ('DIVISI TI', 'DIVISI IT', 'DIVISI TEKNOLOGI INFORMASI');
 > ```
+>
+> Kolom penyetuju (30 September 2026, `scripts/sql/persetujuan_admin.sql`):
+> `transactions` & `handovers` → `approved_by`, `approved_at`,
+> `approved_signature_url`.
 
 ---
 
@@ -624,7 +638,8 @@ Perubahan schema DB → tambahkan kolom manual (Langkah 2), jangan
 
 | Tanggal | Commit | Isi |
 |---|---|---|
-| 30 Sep 2026 | `97db540` | **Persetujuan admin: TTD + nama tercetak di dokumen** — kolom "Yang menyerahkan" dulu SELAMANYA kosong karena rute persetujuan hanya memindahkan berkas PDF, tidak pernah mencetaknya ulang. Sekarang admin WAJIB sudah unggah TTD untuk boleh menyetujui (server 403 + tombol di halaman mati); dokumen dicetak ulang saat disetujui memuat TTD + nama admin, tanggal memakai tanggal persetujuan. Superadmin boleh tanpa TTD tapi namanya TIDAK dicetak (dokumen menulis "Disetujui oleh Admin"); pengajuan lama tetap tanpa nama. Berlaku di peminjaman **dan** serah terima. Kolom baru: `approved_by` / `approved_at` / `approved_signature_url` di `transactions` & `handovers` (lihat `scripts/sql/persetujuan_admin.sql`). Penjaga baru `check:setuju` (**9**). Uji: peminjaman 19/19 · serah terima 18/18 · tombol di Chromium 5/5 · regresi 120/120. DB akhir: 84 barang · 0 transaksi · 9 akun. |
+| 30 Sep 2026 | (Audit #22) | **Kotak QR pemeriksaan dokumen** — kolom penyetuju superadmin yang dulu menulis "Disetujui oleh Admin" diganti **"Admin <unit barang>" + kotak QR**. QR menaut ke halaman publik `/logistik/cek/<kode>` (tanpa login) yang menampilkan ringkasan aman: jenis dokumen, nomor, tanggal, unit, status, penyetuju — **tanpa** nama/NIM/HP peminjam dan tanpa daftar barang. Kode **16 karakter acak** (bukan nomor urut, supaya tak bisa ditebak untuk mengintip dokumen orang lain), terbit saat menyetujui atau saat mencetak ulang dokumen lama. Dua keadaan khusus: kode salah → "Kode tidak ditemukan"; pengajuan dibatalkan → "⚠ DOKUMEN SUDAH DIBATALKAN". **Kolom baru wajib di-ALTER dulu** (Langkah 2: `verification_code` di `transactions` & `handovers`) — kalau belum, pm2 akan error `Unknown column 'verification_code'`. |
+| 30 Sep 2026 | `97db540` | **Persetujuan admin: TTD + nama tercetak di dokumen** — kolom "Yang menyerahkan" dulu SELAMANYA kosong karena rute persetujuan hanya memindahkan berkas PDF, tidak pernah mencetaknya ulang. Sekarang admin WAJIB sudah unggah TTD untuk boleh menyetujui (server 403 + tombol di halaman mati); dokumen dicetak ulang saat disetujui memuat TTD + nama admin, tanggal memakai tanggal persetujuan. Superadmin boleh tanpa TTD tapi namanya TIDAK dicetak (dokumen menulis "Disetujui oleh Admin" — sejak Audit #22 diganti "Admin &lt;unit&gt;" + kotak QR); pengajuan lama tetap tanpa nama. Berlaku di peminjaman **dan** serah terima. Kolom baru: `approved_by` / `approved_at` / `approved_signature_url` di `transactions` & `handovers` (lihat `scripts/sql/persetujuan_admin.sql`). Penjaga baru `check:setuju` (**9**). Uji: peminjaman 19/19 · serah terima 18/18 · tombol di Chromium 5/5 · regresi 120/120. DB akhir: 84 barang · 0 transaksi · 9 akun. |
 | 30 Sep 2026 | `a4d98fe` | Hapus banner "Serah Terima Permanen" di halaman user. Sebelumnya `557448e` (memperbaiki `transform` sisa animasi yang merusak elemen `fixed`, dan remap mode gelap per kelas), `ca7a228` (spesifikasi kosong cukup `-`). |
 | 28 Sep 2026 | `69db70d` | **Pesan galat tak lagi membocorkan barang unit lain** (Audit #19) — pratinjau impor menyebut `"barang unit lain"` untuk kode milik unit yang tidak dikelola admin itu; pemeriksa unit di `bulk-delete`, `labels`, `transactions`, dan `admin/handovers` dipindah ke **paling awal** supaya pesan seperti `Stok "<nama>" tidak mencukupi` tak bisa dipakai membaca nama barang unit lain lewat menebak ID. **Buku register dipulihkan** setelah skrip uji impor sendiri menghapusnya (kode 038–050 milik 13 barang baru kini tercatat). Skrip audit dirapikan dari ranjau penghapus data (`TRUNCATE` seluruh tabel di `reset-nomor.sh`/`verif-akhir-hapus.sh`, `DELETE` longgar di `bersih.sh`, 3 skrip ber-ID-keras ke `arsip/`). `check-kode-barang` B9 tak lagi mengandaikan database kosong. Penjaga `check-unit`: **97** (+U18/U18b/U18c/U19). DB akhir: 13 barang · 0 transaksi · register 119 · 9 akun. |
 | 28 Sep 2026 | `6079eaf` | **Impor dua langkah** (Audit #17) — pratinjau dulu (menghitung, tidak menulis DB), lalu pilih "Impor semua (N)" / "Lewati yang mirip (X)". Baris mirip tak lagi dibuang diam-diam: nomor inventaris sama untuk banyak unit fisik itu wajar. Register `kode_terpakai` dipulihkan setelah `uji-hapus.sh` menghapusnya (Audit #18). |
@@ -747,6 +762,19 @@ tombol "Unduh" butuh `attachment`.
 Kalau PDF yang muncul isinya lama (bukan hasil build terbaru), itu cache
 browser/nginx: hard refresh (Ctrl+Shift+R). Blok nginx `/uploads/` sudah
 `no-cache` (`expires -1`, `no-store`) untuk mencegah ini.
+
+### Halaman pemeriksaan `/logistik/cek/<kode>` balas 404 atau "Kode tidak ditemukan"
+
+Bukan nginx. Bedakan dua hal:
+- **404 dari Next** = halaman belum ada di build. Pastikan `npm run build` sudah
+  dijalankan **dan** `pm2 restart pinjam-app --update-env` (build tidak
+  dipasang sendiri). Cek foldernya: `ls .next/server/app/cek`.
+- **Halaman terbuka tapi bilang "Kode tidak ditemukan"** = halaman jalan normal,
+  cuma kodenya tidak ada di DB. Kode terbit saat pengajuan **disetujui**; dokumen
+  lama dapat kode saat tombol **Buat Ulang Dokumen** ditekan.
+
+Kalau `Unknown column 'verification_code'` di `pm2 logs pinjam-app`, kolomnya
+belum di-ALTER — lihat Langkah 2.
 
 ### Memori Proyek
 - Detail sourcecode & konvensi kode (struktur folder, schema, role, alur):

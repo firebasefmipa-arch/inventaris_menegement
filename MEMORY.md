@@ -884,7 +884,7 @@ Sekarang berjalan begini:
 | Keadaan baris pengajuan | Isi kolom TTD di dokumen |
 |---|---|
 | `approved_at` NULL (pengajuan lama) | garis kosong — perilaku lama, TIDAK menebak |
-| `approved_at` ada, `approved_by` NULL | tulisan "Disetujui oleh Admin" (superadmin) |
+| `approved_at` ada, `approved_by` NULL | tulisan **"Admin <unit barang>"** + **kotak QR** (superadmin) |
 | `approved_at` ada, `approved_by` ada | gambar TTD + nama admin bergaris bawah |
 
 - Kolom baru di `transactions` **dan** `handovers`: `approved_by`,
@@ -898,7 +898,9 @@ Sekarang berjalan begini:
   (`cekBolehSetujui()` → prop `bolehSetujui`). Dua lapis: sembunyikan tombol
   saja tidak cukup, URL bisa diketik langsung.
 - **Superadmin DILOLOSKAN tanpa TTD, tapi namanya TIDAK dicetak** — keputusan
-  user. Dokumennya hanya menulis "Disetujui oleh Admin".
+  user. Dokumennya menulis **"Admin <unit barang>"** + kotak QR (dulu:
+  "Disetujui oleh Admin"). Tujuannya supaya tidak terlihat bedanya dengan admin
+  biasa — orang luar tidak perlu tahu bahwa yang menyetujui superadmin.
 - Pemeriksa TTD dijalankan **SEBELUM** status dikunci, supaya penolakan tidak
   meninggalkan jejak separuh jadi.
 - Kedua jalan cetak ulang harus memakai **satu** berkas:
@@ -914,13 +916,60 @@ Sekarang berjalan begini:
 - Kalau stok kurang saat menyetujui serah terima, status dikembalikan ke
   `pending_approval` → **catatan penyetuju IKUT dibersihkan** (kalau tertinggal,
   dokumen berikutnya mengaku sudah disetujui padahal belum).
-- Penjaga: `npm run check:setuju` (`scripts/check-persetujuan.ts`, 9 pemeriksaan)
+- Penjaga: `npm run check:setuju` (`scripts/check-persetujuan.ts`, 13 pemeriksaan)
   — membaca ISI DOKUMEN, bukan kode. Uji alur:
   `/root/audit-20260925/uji-persetujuan.ts` (peminjaman, 19) ·
-  `uji-setuju-serah.ts` (serah terima, 18) ·
-  `uji-tombol-setujui.mjs` (tombol di Chromium, 5).
+  `uji-setuju-serah.ts` (serah terima, 18) · `uji-tombol-setujui.mjs` (tombol di Chromium, 5).
 - **Isi PDF termampatkan (Flate)** — teksnya TIDAK bisa dicari dengan
   `buf.toString().includes()`. Uji harus `inflateSync` dulu, baru regex `Tj`.
+
+
+### Kotak QR pemeriksaan dokumen (`/cek/<kode>`)
+
+Dokumen resmi bisa **dipalsukan**: tidak ada cara cepat bagi orang luar (atasan,
+auditor) membuktikan bahwa selembar fotokopi benar terbit dari sistem ini. Solusinya
+kotak QR di dokumen → halaman pemeriksaan publik. **QR di sini BUKAN tanda tangan
+elektronik bersertifikat** (itu butuh sertifikat BSSN berbayar) — sifatnya hanya
+**alat pemeriksaan cepat**, sama seperti pola QR pada SKCK/ijazah/sertifikat.
+
+- Kode: **16 karakter acak** (`kodeBaru()` di `src/lib/dokumen-verifikasi.ts`),
+  BUKAN nomor urut — nomor urut bisa ditebak untuk mengintip dokumen orang lain.
+- Kolom baru (sudah di-ALTER): `transactions.verification_code` +
+  `handovers.verification_code`, **berindeks unik**. Migrasi manual:
+  `scripts/sql/kode_verifikasi.sql`. Diterbitkan saat **menyetujui**
+  (`approve/route.ts`, `admin/handovers/[id]/route.ts`) dan saat
+  **mencetak ulang dokumen lama** (`regenerate-doc/route.ts` di dua rute).
+  Kalau stok kurang saat menyetujui serah terima → `verification_code` **ikut
+  dibersihkan** (pola sama seperti catatan penyetuju).
+- Alamat: `<BASE_PATH>/cek/<kode>` — `tempelQr()` membangun URL dari
+  `BASE_PATH`, jadi **jangan** menulis alamat absolut di dalam PDF.
+- **Halaman publik TANPA LOGIN** (`src/app/cek/[kode]/page.tsx`) — sengaja,
+  pemeriksanya pihak luar. Isinya **hanya**: jenis dokumen, nomor, tanggal, unit,
+  status, "Admin <unit>", tanggal persetujuan.
+  **TIDAK memuat**: nama/NIM/HP peminjam, daftar barang, tautan dokumen lain.
+  (Permintaan pemilik produk: *"barang jangan tampil"*.)
+- Tiga keadaan halaman: kode salah → "Kode tidak ditemukan"; pengajuan
+  dibatalkan/ditolak → "⚠ DOKUMEN SUDAH DIBATALKAN" (supaya kertas lama tak bisa
+  dipakai mengaku masih sah); normal → ringkasan.
+- Halaman **selalu menampilkan keadaan TERKINI**, bukan keadaan saat kertas dicetak.
+- Penyamaran penyetuju superadmin: `labelPenyetuju()` →
+  **"Admin <unit>"**, dipakai di **DUA tempat** (dokumen tercetak + halaman
+  pemeriksaan) supaya tidak ada bedanya dengan admin biasa. Untuk serah terima,
+  unitnya = unit **PEMILIK** barang (`hv.unit`), bukan unit penerima.
+- `tempelQr()` menggambar kotak QR; pdf-lib mengubah PNG menjadi **gambar mentah
+  Flate** (`/Width /Height /ColorSpace /BitsPerComponent /Filter`), **bukan PNG
+  utuh**; gambar ~300×300, **3 byte/piksel**. `ukuranMuat()` mengecilkan tulisan
+  label kalau terlalu panjang.
+- Pustaka: `qrcode@1.5.4` + `@types/qrcode` (dev). PDF tetap `pdf-lib`.
+- Penjaga: `npm run check:verifikasi` (`scripts/check-verifikasi.ts`, 33
+  pemeriksaan) — membaca ISI DOKUMEN & halaman. Uji alur:
+  `/root/audit-20260930/kerja/uji-kode-qr.ts` (20) ·
+  `uji-qr-http.ts` (41) · halaman di Chromium `uji-halaman-qr.mjs` (26) ·
+  QR di-decode pembaca sungguhan `/root/audit-20260930/qrcek/pindai-qr.ts`.
+  Verifikasi pasca-deploy: `/root/audit-20260930/qrcek/verif-produksi.ts`.
+- **Uji wajib memeriksa hal yang SUNGGUH DILIHAT orang** (isi PDF/halaman),
+  bukan meniru query — peniru query bisa "aman" padahal tampilannya bocor.
+
 
 
 ### Ketersediaan Barang (`can_borrow` / `can_handover`)

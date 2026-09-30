@@ -101,6 +101,8 @@ export async function buatDokumenPinjam(txId: number, penyetuju: Penyetuju): Pro
     items: pdfItems,
     signatureUrl,
     penyetuju,
+    kodeVerifikasi: tx.verificationCode,
+    unit: tx.unit,
     tanggalTandaTangan: penyetuju ? new Date() : undefined,
   });
 
@@ -158,6 +160,10 @@ export async function buatDokumenSerahTerima(hvId: number, penyetuju: Penyetuju)
     handoverDate: hv.handoverDate,
     signatureUrl,
     penyetuju,
+    kodeVerifikasi: hv.verificationCode,
+    // Label penyetuju memakai unit PEMILIK barang (kolom `unit`), bukan
+    // `unitName` yang di dokumen berarti unit si penerima barang.
+    unit: hv.unit,
     tanggalTandaTangan: penyetuju ? new Date() : undefined,
     items: barisItem.map((r) => ({
       name: namaBarang(r.snapName, r.itemName),

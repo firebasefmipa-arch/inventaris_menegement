@@ -8,6 +8,7 @@ import { uploadPathFromUrl } from "@/lib/upload-dir";
 import { periksaAksesUnit } from "@/lib/akses-unit";
 import { buatDokumenPinjam } from "@/lib/dokumen-persetujuan";
 import { penyetujuDari } from "@/lib/penyetuju";
+import { kodeBaru } from "@/lib/dokumen-verifikasi";
 
 export async function POST(
   request: NextRequest,
@@ -50,6 +51,13 @@ export async function POST(
     // Untuk pengajuan lama (sebelum fitur persetujuan) kolomnya kosong, jadi
     // dokumen tetap tercetak tanpa nama — persis seperti aslinya dulu.
     // Lihat src/lib/dokumen-persetujuan.ts.
+    //
+    // Pengajuan lama yang SUDAH disetujui belum punya kode pemeriksaan (kolomnya
+    // baru ada belakangan). Karena dokumennya toh sedang dicetak ulang, sekalian
+    // diberi kode — supaya ikut bisa diperiksa lewat kotak QR.
+    if (tx.approvedAt && !tx.verificationCode) {
+      await db.update(transactions).set({ verificationCode: kodeBaru() }).where(eq(transactions.id, txId));
+    }
     const newUrl = await buatDokumenPinjam(txId, penyetujuDari(tx));
 
     // Update DB — set URL baru saja, status tidak berubah

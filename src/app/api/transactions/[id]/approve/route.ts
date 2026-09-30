@@ -13,6 +13,7 @@ import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 import { jsonBody } from "@/lib/json-body";
 import { buatDokumenPinjam } from "@/lib/dokumen-persetujuan";
 import { tentukanPenyetuju, type Penyetuju } from "@/lib/penyetuju";
+import { kodeBaru } from "@/lib/dokumen-verifikasi";
 
 export async function POST(
   request: NextRequest,
@@ -76,6 +77,7 @@ export async function POST(
               approvedBy: penyetuju?.nama ?? null,
               approvedAt: new Date(),
               approvedSignatureUrl: penyetuju?.tandaTangan ?? null,
+              verificationCode: kodeBaru(),
             }
           : {
               status: "rejected",

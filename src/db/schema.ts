@@ -177,6 +177,9 @@ export const transactions = mysqlTable("transactions", {
   // Salinan TTD admin saat menyetujui; sengaja disimpan supaya dokumen lama
   // tidak berubah bila admin mengganti TTD profilnya.
     approvedSignatureUrl: varchar("approved_signature_url", { length: 500 }),
+  // Kode pemeriksaan dokumen — dicetak sebagai kotak QR. NULL = dokumen lama
+  // atau belum disetujui. Lihat src/lib/dokumen-verifikasi.ts.
+  verificationCode: varchar("verification_code", { length: 32 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   });
 
@@ -233,6 +236,8 @@ export const handovers = mysqlTable("handovers", {
   approvedBy: varchar("approved_by", { length: 255 }),
   approvedAt: timestamp("approved_at"),
   approvedSignatureUrl: varchar("approved_signature_url", { length: 500 }),
+  // Kode pemeriksaan dokumen — lihat penjelasan di tabel transactions.
+  verificationCode: varchar("verification_code", { length: 32 }),
   handoverDate: timestamp("handover_date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

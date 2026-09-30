@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { uploadPathFromUrl } from '@/lib/upload-dir';
 import type { Penyetuju } from '@/lib/penyetuju';
+import { tempelQr, labelPenyetuju, ukuranMuat } from '@/lib/dokumen-verifikasi';
 
 export interface HandoverData {
   receiverName: string;
@@ -17,6 +18,10 @@ export interface HandoverData {
   signatureUrl?: string | null;
   /** Siapa yang menyetujui — lihat @/lib/penyetuju. */
   penyetuju?: Penyetuju;
+  /** Kode pemeriksaan dokumen — dicetak sebagai kotak QR (khusus superadmin). */
+  kodeVerifikasi?: string | null;
+  /** Unit PEMILIK barang — dipakai menyamarkan penyetuju superadmin jadi "Admin <unit>". */
+  unit?: string | null;
   /** Tanggal baris "Yogyakarta, ..." — tanggal persetujuan bila sudah disetujui. */
   tanggalTandaTangan?: Date;
   items: Array<{
@@ -373,9 +378,15 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
     currentPage.drawText(data.penyetuju.nama, { x: admX, y: signNameY, size: 10, font: boldFont, color: rgb(0, 0, 0) });
     currentPage.drawLine({ start: { x: admX, y: signNameY - 2 }, end: { x: admX + admTw, y: signNameY - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
   } else if (data.penyetuju) {
-    const teks = 'Disetujui oleh Admin';
-    const tw = boldFont.widthOfTextAtSize(teks, 9);
-    currentPage.drawText(teks, { x: col1X + (colW - tw) / 2, y: signNameY, size: 9, font: boldFont, color: rgb(0, 0, 0) });
+    // Superadmin: dulu tertulis "Disetujui oleh Admin" — itu justru menandai
+    // dirinya sebagai superadmin (karena admin biasa namanya tercetak).
+    // Sekarang "Admin <unit>" + kotak QR.
+    if (data.kodeVerifikasi) {
+      await tempelQr(pdfDoc, currentPage, data.kodeVerifikasi, col1X + (colW - 62) / 2, signNameY + 76, 62, font);
+    }
+    const labelAdm = labelPenyetuju(data.penyetuju, data.unit ?? data.unitName ?? data.department ?? null) ?? 'Admin';
+    const tw = boldFont.widthOfTextAtSize(labelAdm, ukuranMuat(boldFont, labelAdm, colW));
+    currentPage.drawText(labelAdm, { x: col1X + (colW - tw) / 2, y: signNameY, size: ukuranMuat(boldFont, labelAdm, colW), font: boldFont, color: rgb(0, 0, 0) });
     currentPage.drawLine({ start: { x: col1X, y: signNameY - 2 }, end: { x: col1X + colW, y: signNameY - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
   } else {
     // Garis kosong utk penandatangan kiri (belum disetujui)

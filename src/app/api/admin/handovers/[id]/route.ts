@@ -13,6 +13,7 @@ import { deleteUploadByUrl, deleteUploadIfDifferent } from "@/lib/delete-upload"
 import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 import { buatDokumenSerahTerima } from "@/lib/dokumen-persetujuan";
 import { tentukanPenyetuju, type Penyetuju } from "@/lib/penyetuju";
+import { kodeBaru } from "@/lib/dokumen-verifikasi";
 
 // PUT /api/admin/handovers/[id] — approve atau reject
 export async function PUT(
@@ -71,6 +72,7 @@ export async function PUT(
               approvedBy: penyetuju?.nama ?? null,
               approvedAt: new Date(),
               approvedSignatureUrl: penyetuju?.tandaTangan ?? null,
+              verificationCode: kodeBaru(),
             }
           : { status: "rejected" }
       )
@@ -122,6 +124,7 @@ export async function PUT(
             approvedBy: null,
             approvedAt: null,
             approvedSignatureUrl: null,
+            verificationCode: null,
           })
           .where(eq(handovers.id, hvId));
         return NextResponse.json(

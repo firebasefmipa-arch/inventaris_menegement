@@ -16,6 +16,107 @@ ditulis alasannya — jangan hilang begitu saja.
 
 ---
 
+## Audit #22 — 30 Sep 2026 — Dokumen bisa dipalsukan: kotak QR pemeriksaan + penyamaran penyetuju
+
+**Kesempatan:** permintaan pemilik produk — *"yang superadmin tadi yang disetujui
+oleh admin diganti dengan barcode, nah untuk konsepnya cari referensinya di
+internet"*.
+
+### Temuan — dokumen resmi tidak punya cara pembuktian cepat
+
+Setelah Audit #20, dokumen sudah bertanda tangan admin. Tapi kolom penyetuju
+superadmin hanya menulis **"Disetujui oleh Admin"** — kalimat yang (a) tidak bisa
+dibuktikan keasliannya oleh orang luar, dan (b) justru **membocorkan** bahwa
+penyetujunya bukan admin biasa: admin biasa mencetak **nama**-nya, jadi tulisan
+"oleh Admin" hanya muncul pada dokumen yang disetujui superadmin.
+
+Fotokopi dokumen juga bisa dipalsukan: tidak ada cara cepat bagi atasan/auditor
+membuktikan lembar itu benar terbit dari sistem.
+
+**Bukti:** dokumen tx #408/#409 hanya memuat "Disetujui oleh Admin" tanpa penanda
+apa pun; tidak ada kolom kode di `transactions`/`handovers`.
+
+### Riset lebih dulu (diminta pemilik produk)
+
+Dibandingkan tiga pilihan: tanda tangan elektronik bersertifikat (BSrE/BSSN),
+barcode batang, dan kotak QR menuju halaman pemeriksaan.
+
+- **QR ≠ tanda tangan elektronik yang sah.** Kominfo menegaskan TTE yang sah
+  butuh sertifikat diterbitkan BSSN, dan itu berbayar per dokumen. Jadi QR di
+  sini **bukan** pengganti TTE — hanya alat pemeriksaan cepat.
+- **Barcode batang tidak bisa dipindai kamera HP** — pemeriksa malah perlu alat
+  khusus. Ditolak.
+- Pola lazim di Indonesia (SKCK, ijazah, sertifikat): kotak QR → halaman web
+  pemeriksaan. **Dipilih ini.**
+
+### Perbaikan
+
+**1. Kode pemeriksaan + halaman publik**
+- Kolom `transactions.verification_code` & `handovers.verification_code`,
+  indeks unik; migrasi manual `scripts/sql/kode_verifikasi.sql`.
+- Kode **16 karakter acak** (`kodeBaru()` di `src/lib/dokumen-verifikasi.ts`).
+  Sengaja **bukan nomor urut** — nomor urut bisa ditebak untuk mengintip dokumen
+  orang lain.
+- Diterbitkan saat **menyetujui** (`approve/route.ts`,
+  `admin/handovers/[id]/route.ts`) dan saat **mencetak ulang dokumen lama**
+  (`regenerate-doc/route.ts` di dua rute) — supaya dokumen lama pun ikut bisa
+  diperiksa. Kalau stok kurang saat menyetujui serah terima, kodenya **ikut
+  dibersihkan** (pola sama seperti catatan penyetuju).
+- Halaman `src/app/cek/[kode]/page.tsx` — **TANPA LOGIN**, disengaja: pemeriksa
+  biasanya pihak luar. Isinya hanya jenis dokumen, nomor, tanggal, unit, status,
+  "Admin <unit>", tanggal persetujuan.
+  **TIDAK memuat nama/NIM/HP peminjam, daftar barang, atau tautan dokumen lain.**
+- Tiga keadaan: kode salah → "Kode tidak ditemukan"; pengajuan dibatalkan/ditolak
+  → "⚠ DOKUMEN SUDAH DIBATALKAN" (kertas lama tak bisa mengaku masih sah);
+  normal → ringkasan.
+- Halaman menampilkan keadaan **TERKINI**, bukan keadaan saat kertas dicetak.
+
+**2. Penyamaran penyetuju superadmin**
+- `labelPenyetuju()` → **"Admin <unit barang>"**, menggantikan "Disetujui oleh
+  Admin", dipakai di **DUA tempat**: dokumen tercetak **dan** halaman pemeriksaan.
+  Kalau hanya salah satu yang diganti, orang masih bisa membedakan.
+- Untuk serah terima, unitnya = unit **PEMILIK** barang (`hv.unit`), bukan unit
+  penerima — supaya labelnya cocok dengan kertas yang dipegang pemilik.
+- **Admin biasa tidak berubah**: tetap TTD + nama bergaris bawah.
+
+**3. Kotak QR di dokumen**
+- `tempelQr()` menggambar kotak QR berisi
+  `https://science.uii.ac.id/logistik/cek/<kode>`. Alamat dibangun dari
+  `BASE_PATH`, bukan ditulis absolut.
+- Pustaka `qrcode@1.5.4` (+ `@types/qrcode` dev). PDF tetap `pdf-lib`.
+- pdf-lib mengubah PNG jadi **gambar mentah Flate** (bukan PNG utuh) — 300×300,
+  **3 byte/piksel**. Ini penting bagi siapa pun yang hendak membaca ulang QR-nya.
+
+### Bukti pengujian
+
+| Pemeriksaan | Hasil |
+|---|---|
+| `uji-kode-qr.ts` — kode terbit, unik, 16 karakter | 20/20 |
+| `uji-qr-http.ts` — alur sungguhan lewat HTTP | 41/41 |
+| `uji-halaman-qr.mjs` — halaman di Chromium, HP & desktop, terang & gelap | 26/26 |
+| `pindai-qr.ts` — kotak QR di PDF **didekode pembaca QR sungguhan** (`jsqr`) | isi benar |
+| `verif-produksi.ts` — dokumen hasil **produksi** | QR terbaca, label benar, tulisan lama hilang |
+| `check-verifikasi` — penjaga baru dari ISI DOKUMEN & halaman | 33/33 |
+| Seluruh penjaga lama (`check:pdf`, `check:label`, `check:snapshot`, `check:habis`, `check:kembali`, `check:kode`, `check:unit`, `check:setuju`) | lulus |
+| Uji alur lama (persetujuan 21 · serah terima 20 · skenario 50 · body rusak 32 · simulasi 25 · bocor unit 14 · bocor impor 5 · terlihat user 13 · kondisi 39 · kondisi-http 33 · tebak id 14) | lulus |
+
+**Catatan jujur:** kolom `verification_code` di-ALTER pada database yang **sama**
+dengan produksi (menambah kolom kosong — kode lama yang sedang jalan tidak
+terpengaruh), sebelum aplikasinya dipasang. Sifatnya tidak merusak, tapi patut
+dicatat karena bukan cara yang ideal.
+
+### Temuan alat-uji yang ikut dibereskan (bukan bug aplikasi)
+
+- `scripts/check-persetujuan.ts` dan dua uji alur lama masih **menuntut** tulisan
+  "Disetujui oleh Admin" yang justru sengaja dibuang — diperbarui.
+- `uji-setuju-serah.ts` & `uji-bocor-impor.ts` memakai `LIMIT 1` / `= 1` pada
+  nama barang uji yang **kembar** (data uji sengaja tidak dihapus) → mengambil
+  barang yang salah. Diperbaiki agar tahan barang kembar.
+- `uji-katalog-lama.ts` menguji halaman `/katalog` yang **sudah lama dihapus**
+  dari source — uji usang, bukan kerusakan baru.
+
+---
+
 ## Audit #20 — 30 Sep 2026 — Dokumen tidak membuktikan siapa yang menyetujui (dan dua bug yang ditemukan sambil mengerjakannya)
 
 **Kesempatan:** pertanyaan pemilik produk — *"apakah sudah ada system ketika admin

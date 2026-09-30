@@ -8,6 +8,7 @@ import { uploadPathFromUrl } from "@/lib/upload-dir";
 import { periksaAksesUnit } from "@/lib/akses-unit";
 import { buatDokumenSerahTerima } from "@/lib/dokumen-persetujuan";
 import { penyetujuDari } from "@/lib/penyetuju";
+import { kodeBaru } from "@/lib/dokumen-verifikasi";
 
 export async function POST(
   request: NextRequest,
@@ -47,6 +48,12 @@ export async function POST(
 
     // Memakai data penyetuju TERSIMPAN — pengajuan lama tetap tanpa nama.
     // Lihat src/lib/dokumen-persetujuan.ts.
+    //
+    // Dokumen lama yang sudah disetujui belum punya kode pemeriksaan; karena
+    // sedang dicetak ulang, sekalian diberi kode supaya ikut bisa diperiksa.
+    if (hv.approvedAt && !hv.verificationCode) {
+      await db.update(handovers).set({ verificationCode: kodeBaru() }).where(eq(handovers.id, hvId));
+    }
     const newUrl = await buatDokumenSerahTerima(hvId, penyetujuDari(hv));
 
     // Update DB — set URL baru saja, status tidak berubah

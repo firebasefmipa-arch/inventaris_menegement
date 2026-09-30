@@ -21,7 +21,8 @@
     "kode:bebas": "tsx scripts/kode-bebas.ts",
     "check:kode": "tsx scripts/check-kode-barang.ts",
     "check:unit": "tsx scripts/check-unit.ts",
-    "check:setuju": "tsx scripts/check-persetujuan.ts"
+    "check:setuju": "tsx scripts/check-persetujuan.ts",
+    "check:verifikasi": "tsx scripts/check-verifikasi.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
@@ -38,6 +39,7 @@
     "next-auth": "^5.0.0-beta.32",
     "nodemailer": "^8.0.11",
     "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tsx": "^4.23.1",
@@ -48,6 +50,7 @@
     "@types/archiver": "^6.0.3",
     "@types/node": "22.19.15",
     "@types/nodemailer": "^8.0.1",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.10",

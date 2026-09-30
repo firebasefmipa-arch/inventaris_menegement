@@ -15,7 +15,7 @@ import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
 import { penyetujuDari } from "@/lib/penyetuju";
 import { PDFDocument, PDFRawStream, decodePDFRawStream } from "pdf-lib";
 
-const TOTAL = 9;
+const TOTAL = 13;
 let lulus = 0;
 const ok = (m: string) => { lulus++; console.log("  OK    " + m); };
 const gagal = (m: string) => { console.log("  GAGAL " + m); };
@@ -86,19 +86,44 @@ async function main() {
 
   console.log("=== 3. Disetujui superadmin — nama TIDAK boleh tercetak ===");
   {
+    // Sejak kotak QR diperkenalkan (Audit #22), tulisan "Disetujui oleh Admin"
+    // DIGANTI "Admin <unit barang>" + kotak QR. Tulisan lama itu justru
+    // membocorkan rahasia: admin biasa namanya tercetak, jadi tulisan "Admin"
+    // saja langsung menandakan penyetujunya superadmin.
+    //
+    // Unit & kode WAJIB dikirim di sini — tanpa keduanya labelnya jatuh ke
+    // "Admin FMIPA UII" dan kotak QR-nya memang tidak digambar, jadi ujinya
+    // akan gagal karena bahan ujinya kurang, bukan karena kodenya salah.
     const penyetuju = { nama: null, tandaTangan: null };
-    const t = await teksPdf(await generateBorrowingPDF({ ...dasarPinjam, penyetuju }));
-    t.some((x) => x.includes("Disetujui oleh Admin"))
-      ? ok("peminjaman: tertulis 'Disetujui oleh Admin'")
-      : gagal("peminjaman: tulisan 'Disetujui oleh Admin' tidak ada");
+    const KODE = "ABCD2345EFGH6789";
+    const t = await teksPdf(await generateBorrowingPDF({
+      ...dasarPinjam, penyetuju, kodeVerifikasi: KODE, unit: "Divisi Teknologi Informasi",
+    }));
+    !t.includes("Disetujui oleh Admin")
+      ? ok("peminjaman: tulisan lama 'Disetujui oleh Admin' sudah tidak dipakai")
+      : gagal("peminjaman: tulisan lama 'Disetujui oleh Admin' masih ada");
+    t.some((x) => x.includes("Admin Divisi Teknologi Informasi"))
+      ? ok("peminjaman: tertulis 'Admin <unit barang>'")
+      : gagal("peminjaman: label 'Admin <unit barang>' tidak ada");
+    t.some((x) => x.includes("Pindai untuk memeriksa"))
+      ? ok("peminjaman: ada keterangan kotak QR")
+      : gagal("peminjaman: keterangan kotak QR tidak ada");
     !t.includes(NAMA_SUPER)
       ? ok("peminjaman: nama superadmin tidak tercetak")
       : gagal("peminjaman: nama superadmin ikut tercetak");
 
-    const s = await teksPdf(await generateHandoverPDF({ ...dasarSerah, penyetuju }));
-    s.some((x) => x.includes("Disetujui oleh Admin"))
-      ? ok("serah terima: tertulis 'Disetujui oleh Admin'")
-      : gagal("serah terima: tulisan 'Disetujui oleh Admin' tidak ada");
+    const s = await teksPdf(await generateHandoverPDF({
+      ...dasarSerah, penyetuju, kodeVerifikasi: KODE, unit: "Divisi Teknologi Informasi",
+    }));
+    !s.includes("Disetujui oleh Admin")
+      ? ok("serah terima: tulisan lama 'Disetujui oleh Admin' sudah tidak dipakai")
+      : gagal("serah terima: tulisan lama 'Disetujui oleh Admin' masih ada");
+    s.some((x) => x.includes("Admin Divisi Teknologi Informasi"))
+      ? ok("serah terima: tertulis 'Admin <unit barang>'")
+      : gagal("serah terima: label 'Admin <unit barang>' tidak ada");
+    s.some((x) => x.includes("Pindai untuk memeriksa"))
+      ? ok("serah terima: ada keterangan kotak QR")
+      : gagal("serah terima: keterangan kotak QR tidak ada");
     !s.includes(NAMA_SUPER)
       ? ok("serah terima: nama superadmin tidak tercetak")
       : gagal("serah terima: nama superadmin ikut tercetak");

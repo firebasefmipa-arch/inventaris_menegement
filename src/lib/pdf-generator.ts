@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { uploadPathFromUrl } from '@/lib/upload-dir';
 import type { Penyetuju } from '@/lib/penyetuju';
+import { tempelQr, labelPenyetuju, ukuranMuat } from '@/lib/dokumen-verifikasi';
 
 interface TransactionData {
   borrowerName: string;
@@ -16,6 +17,10 @@ interface TransactionData {
   signatureUrl?: string | null;
   /** Siapa yang menyetujui pengajuan ini — lihat @/lib/penyetuju. */
   penyetuju?: Penyetuju;
+  /** Kode pemeriksaan dokumen — dicetak sebagai kotak QR. Lihat @/lib/dokumen-verifikasi. */
+  kodeVerifikasi?: string | null;
+  /** Unit barang, dipakai menyamarkan penyetuju superadmin jadi "Admin <unit>". */
+  unit?: string | null;
   /** Tanggal pada baris "Yogyakarta, ..." — tanggal persetujuan bila sudah disetujui. */
   tanggalTandaTangan?: Date;
   items: Array<{
@@ -155,7 +160,9 @@ async function drawFooter(
   boldItalicFont: PDFFont,
   signatureUrl?: string | null,
   penyetuju?: Penyetuju,
-  tanggalTandaTangan?: Date
+  tanggalTandaTangan?: Date,
+  kodeVerifikasi?: string | null,
+  unit?: string | null
 ) {
   const col1X = MARGIN_LEFT;
   const col2X = MARGIN_LEFT + 190;
@@ -236,8 +243,15 @@ async function drawFooter(
     page.drawText(penyetuju.nama, { x: admX, y, size: 10, font: boldFont, color: rgb(0, 0, 0) });
     page.drawLine({ start: { x: admX, y: y - 2 }, end: { x: admX + admTw, y: y - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
   } else if (penyetuju) {
-    // Superadmin: sengaja TANPA nama dan TANPA tanda tangan.
-    centerText('Disetujui oleh Admin', col2X, colW, boldFont, 9, y);
+    // Superadmin: TANPA nama dan TANPA tanda tangan.
+    // Dulu di sini tertulis "Disetujui oleh Admin" — itu justru membocorkan
+    // rahasia, karena admin biasa namanya tercetak, jadi tulisan "Admin" saja
+    // berarti superadmin. Sekarang ditulis "Admin <unit barang>" + kotak QR.
+    if (kodeVerifikasi) {
+      await tempelQr(pdfDoc, page, kodeVerifikasi, col2X + (colW - 62) / 2, y + 76, 62, font);
+    }
+    const labelAdm = labelPenyetuju(penyetuju, unit ?? null) ?? 'Admin';
+    centerText(labelAdm, col2X, colW, boldFont, ukuranMuat(boldFont, labelAdm, colW), y);
     page.drawLine({ start: { x: col2X, y: y - 2 }, end: { x: col2X + colW, y: y - 2 }, thickness: 0.5, color: rgb(0, 0, 0) });
   } else {
     // Belum disetujui (dokumen pengajuan, atau dokumen lama) — garis kosong.
@@ -406,7 +420,7 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
   }
 
   // ── Footer (tanda tangan + ketentuan) ──
-  await drawFooter(pdfDoc, currentPage, y, data.borrowerName, data.borrowDate, font, boldFont, italicFont, boldItalicFont, data.signatureUrl, data.penyetuju, data.tanggalTandaTangan);
+  await drawFooter(pdfDoc, currentPage, y, data.borrowerName, data.borrowDate, font, boldFont, italicFont, boldItalicFont, data.signatureUrl, data.penyetuju, data.tanggalTandaTangan, data.kodeVerifikasi, data.unit);
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
