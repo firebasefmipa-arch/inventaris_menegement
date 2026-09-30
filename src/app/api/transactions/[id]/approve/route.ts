@@ -8,9 +8,11 @@ import { kembalikanKeStok } from "@/lib/pengembalian";
 import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
-import { deleteUploadByUrl } from "@/lib/delete-upload";
+import { deleteUploadByUrl, deleteUploadIfDifferent } from "@/lib/delete-upload";
 import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
 import { jsonBody } from "@/lib/json-body";
+import { buatDokumenPinjam } from "@/lib/dokumen-persetujuan";
+import { tentukanPenyetuju, type Penyetuju } from "@/lib/penyetuju";
 
 export async function POST(
   request: NextRequest,
@@ -49,6 +51,17 @@ export async function POST(
 
     const newStatus = action === "approve" ? "active" : "rejected";
 
+    // ── Siapa yang menyetujui? ──
+    // Diperiksa SEBELUM status dikunci: admin yang belum mengunggah tanda tangan
+    // tidak boleh menyetujui, dan penolakan ini tidak boleh meninggalkan jejak
+    // separuh jadi. Superadmin dikecualikan (namanya tak dicetak di dokumen).
+    let penyetuju: Penyetuju = null;
+    if (action === "approve") {
+      const hasil = await tentukanPenyetuju(String(session.user.id), role);
+      if ("tolak" in hasil) return NextResponse.json({ error: hasil.tolak.pesan }, { status: hasil.tolak.status });
+      penyetuju = hasil.penyetuju;
+    }
+
     // ── Kunci status di WHERE ──
     // Dulu di sini hanya `WHERE id`, sehingga tiga klik bersamaan sama-sama
     // "berhasil": untuk penolakan itu berarti stok dikembalikan tiga kali dan
@@ -58,7 +71,12 @@ export async function POST(
       .update(transactions)
       .set(
         action === "approve"
-          ? { status: "active" }
+          ? {
+              status: "active",
+              approvedBy: penyetuju?.nama ?? null,
+              approvedAt: new Date(),
+              approvedSignatureUrl: penyetuju?.tandaTangan ?? null,
+            }
           : {
               status: "rejected",
               rejectionReason: rejectionReason!.trim(),
@@ -76,29 +94,38 @@ export async function POST(
     }
 
     if (action === "approve") {
-      // Pindahkan PDF dari pending/ ke signed_forms/. Dikerjakan SETELAH status
-      // terkunci, jadi hanya satu permintaan yang menyentuh berkasnya.
-      let finalPdfUrl = tx.signedDocumentUrl;
-      if (tx.signedDocumentUrl?.startsWith("/uploads/pending/")) {
-        try {
-          const filename = path.basename(tx.signedDocumentUrl);
-          const srcPath  = uploadPathFromUrl(tx.signedDocumentUrl);
-          const destDir  = uploadPath("signed_forms");
-          const destPath = path.join(destDir, filename);
-
-          await mkdir(destDir, { recursive: true });
-          if (existsSync(srcPath)) {
-            await copyFile(srcPath, destPath);
-            await unlink(srcPath).catch(() => {});
+      // Dokumen dicetak ULANG lengkap dengan tanda tangan & nama admin.
+      // Dulu berkasnya hanya dipindahkan dari pending/ ke signed_forms/,
+      // sehingga kolom "Yang menyerahkan" selamanya kosong.
+      // Kalau gagal, berkas lama tetap dipindah supaya dokumen tidak hilang.
+      try {
+        const urlBaru = await buatDokumenPinjam(txId, penyetuju);
+        // Berkas lama dibuang hanya bila beda dari yang baru — kalau namanya
+        // kebetulan sama, menghapus "yang lama" = menghapus dokumen barunya.
+        await deleteUploadIfDifferent(urlBaru, tx.signedDocumentUrl);
+        await db.update(transactions).set({ signedDocumentUrl: urlBaru }).where(eq(transactions.id, txId));
+      } catch (e) {
+        console.error("Cetak dokumen persetujuan error:", e);
+        let finalPdfUrl = tx.signedDocumentUrl;
+        if (tx.signedDocumentUrl?.startsWith("/uploads/pending/")) {
+          try {
+            const filename = path.basename(tx.signedDocumentUrl);
+            const srcPath  = uploadPathFromUrl(tx.signedDocumentUrl);
+            const destDir  = uploadPath("signed_forms");
+            const destPath = path.join(destDir, filename);
+            await mkdir(destDir, { recursive: true });
+            if (existsSync(srcPath)) {
+              await copyFile(srcPath, destPath);
+              await unlink(srcPath).catch(() => {});
+            }
+            finalPdfUrl = `/uploads/signed_forms/${filename}`;
+          } catch (e2) {
+            console.error("Pindah PDF error:", e2);
           }
-          finalPdfUrl = `/uploads/signed_forms/${filename}`;
-        } catch (e) {
-          console.error("Pindah PDF error:", e);
         }
-      }
-
-      if (finalPdfUrl !== tx.signedDocumentUrl) {
-        await db.update(transactions).set({ signedDocumentUrl: finalPdfUrl }).where(eq(transactions.id, txId));
+        if (finalPdfUrl !== tx.signedDocumentUrl) {
+          await db.update(transactions).set({ signedDocumentUrl: finalPdfUrl }).where(eq(transactions.id, txId));
+        }
       }
     } else {
       // Reject — hapus PDF (folder mana pun) dan kembalikan stok.

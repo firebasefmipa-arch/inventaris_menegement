@@ -9,8 +9,10 @@ import { kembalikanKeStok } from "@/lib/pengembalian";
 import { copyFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
-import { deleteUploadByUrl } from "@/lib/delete-upload";
+import { deleteUploadByUrl, deleteUploadIfDifferent } from "@/lib/delete-upload";
 import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
+import { buatDokumenSerahTerima } from "@/lib/dokumen-persetujuan";
+import { tentukanPenyetuju, type Penyetuju } from "@/lib/penyetuju";
 
 // PUT /api/admin/handovers/[id] — approve atau reject
 export async function PUT(
@@ -45,6 +47,16 @@ export async function PUT(
     const tolak = await periksaAksesUnit(session, hv.unit);
     if (tolak) return NextResponse.json({ error: tolak.pesan }, { status: tolak.status });
 
+    // ── Siapa yang menyetujui? ──
+    // Diperiksa SEBELUM status dikunci: admin yang belum mengunggah tanda tangan
+    // tidak boleh menyetujui. Superadmin dikecualikan, namanya tak dicetak.
+    let penyetuju: Penyetuju = null;
+    if (action === "approve") {
+      const hasil = await tentukanPenyetuju(String(session.user.id), role);
+      if ("tolak" in hasil) return NextResponse.json({ error: hasil.tolak.pesan }, { status: hasil.tolak.status });
+      penyetuju = hasil.penyetuju;
+    }
+
     // ── Kunci status di WHERE ──
     // Dulu di sini `WHERE id` saja, jadi tiga klik bersamaan sama-sama lolos:
     // untuk penolakan berarti stok dikembalikan tiga kali (stok jadi melebihi
@@ -52,7 +64,16 @@ export async function PUT(
     // Sekarang hanya sah kalau statusnya MASIH `pending_approval`.
     const kunci = await db
       .update(handovers)
-      .set({ status: action === "approve" ? "completed" : "rejected" })
+      .set(
+        action === "approve"
+          ? {
+              status: "completed",
+              approvedBy: penyetuju?.nama ?? null,
+              approvedAt: new Date(),
+              approvedSignatureUrl: penyetuju?.tandaTangan ?? null,
+            }
+          : { status: "rejected" }
+      )
       .where(and(eq(handovers.id, hvId), eq(handovers.status, "pending_approval")));
 
     const baris = (Array.isArray(kunci) ? kunci[0] : kunci) as unknown as { affectedRows?: number };
@@ -64,25 +85,9 @@ export async function PUT(
     }
 
     if (action === "approve") {
-      // Pindahkan PDF dari pending/ ke handovers/. Dikerjakan SETELAH status
-      // terkunci, jadi hanya satu permintaan yang menyentuh berkasnya.
-      let finalPdfUrl = hv.signedDocumentUrl;
-      if (hv.signedDocumentUrl?.startsWith("/uploads/pending/")) {
-        try {
-          const filename = path.basename(hv.signedDocumentUrl);
-          const srcPath  = uploadPathFromUrl(hv.signedDocumentUrl);
-          const destDir  = uploadPath("handovers");
-          const destPath = path.join(destDir, filename);
-          await mkdir(destDir, { recursive: true });
-          if (existsSync(srcPath)) {
-            await copyFile(srcPath, destPath);
-            await unlink(srcPath).catch(() => {});
-          }
-          finalPdfUrl = `/uploads/handovers/${filename}`;
-        } catch (e) {
-          console.error("Pindah PDF handover error:", e);
-        }
-      }
+      // Catatan urutan: dokumen dicetak ulang NANTI, setelah stok dipastikan
+      // cukup — supaya dokumen bersetujuan tidak terbentuk untuk serah terima
+      // yang ternyata gagal karena stok.
 
       // Kurangi stok permanen — ATOMIK. Syarat "stok cukup" ada di WHERE
       // supaya stok tak bisa jadi minus.
@@ -108,7 +113,16 @@ export async function PUT(
       if (stokGagal) {
         await db
           .update(handovers)
-          .set({ status: "pending_approval" })
+          .set({
+            status: "pending_approval",
+            // Catatan penyetuju IKUT dibersihkan: statusnya kembali "menunggu",
+            // jadi tidak boleh ada sisa tanda tangan/nama admin di baris ini —
+            // kalau tertinggal, dokumen yang dicetak ulang nanti akan mengaku
+            // sudah disetujui padahal belum.
+            approvedBy: null,
+            approvedAt: null,
+            approvedSignatureUrl: null,
+          })
           .where(eq(handovers.id, hvId));
         return NextResponse.json(
           { error: "Stok salah satu barang tidak mencukupi. Periksa jumlah barang lalu setujui ulang." },
@@ -116,8 +130,36 @@ export async function PUT(
         );
       }
 
-      if (finalPdfUrl !== hv.signedDocumentUrl) {
-        await db.update(handovers).set({ signedDocumentUrl: finalPdfUrl }).where(eq(handovers.id, hvId));
+      // Dokumen dicetak ulang lengkap dengan tanda tangan & nama admin.
+      // Dulu berkasnya hanya dipindahkan antar folder, sehingga kolom
+      // "Yang menyerahkan" selamanya kosong.
+      try {
+        const urlBaru = await buatDokumenSerahTerima(hvId, penyetuju);
+        await deleteUploadIfDifferent(urlBaru, hv.signedDocumentUrl);
+        await db.update(handovers).set({ signedDocumentUrl: urlBaru }).where(eq(handovers.id, hvId));
+      } catch (e) {
+        console.error("Cetak dokumen persetujuan error:", e);
+        // Cadangan: pindahkan saja berkas lamanya supaya dokumen tidak hilang.
+        let finalPdfUrl = hv.signedDocumentUrl;
+        if (hv.signedDocumentUrl?.startsWith("/uploads/pending/")) {
+          try {
+            const filename = path.basename(hv.signedDocumentUrl);
+            const srcPath  = uploadPathFromUrl(hv.signedDocumentUrl);
+            const destDir  = uploadPath("handovers");
+            const destPath = path.join(destDir, filename);
+            await mkdir(destDir, { recursive: true });
+            if (existsSync(srcPath)) {
+              await copyFile(srcPath, destPath);
+              await unlink(srcPath).catch(() => {});
+            }
+            finalPdfUrl = `/uploads/handovers/${filename}`;
+          } catch (e2) {
+            console.error("Pindah PDF handover error:", e2);
+          }
+        }
+        if (finalPdfUrl !== hv.signedDocumentUrl) {
+          await db.update(handovers).set({ signedDocumentUrl: finalPdfUrl }).where(eq(handovers.id, hvId));
+        }
       }
 
       return NextResponse.json({ success: true, message: "Serah terima berhasil disetujui" });

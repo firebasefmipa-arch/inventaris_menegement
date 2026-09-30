@@ -6,6 +6,7 @@ import { desc, inArray, eq, sql } from "drizzle-orm";
 import { namaSql } from "@/lib/item-snapshot";
 import { HandoversClient } from "./HandoversClient";
 import { batasUnit } from "@/lib/akses-unit";
+import { cekBolehSetujui } from "@/lib/penyetuju";
 
 export default async function AdminHandoversPage() {
   const session = await auth();
@@ -16,6 +17,9 @@ export default async function AdminHandoversPage() {
 
   // Admin hanya melihat pecahan unit yang dikelolanya; superadmin semua.
   const batas = await batasUnit(session);
+  // Admin yang belum mengunggah tanda tangan tidak boleh menyetujui (server
+  // menolak juga — ini hanya supaya tombolnya tidak mengundang klik sia-sia).
+  const bolehSetujui = await cekBolehSetujui(String(session?.user?.id ?? ""), role);
 
   const hvList = await db
     .select()
@@ -76,6 +80,7 @@ export default async function AdminHandoversPage() {
       <HandoversClient
         initialData={result}
         isSuperAdmin={role === "super_admin"}
+        bolehSetujui={bolehSetujui}
       />
     </div>
   );

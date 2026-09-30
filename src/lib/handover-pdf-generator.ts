@@ -2,6 +2,7 @@ import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
 import { uploadPathFromUrl } from '@/lib/upload-dir';
+import type { Penyetuju } from '@/lib/penyetuju';
 
 export interface HandoverData {
   receiverName: string;
@@ -14,6 +15,10 @@ export interface HandoverData {
   notes?: string;
   handoverDate: Date;
   signatureUrl?: string | null;
+  /** Siapa yang menyetujui — lihat @/lib/penyetuju. */
+  penyetuju?: Penyetuju;
+  /** Tanggal baris "Yogyakarta, ..." — tanggal persetujuan bila sudah disetujui. */
+  tanggalTandaTangan?: Date;
   items: Array<{
     name: string;
     quantity: number;
@@ -313,7 +318,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
 
   // Label kolom
   currentPage.drawText('DIVISI TI FMIPA UII', { x: col1X, y, size: 10, font: boldFont, color: rgb(0, 0, 0) });
-  const yogyaText = `Yogyakarta, ${formatDateShort(data.handoverDate)}`;
+  const yogyaText = `Yogyakarta, ${formatDateShort(data.tanggalTandaTangan ?? data.handoverDate)}`;
   const yogyaTw = font.widthOfTextAtSize(yogyaText, 10);
   currentPage.drawText(yogyaText, { x: col2X + (colW - yogyaTw) / 2, y, size: 10, font, color: rgb(0, 0, 0) });
 
@@ -343,8 +348,39 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
     });
   }
 
-  // Garis kiri disejajarkan di posisi nama (garis kosong utk penandatangan kiri)
-  currentPage.drawLine({ start: { x: col1X, y: signNameY - 2 }, end: { x: col1X + colW, y: signNameY - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
+  // Garis kiri: dulu SELALU kosong. Sekarang diisi blok penyetuju.
+  //   admin      -> tanda tangan + nama bergaris bawah
+  //   superadmin -> "Disetujui oleh Admin", tanpa nama (lihat @/lib/penyetuju)
+  //   belum      -> garis kosong seperti dokumen pengajuan (perilaku lama)
+  if (data.penyetuju?.nama) {
+    if (data.penyetuju.tandaTangan) {
+      try {
+        const sigPath = uploadPathFromUrl(data.penyetuju.tandaTangan);
+        const sigBytes = await fs.readFile(sigPath);
+        const ext = path.extname(data.penyetuju.tandaTangan).toLowerCase();
+        const sigImg = ext === '.png' ? await pdfDoc.embedPng(sigBytes) : await pdfDoc.embedJpg(sigBytes);
+        const sigDims = sigImg.scaleToFit(colW - 10, 55);
+        currentPage.drawImage(sigImg, {
+          x: col1X + (colW - sigDims.width) / 2,
+          y: signNameY + 12,
+          width: sigDims.width,
+          height: sigDims.height,
+        });
+      } catch { /* TTD gagal dimuat — nama tetap dicetak */ }
+    }
+    const admTw = boldFont.widthOfTextAtSize(data.penyetuju.nama, 10);
+    const admX = col1X + (colW - admTw) / 2;
+    currentPage.drawText(data.penyetuju.nama, { x: admX, y: signNameY, size: 10, font: boldFont, color: rgb(0, 0, 0) });
+    currentPage.drawLine({ start: { x: admX, y: signNameY - 2 }, end: { x: admX + admTw, y: signNameY - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
+  } else if (data.penyetuju) {
+    const teks = 'Disetujui oleh Admin';
+    const tw = boldFont.widthOfTextAtSize(teks, 9);
+    currentPage.drawText(teks, { x: col1X + (colW - tw) / 2, y: signNameY, size: 9, font: boldFont, color: rgb(0, 0, 0) });
+    currentPage.drawLine({ start: { x: col1X, y: signNameY - 2 }, end: { x: col1X + colW, y: signNameY - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
+  } else {
+    // Garis kosong utk penandatangan kiri (belum disetujui)
+    currentPage.drawLine({ start: { x: col1X, y: signNameY - 2 }, end: { x: col1X + colW, y: signNameY - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
+  }
 
   // TTD penerima digambar di ATAS nama (bottom TTD = nama + 12)
   if (data.receiverName && data.signatureUrl) {

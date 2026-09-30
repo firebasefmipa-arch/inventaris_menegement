@@ -18,3 +18,20 @@ export async function deleteUploadByUrl(url: string | null | undefined): Promise
     return false;
   }
 }
+
+/**
+ * Hapus berkas LAMA hanya bila beda dari berkas BARU.
+ *
+ * Saat dokumen dicetak ulang, berkas lama dibuang supaya tidak menumpuk. Tapi
+ * kalau kebetulan nama berkasnya sama (mis. dokumen yang tadinya sudah di
+ * folder tujuan), menghapus "yang lama" berarti menghapus berkas yang baru
+ * saja ditulis — dokumennya hilang seketika.
+ */
+export async function deleteUploadIfDifferent(
+  urlBaru: string | null | undefined,
+  urlLama: string | null | undefined
+): Promise<boolean> {
+  if (!urlBaru || !urlLama) return false;
+  if (uploadPathFromUrl(urlBaru) === uploadPathFromUrl(urlLama)) return false;
+  return deleteUploadByUrl(urlLama);
+}

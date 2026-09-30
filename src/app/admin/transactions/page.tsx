@@ -6,6 +6,7 @@ import { sqlTerlambat } from "@/lib/tanggal";
 import { TransactionsClient } from "./TransactionsClient";
 import { auth } from "@/auth";
 import { batasUnit } from "@/lib/akses-unit";
+import { cekBolehSetujui } from "@/lib/penyetuju";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,10 @@ export default async function TransactionsPage({
   // Admin hanya melihat pecahan unit yang dikelolanya; superadmin semua.
   const session = await auth();
   const batas = await batasUnit(session);
+  const role = (session?.user as any)?.role;
+  // Admin yang belum mengunggah tanda tangan tidak boleh menyetujui (server
+  // menolak juga — ini hanya supaya tombolnya tidak mengundang klik sia-sia).
+  const bolehSetujui = await cekBolehSetujui(String(session?.user?.id ?? ""), role);
 
   const conditions = [];
   if (batas !== null) {
@@ -102,6 +107,7 @@ export default async function TransactionsPage({
       <TransactionsClient
         transactions={mergedData}
         currentStatus={statusFilter}
+        bolehSetujui={bolehSetujui}
       />
     </div>
   );

@@ -168,8 +168,17 @@ export const transactions = mysqlTable("transactions", {
   // per unit, jadi kolom ini yang menentukan admin mana yang berhak
   // menyetujui/menolaknya. NULL = barang tanpa unit → hanya superadmin.
   unit: varchar("unit", { length: 255 }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+  // ── Pencatat persetujuan ────────────────────────────────────────────────
+  // approvedBy NULL + approvedAt terisi = superadmin (dokumen menulis
+  // "Disetujui oleh Admin", tanpa nama). approvedAt NULL = pengajuan lama
+  // sebelum fitur ini — dokumennya tetap tanpa nama.
+  approvedBy: varchar("approved_by", { length: 255 }),
+  approvedAt: timestamp("approved_at"),
+  // Salinan TTD admin saat menyetujui; sengaja disimpan supaya dokumen lama
+  // tidak berubah bila admin mengganti TTD profilnya.
+    approvedSignatureUrl: varchar("approved_signature_url", { length: 500 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  });
 
 // Tabel join untuk multi-item per transaksi
 export const transactionItems = mysqlTable("transaction_items", {
@@ -220,6 +229,10 @@ export const handovers = mysqlTable("handovers", {
   // Unit pemilik barang pada pecahan ini — menentukan admin mana yang berhak
   // menyetujui/menolaknya. NULL = barang tanpa unit → hanya superadmin.
   unit: varchar("unit", { length: 255 }),
+  // ── Pencatat persetujuan ── lihat penjelasan di tabel transactions.
+  approvedBy: varchar("approved_by", { length: 255 }),
+  approvedAt: timestamp("approved_at"),
+  approvedSignatureUrl: varchar("approved_signature_url", { length: 500 }),
   handoverDate: timestamp("handover_date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

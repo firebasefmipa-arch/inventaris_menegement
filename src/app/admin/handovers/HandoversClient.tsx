@@ -60,9 +60,11 @@ const STATUS_TABS = [
   { key: "rejected", label: "Ditolak" },
 ];
 
-export function HandoversClient({ initialData, isSuperAdmin }: {
+export function HandoversClient({ initialData, isSuperAdmin, bolehSetujui }: {
   initialData: Handover[];
   isSuperAdmin: boolean;
+  /** Admin ini sudah punya tanda tangan? Kalau belum, tombol Setujui dimatikan. */
+  bolehSetujui: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -278,7 +280,9 @@ export function HandoversClient({ initialData, isSuperAdmin }: {
                       </button>
                       <button
                         onClick={() => { setActionId(hv.id); setActionType("approve"); }}
-                        className="w-full text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-3 py-2.5 rounded-xl transition-colors"
+                        disabled={!bolehSetujui}
+                        title={bolehSetujui ? undefined : "Unggah tanda tangan dulu di halaman Profil"}
+                        className="w-full text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-3 py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-teal-600"
                       >
                         ✓ Setujui
                       </button>

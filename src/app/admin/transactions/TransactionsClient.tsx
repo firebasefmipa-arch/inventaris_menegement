@@ -39,9 +39,11 @@ type Transaction = {
 interface Props {
   transactions: Transaction[];
   currentStatus: string;
+  /** Admin ini sudah punya tanda tangan? Kalau belum, tombol Setujui dimatikan. */
+  bolehSetujui: boolean;
 }
 
-export function TransactionsClient({ transactions }: Props) {
+export function TransactionsClient({ transactions, bolehSetujui }: Props) {
   const [showBorrowModal, setShowBorrowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -137,11 +139,14 @@ export function TransactionsClient({ transactions }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "approve" }),
       });
-      if (!res.ok) throw new Error();
+      // Pesan dari server (mis. "belum unggah tanda tangan") harus sampai ke
+      // admin — dulu errornya ditelan dan hanya muncul "Terjadi kesalahan".
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Gagal menyetujui");
       toast("Peminjaman berhasil disetujui", "success");
       router.refresh();
-    } catch {
-      toast("Terjadi kesalahan", "error");
+    } catch (e: any) {
+      toast(e.message || "Terjadi kesalahan", "error");
     }
   };
 
@@ -405,7 +410,9 @@ export function TransactionsClient({ transactions }: Props) {
                               </button>
                               <button
                                 onClick={() => handleApprove(tx.id)}
-                                className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                                disabled={!bolehSetujui}
+                                title={bolehSetujui ? undefined : "Unggah tanda tangan dulu di halaman Profil sebelum bisa menyetujui"}
+                                className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                               >
                                 Setujui
                               </button>

@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { handovers, handoverItems, items, users } from "@/db/schema";
+import { handovers } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
-import { namaBarang } from "@/lib/item-snapshot";
-import { generateHandoverPDF } from "@/lib/handover-pdf-generator";
-import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
-import path from "path";
-import { uploadPath, uploadPathFromUrl } from "@/lib/upload-dir";
+import { uploadPathFromUrl } from "@/lib/upload-dir";
 import { periksaAksesUnit } from "@/lib/akses-unit";
+import { buatDokumenSerahTerima } from "@/lib/dokumen-persetujuan";
+import { penyetujuDari } from "@/lib/penyetuju";
 
 export async function POST(
   request: NextRequest,
@@ -47,69 +45,9 @@ export async function POST(
       return NextResponse.json({ error: "Dokumen belum dihapus atau sudah ada" }, { status: 400 });
     }
 
-    // Ambil item serah terima. Data master (live) menang; snapshot dari baris
-    // riwayat jadi cadangan kalau barangnya sudah dihapus.
-    const hvItemRows = await db
-      .select({
-        itemId: handoverItems.itemId,
-        quantity: handoverItems.quantity,
-        notes: handoverItems.notes,
-        itemName: items.name,
-        inventoryNumber: items.inventoryNumber,
-        assetNumber: items.assetNumber,
-        itemCode: items.itemCode,
-        snapName: handoverItems.itemName,
-        snapCode: handoverItems.itemCode,
-        snapInventoryNumber: handoverItems.itemInventoryNumber,
-      })
-      .from(handoverItems)
-      .leftJoin(items, eq(handoverItems.itemId, items.id))
-      .where(eq(handoverItems.handoverId, hvId));
-
-    if (hvItemRows.length === 0) {
-      return NextResponse.json({ error: "Tidak ada barang ditemukan" }, { status: 404 });
-    }
-
-    // Ambil TTD elektronik pemohon (user yang membuat handover)
-    let signatureUrl: string | null = null;
-    if (hv.userId) {
-      const [hvUser] = await db.select({ signatureUrl: users.signatureUrl }).from(users).where(eq(users.id, hv.userId as any)).limit(1);
-      signatureUrl = hvUser?.signatureUrl || null;
-    }
-
-    // Generate PDF
-    const pdfBuffer = await generateHandoverPDF({
-      receiverName: hv.receiverName,
-      receiverNim: hv.receiverNim || "",
-      unitName: hv.unitName || hv.department || "",
-      department: hv.department || "",
-      phone: hv.phone || "",
-      location: hv.location || "",
-      purpose: hv.purpose || "",
-      notes: hv.notes || "",
-      handoverDate: hv.handoverDate,
-      signatureUrl,
-      items: hvItemRows.map((r) => ({
-        name: namaBarang(r.snapName, r.itemName),
-        quantity: r.quantity,
-        assetNumber: r.assetNumber,
-        itemCode: r.itemCode ?? r.snapCode,
-        inventoryNumber: r.inventoryNumber ?? r.snapInventoryNumber,
-      })),
-    });
-
-    // Simpan ke disk
-    const receiverSafe = (hv.receiverName || "Penerima")
-      .replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 40);
-    const d = hv.handoverDate;
-    const dateStr = `${String(new Date(d).getDate()).padStart(2, "0")}${String(new Date(d).getMonth() + 1).padStart(2, "0")}${new Date(d).getFullYear()}`;
-    const filename = `ST_${receiverSafe}_${dateStr}_${hvId}_regen.pdf`;
-
-    const uploadDir = uploadPath("handovers");
-    await mkdir(uploadDir, { recursive: true });
-    await writeFile(path.join(uploadDir, filename), pdfBuffer);
-
-    const newUrl = `/uploads/handovers/${filename}`;
+    // Memakai data penyetuju TERSIMPAN — pengajuan lama tetap tanpa nama.
+    // Lihat src/lib/dokumen-persetujuan.ts.
+    const newUrl = await buatDokumenSerahTerima(hvId, penyetujuDari(hv));
 
     // Update DB — set URL baru saja, status tidak berubah
     await db.update(handovers).set({

@@ -2,6 +2,7 @@ import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
 import fs from 'fs/promises';
 import path from 'path';
 import { uploadPathFromUrl } from '@/lib/upload-dir';
+import type { Penyetuju } from '@/lib/penyetuju';
 
 interface TransactionData {
   borrowerName: string;
@@ -13,6 +14,10 @@ interface TransactionData {
   borrowDate: Date;
   returnDate: Date;
   signatureUrl?: string | null;
+  /** Siapa yang menyetujui pengajuan ini — lihat @/lib/penyetuju. */
+  penyetuju?: Penyetuju;
+  /** Tanggal pada baris "Yogyakarta, ..." — tanggal persetujuan bila sudah disetujui. */
+  tanggalTandaTangan?: Date;
   items: Array<{
     name: string;
     quantity: number;
@@ -148,7 +153,9 @@ async function drawFooter(
   boldFont: PDFFont,
   italicFont: PDFFont,
   boldItalicFont: PDFFont,
-  signatureUrl?: string | null
+  signatureUrl?: string | null,
+  penyetuju?: Penyetuju,
+  tanggalTandaTangan?: Date
 ) {
   const col1X = MARGIN_LEFT;
   const col2X = MARGIN_LEFT + 190;
@@ -162,7 +169,7 @@ async function drawFooter(
   };
 
   page.drawText('Tanggal kembali:', { x: col1X, y, size: 10, font: boldFont, color: rgb(0, 0, 0) });
-  page.drawText(`Yogyakarta, ${formatDate(borrowDate)}`, { x: col3X, y, size: 10, font, color: rgb(0, 0, 0) });
+  page.drawText(`Yogyakarta, ${formatDate(tanggalTandaTangan ?? borrowDate)}`, { x: col3X, y, size: 10, font, color: rgb(0, 0, 0) });
 
   y -= 14;
   page.drawLine({ start: { x: col1X, y }, end: { x: col1X + 120, y }, thickness: 0.5, color: rgb(0, 0, 0) });
@@ -203,7 +210,39 @@ async function drawFooter(
 
   // Garis utk TTD manual — di atas tulisan peran, sejajar underline nama (y-2)
   page.drawLine({ start: { x: col1X, y: y - 2 }, end: { x: col1X + colW, y: y - 2 }, thickness: 0.5, color: rgb(0, 0, 0) });
-  page.drawLine({ start: { x: col2X, y: y - 2 }, end: { x: col2X + colW, y: y - 2 }, thickness: 0.5, color: rgb(0, 0, 0) });
+
+  // ── Kolom tengah: yang menyetujui ──
+  // Dulu kolom ini selamanya garis kosong, jadi dokumen tidak membuktikan
+  // siapa yang menyetujui. Sekarang diisi begitu pengajuan disetujui.
+  if (penyetuju?.nama) {
+    // Admin: tanda tangan di atas, nama bergaris bawah di bawahnya.
+    if (penyetuju.tandaTangan) {
+      try {
+        const sigPath = uploadPathFromUrl(penyetuju.tandaTangan);
+        const sigBytes = await fs.readFile(sigPath);
+        const ext = path.extname(penyetuju.tandaTangan).toLowerCase();
+        const sigImg = ext === '.png' ? await pdfDoc.embedPng(sigBytes) : await pdfDoc.embedJpg(sigBytes);
+        const sigDims = sigImg.scaleToFit(colW - 10, 55);
+        page.drawImage(sigImg, {
+          x: col2X + (colW - sigDims.width) / 2,
+          y: y + 12,
+          width: sigDims.width,
+          height: sigDims.height,
+        });
+      } catch { /* TTD gagal dimuat — nama tetap dicetak */ }
+    }
+    const admTw = boldFont.widthOfTextAtSize(penyetuju.nama, 10);
+    const admX = col2X + (colW - admTw) / 2;
+    page.drawText(penyetuju.nama, { x: admX, y, size: 10, font: boldFont, color: rgb(0, 0, 0) });
+    page.drawLine({ start: { x: admX, y: y - 2 }, end: { x: admX + admTw, y: y - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
+  } else if (penyetuju) {
+    // Superadmin: sengaja TANPA nama dan TANPA tanda tangan.
+    centerText('Disetujui oleh Admin', col2X, colW, boldFont, 9, y);
+    page.drawLine({ start: { x: col2X, y: y - 2 }, end: { x: col2X + colW, y: y - 2 }, thickness: 0.5, color: rgb(0, 0, 0) });
+  } else {
+    // Belum disetujui (dokumen pengajuan, atau dokumen lama) — garis kosong.
+    page.drawLine({ start: { x: col2X, y: y - 2 }, end: { x: col2X + colW, y: y - 2 }, thickness: 0.5, color: rgb(0, 0, 0) });
+  }
 
   // Nama peminjam: bold + underline DI BAWAH nama (pola serah terima).
   // Sebelumnya underline digambar di y+12 (atas nama) dan menimpa bagian bawah TTD.
@@ -367,7 +406,7 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
   }
 
   // ── Footer (tanda tangan + ketentuan) ──
-  await drawFooter(pdfDoc, currentPage, y, data.borrowerName, data.borrowDate, font, boldFont, italicFont, boldItalicFont, data.signatureUrl);
+  await drawFooter(pdfDoc, currentPage, y, data.borrowerName, data.borrowDate, font, boldFont, italicFont, boldItalicFont, data.signatureUrl, data.penyetuju, data.tanggalTandaTangan);
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
