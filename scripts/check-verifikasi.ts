@@ -46,6 +46,124 @@ function teksPdf(buf: Buffer): string {
 
 const adaGambar = (buf: Buffer) => (buf.toString("latin1").match(/\/Subtype\s*\/Image/g) || []).length;
 
+/**
+ * Baca posisi tulisan & gambar di PDF supaya tumpang-tindih bisa DIBUKTIKAN,
+ * bukan ditebak dari angka di sourcecode. Angka di sourcecode pernah bilang
+ * "aman" padahal kotak QR menembus tulisan "Yang menyerahkan,".
+ */
+function tataLetak(buf: Buffer): {
+  teks: { x: number; y: number; ukuran: number; isi: string }[];
+  gambar: { x: number; y: number; w: number; h: number }[];
+} {
+  const teks: { x: number; y: number; ukuran: number; isi: string }[] = [];
+  const gambar: { x: number; y: number; w: number; h: number }[] = [];
+  const mentah = buf.toString("latin1");
+  const re = /stream\r?\n/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(mentah))) {
+    const mulai = m.index + m[0].length;
+    const akhir = mentah.indexOf("endstream", mulai);
+    if (akhir < 0) continue;
+    let isi: string;
+    try { isi = inflateSync(Buffer.from(mentah.slice(mulai, akhir), "latin1")).toString("latin1"); } catch { continue; }
+
+    // Tulisan: "1 0 0 1 x y Tm" lalu Tj berikutnya (heksa atau kurung).
+    // Ukuran huruf dilacak dari operator "Tf" supaya tinggi huruf bisa
+    // diperkirakan sesuai ukurannya — keterangan QR hanya 6,5pt, kalau
+    // dianggap 10pt pemeriksaan tumpang-tindihnya jadi gagal palsu.
+    let ukuran = 10;
+    let tunggu: { x: number; y: number } | null = null;
+    for (const baris of isi.split("\n")) {
+      const l = baris.trim();
+      const mTf = /^\/[\w.-]+ ([\d.]+) Tf$/.exec(l);
+      if (mTf) { ukuran = Number(mTf[1]); continue; }
+      const mTm = /^1 0 0 1 ([\d.-]+) ([\d.-]+) Tm$/.exec(l);
+      if (mTm) { tunggu = { x: Number(mTm[1]), y: Number(mTm[2]) }; continue; }
+      const mTj = /^(?:<([0-9A-Fa-f]*)>|\(((?:[^()\\]|\\.)*)\)) Tj$/.exec(l);
+      if (mTj && tunggu) {
+        const isiTeks = mTj[1] !== undefined ? Buffer.from(mTj[1], "hex").toString("latin1") : mTj[2];
+        teks.push({ x: tunggu.x, y: tunggu.y, ukuran, isi: isiTeks });
+        tunggu = null;
+      }
+    }
+    // Gambar: pdf-lib menulis TERJEMAHAN dan SKALA sebagai dua operator `cm`
+    // terpisah (mis. "1 0 0 1 280 245 cm" lalu "62 0 0 62 0 0 cm"), jadi
+    // keduanya harus dikalikan — kalau hanya satu yang dibaca, kotak QR tak
+    // ketemu dan penjaga jadi buta.
+    let mat: number[] | null = null;
+    for (const baris of isi.split("\n")) {
+      const l = baris.trim();
+      if (l === "q") { mat = [1, 0, 0, 1, 0, 0]; continue; }
+      const mCm = /^([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) cm$/.exec(l);
+      if (mCm && mat) {
+        const [a, b, c, d, e, f] = mCm.slice(1).map(Number);
+        // Operator `cm` berlaku SEBELUM matriks yang sudah terkumpul
+        // (titik di ruang lokal dikalikan skala dulu, baru diterjemahkan),
+        // jadi perkaliannya M_operator x M_terkumpul — bukan sebaliknya.
+        mat = [
+          a * mat[0] + b * mat[2],
+          a * mat[1] + b * mat[3],
+          c * mat[0] + d * mat[2],
+          c * mat[1] + d * mat[3],
+          e * mat[0] + f * mat[2] + mat[4],
+          e * mat[1] + f * mat[3] + mat[5],
+        ];
+        continue;
+      }
+      if (/\/[\w.-]+ Do$/.test(l) && mat) {
+        gambar.push({ w: Math.abs(mat[0]), h: Math.abs(mat[3]), x: mat[4], y: mat[5] });
+      }
+    }
+  }
+  return { teks, gambar };
+}
+
+/** Kotak besar persegi = kandidat kotak QR (TTD biasanya lebih lebar/rendah). */
+function kotakQr(buf: Buffer) {
+  return tataLetak(buf).gambar.filter((z) => Math.abs(z.w - z.h) < 1.5 && z.w > 40);
+}
+
+/**
+ * Cari baris tulisan yang PALING DEKAT ke sebuah posisi y.
+ * Perlu karena banyak tulisan muncul berkali-kali (nama peminjam tercetak di
+ * tabel keterangan DAN di blok tanda tangan) — `find` biasa bisa mengambil yang
+ * salah dan membuat pemeriksaan "sejajar" jadi gagal palsu / lulus palsu.
+ */
+function cariDekat(teks: { x: number; y: number; ukuran: number; isi: string }[], isi: string, dekatY: number) {
+  const sama = teks.filter((b) => b.isi === isi);
+  if (!sama.length) return undefined;
+  return sama.reduce((a, b) => (Math.abs(b.y - dekatY) < Math.abs(a.y - dekatY) ? b : a));
+}
+
+/**
+ * Benar kalau kotak QR di PDF tidak menembus tulisan atau keterangannya sendiri.
+ * Tinggi huruf diperkirakan ~1pt per poin ukuran (tulisan di sini 8-10pt).
+ */
+function qrTidakBertabrakan(buf: Buffer): { aman: boolean; bukti: string } {
+  const { teks, gambar } = tataLetak(buf);
+  const qr = gambar.filter((z) => Math.abs(z.w - z.h) < 1.5 && z.w > 40);
+  if (!qr.length) return { aman: false, bukti: "kotak QR tidak ditemukan" };
+  const z = qr[0];
+  const atasQr = z.y + z.h;
+  const kiriQr = z.x - 2, kananQr = z.x + z.w + 2;
+  const tabrakan: string[] = [];
+  for (const b of teks) {
+    // Tinggi huruf mengikuti ukuran aslinya (dilacak dari operator Tf), bukan
+    // angka tetap — keterangan QR 6,5pt tidak setinggi tulisan 10pt.
+    const atasTeks = b.y + b.ukuran * 0.95;
+    const bawahTeks = b.y - 3;
+    const beririsanX = !(b.x + b.isi.length * 5 < kiriQr || b.x > kananQr);
+    const beririsanY = !(atasTeks < z.y || bawahTeks > atasQr);
+    // Keterangan "Pindai untuk memeriksa" memang di bawah kotak — bukan tabrakan
+    // selama masih di luar kotaknya.
+    if (beririsanX && beririsanY) tabrakan.push(`"${b.isi}" (y=${b.y})`);
+  }
+  return {
+    aman: tabrakan.length === 0,
+    bukti: tabrakan.length ? `kotak QR menembus: ${tabrakan.join(", ")}` : `kotak x=${z.x} y=${z.y} ${z.w}x${z.h}`,
+  };
+}
+
 async function main() {
   // ── 1. Bentuk kode ──
   const kode = kodeBaru();
@@ -167,6 +285,53 @@ async function main() {
   cek("[serah] memuat keterangan 'Pindai untuk memeriksa'", isiSt.includes("Pindai untuk memeriksa"));
   cek("[serah] memuat gambar kotak QR", adaGambar(pdfSt) >= 1, `jumlah gambar=${adaGambar(pdfSt)}`);
   cek("[serah] nama penerima tetap tercetak", isiSt.includes("Penerima Contoh"));
+
+  // ── 9. TATA LETAK: kotak QR tidak boleh menembus tulisan di sekitarnya ──
+  // Angka di sourcecode pernah bilang "aman" padahal kotaknya menembus
+  // "Yang menyerahkan,". Jadi yang diperiksa POSISI NYATA di PDF.
+  const tabrakPinjam = qrTidakBertabrakan(pdfSuper);
+  cek("[pinjam] kotak QR tidak menembus tulisan lain", tabrakPinjam.aman, tabrakPinjam.bukti);
+  const tabrakSerah = qrTidakBertabrakan(pdfSt);
+  cek("[serah] kotak QR tidak menembus tulisan lain", tabrakSerah.aman, tabrakSerah.bukti);
+  cek("[pinjam] kotak QR ada & bersudut persegi", kotakQr(pdfSuper).length === 1,
+      `jumlah kotak persegi=${kotakQr(pdfSuper).length}`);
+  cek("[serah] kotak QR ada & bersudut persegi", kotakQr(pdfSt).length === 1,
+      `jumlah kotak persegi=${kotakQr(pdfSt).length}`);
+
+  // ── 10. TATA LETAK: baris kolom kiri/tengah/kanan harus SEJAJAR ──
+  // Nama peminjam tercetak DUA kali (di tabel keterangan dan di blok tanda
+  // tangan), jadi pencariannya harus "yang terdekat dengan blok tanda tangan",
+  // bukan sekadar `find` pertama.
+  //
+  // PENTING soal apa yang memang sebaris: label "Admin <unit>" duduk di baris
+  // yang SAMA dengan nama yang ditandatangani (peminjam / penerima), sedangkan
+  // tulisan peran ("Penerima Barang Kembali", "Divisi Informasi Teknologi")
+  // sengaja lebih RENDAH supaya ada ruang tanda tangan. Jadi yang diperiksa
+  // sejajar adalah label Admin <-> nama penandatangan; baris peran diperiksa
+  // sejajar satu sama lain (kiri <-> tengah).
+  const posPinjam = tataLetak(pdfSuper).teks;
+  const yPeranKiri = posPinjam.find((b) => b.isi === "Penerima Barang Kembali")?.y;
+  const yPeranTengah = posPinjam.find((b) => b.isi === "Divisi Informasi Teknologi")?.y;
+  const yLabelAdminPinjam = yPeranKiri === undefined ? undefined
+    : cariDekat(posPinjam, "Admin Divisi Teknologi Informasi", yPeranKiri)?.y;
+  const yNamaPinjam = yLabelAdminPinjam === undefined ? undefined
+    : cariDekat(posPinjam, "Peminjam Contoh", yLabelAdminPinjam)?.y;
+  cek("[pinjam] tulisan peran kiri & tengah sejajar", yPeranKiri !== undefined && yPeranKiri === yPeranTengah,
+      `kiri=${yPeranKiri} tengah=${yPeranTengah}`);
+  cek("[pinjam] label Admin sejajar dengan nama penandatangan", yLabelAdminPinjam === yNamaPinjam,
+      `admin=${yLabelAdminPinjam} nama=${yNamaPinjam}`);
+
+  const posSerah = tataLetak(pdfSt).teks;
+  const ySerahKiri = posSerah.find((b) => b.isi === "Yang menyerahkan,")?.y;
+  const ySerahKanan = posSerah.find((b) => b.isi === "Yang menerima,")?.y;
+  const yLabelAdmin = ySerahKiri === undefined ? undefined
+    : cariDekat(posSerah, "Admin Divisi Teknologi Informasi", ySerahKiri)?.y;
+  const yNamaPenerima = yLabelAdmin === undefined ? undefined
+    : cariDekat(posSerah, "Penerima Contoh", yLabelAdmin)?.y;
+  cek("[serah] 'Yang menyerahkan,' & 'Yang menerima,' sejajar", ySerahKiri === ySerahKanan,
+      `kiri=${ySerahKiri} kanan=${ySerahKanan}`);
+  cek("[serah] label Admin sejajar dengan nama penerima", yLabelAdmin === yNamaPenerima,
+      `admin=${yLabelAdmin} penerima=${yNamaPenerima}`);
 
   console.log(`\n  lulus=${lulus} gagal=${gagal.length}`);
   if (gagal.length) {

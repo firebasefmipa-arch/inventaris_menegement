@@ -312,7 +312,10 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   y -= 30;
 
   // ── Tanda tangan ──
-  if (y - 110 < MARGIN_BOTTOM) {
+  // Ambang 140 (dulu 110) mengikuti jarak blok yang kini lebih tinggi karena
+  // kotak QR: dari titik ini blok turun 103 (jarak) + 36 (label & nama) = 139.
+  // Kalau ambangnya tetap 110, blok bisa tergambar melewati batas bawah halaman.
+  if (y - 140 < MARGIN_BOTTOM) {
     currentPage = pdfDoc.addPage([PAGE_W, PAGE_H]);
     y = PAGE_H - 80;
   }
@@ -332,7 +335,7 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
   const menerimaTw = font.widthOfTextAtSize('Yang menerima,', 10);
   currentPage.drawText('Yang menerima,', { x: col2X + (colW - menerimaTw) / 2, y, size: 10, font, color: rgb(0, 0, 0) });
 
-  y -= 75;
+  y -= 103;
 
   // Tanda tangan (TTD) DIGAMBAR DI ATAS NAMA.
   // Tata letak dari bawah ke atas: nama (dengan garis bawah) → TTD di atasnya.
@@ -381,8 +384,16 @@ export async function generateHandoverPDF(data: HandoverData): Promise<Buffer> {
     // Superadmin: dulu tertulis "Disetujui oleh Admin" — itu justru menandai
     // dirinya sebagai superadmin (karena admin biasa namanya tercetak).
     // Sekarang "Admin <unit>" + kotak QR.
+    //
+    // JARAK: sama seperti dokumen peminjaman. Dari bawah ke atas:
+    //   label "Admin <unit>"  y = 0
+    //   keterangan            y = 20
+    //   bawah kotak           y = 29
+    //   atas kotak            y = 91   (12pt di bawah "Yang menyerahkan,")
+    // Kolom kanan ("Yang menerima," / nama penerima) TIDAK ikut turun, jadi
+    // barisnya tetap sejajar — label "Admin" pun sebaris dengan nama penerima.
     if (data.kodeVerifikasi) {
-      await tempelQr(pdfDoc, currentPage, data.kodeVerifikasi, col1X + (colW - 62) / 2, signNameY + 76, 62, font);
+      await tempelQr(pdfDoc, currentPage, data.kodeVerifikasi, col1X + (colW - 62) / 2, signNameY + 91, 62, font);
     }
     const labelAdm = labelPenyetuju(data.penyetuju, data.unit ?? data.unitName ?? data.department ?? null) ?? 'Admin';
     const tw = boldFont.widthOfTextAtSize(labelAdm, ukuranMuat(boldFont, labelAdm, colW));

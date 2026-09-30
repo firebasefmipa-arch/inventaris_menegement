@@ -111,9 +111,59 @@ dicatat karena bukan cara yang ideal.
   "Disetujui oleh Admin" yang justru sengaja dibuang — diperbarui.
 - `uji-setuju-serah.ts` & `uji-bocor-impor.ts` memakai `LIMIT 1` / `= 1` pada
   nama barang uji yang **kembar** (data uji sengaja tidak dihapus) → mengambil
-  barang yang salah. Diperbaiki agar tahan barang kembar.
+  barang yang salah. Diperbaiki agar tahan barang kembar. Hal yang sama terjadi
+  lagi di `uji-kondisi-http.ts`
+  ("kondisi kosong → tidak muncul") pada 30 Sep — barang `UJI-B proyektor baik`
+  ada **tiga** (1088, 1129, 1132); prober hanya mengosongkan kondisi SATU barang,
+  lalu namanya tetap terlihat di daftar user lewat barang kembarnya → gagal
+  palsu. Diperbaiki: bersihkan **semua** barang bernama itu lebih dulu.
 - `uji-katalog-lama.ts` menguji halaman `/katalog` yang **sudah lama dihapus**
   dari source — uji usang, bukan kerusakan baru.
+
+### Temuan lanjutan Audit #22 — kotak QR menembus tulisan (dilaporkan pemilik produk)
+
+**Kesempatan:** pemilik produk melihat langsung hasil cetaknya —
+*"barcodenya terlalu besar atau gap yang menyerahkan dengan nama penyerahnya
+kurang lebar"*.
+
+**Temuan:** bukan sekadar kurang rapi. Di dokumen produksi
+(`signed_forms/PB_Uji_Superadmin_30092026_436.pdf`) posisinya:
+
+```
+"Yang menyerahkan,"      y = 301,9
+kotak QR 62pt            atas = 307,9   <- menembus 6pt ke tulisan
+```
+
+Ruang antara tulisan peran dan garis tanda tangan hanya **70pt** (peminjaman) /
+**75pt** (serah terima), sedangkan kotak QR + keterangan butuh **78pt**. Jadi
+kotaknya memang **tidak akan pernah muat** — cacat tata letak, bukan selera.
+
+**Perbaikan:** jarak blok tanda tangan dilebarkan **70/75 → 103pt**, kotak QR
+digambar 91pt di atas garis tanda tangan, jadi:
+label "Admin <unit>" (y=0) → keterangan (y=20) → bawah kotak (y=29) →
+atas kotak (y=91, atau 12pt di bawah "Yang menyerahkan,").
+
+Sesuai permintaan pemilik produk (*"yang samping-sampingnya juga samakan biar
+sejajar"*), **kolom lain tidak digeser** — baris peran kiri/tengah dan nama
+penandatangan di kolom kanan tetap memakai `y` yang sama, sehingga label
+"Admin <unit>" tetap **sebaris** dengan nama penandatangan. Ikut disesuaikan:
+`FOOTER_HEIGHT` 220 → 245 (peminjaman) dan ambang pindah halaman 110 → 140
+(serah terima), supaya blok tidak terpotong atau memicu halaman baru.
+
+**Bukti:** dokumen produksi hasil alur sungguhan (superadmin menyetujui
+pengajuan, sistem mencetak ulang) —
+
+| Dokumen | QR bawah / atas | "Yang menyerahkan," | jarak atas | label Admin & nama |
+|---|---|---|---|---|
+| Peminjaman #394 | 227,9 / 289,9 | 301,9 | 12,0pt | sama-sama y=198,9 |
+| Serah terima #185 | 167,9 / 229,9 | 241,9 | 12,0pt | sama-sama y=138,9 |
+
+Ditambah `uji-layout-panjang.ts` (36) untuk tabel 1–30 barang (termasuk yang
+memicu pindah halaman), dan `check:verifikasi` naik **33 → 41** pemeriksaan:
+sekarang ia membaca **posisi nyata** tulisan & gambar di PDF dan menolak kalau
+kotak QR menembus apa pun atau label Admin tidak sebaris dengan nama
+penandatangan. **Sebelumnya penjaga ini buta** terhadap tata letak — itulah
+sebab cacat ini bisa lolos meski 33 pemeriksaan "lulus".
 
 ---
 

@@ -960,13 +960,42 @@ elektronik bersertifikat** (itu butuh sertifikat BSSN berbayar) — sifatnya han
   Flate** (`/Width /Height /ColorSpace /BitsPerComponent /Filter`), **bukan PNG
   utuh**; gambar ~300×300, **3 byte/piksel**. `ukuranMuat()` mengecilkan tulisan
   label kalau terlalu panjang.
+- **TATA LETAK blok tanda tangan (jangan diubah asal-asalan):** kotak QR 62pt +
+  keterangan butuh ruang, sedangkan jarak lama hanya 70pt (peminjaman) / 75pt
+  (serah terima) — kotaknya **menembus tulisan "Yang menyerahkan,"** (terbukti
+  di dokumen produksi: kotak sampai y=307,9 sedangkan tulisannya di y=301,9).
+  Sekarang jaraknya **103pt**, kotak digambar **91pt** di atas garis tanda
+  tangan. Urutan dari bawah ke atas: label "Admin <unit>" (y=0) → keterangan
+  (y=20) → bawah kotak (y=29) → atas kotak (y=91, jadi 12pt di bawah tulisan
+  peran). **Yang lain TIDAK ikut digeser**: baris peran kiri/tengah, dan nama
+  penandatangan di kolom kanan tetap memakai `y` yang sama, sehingga label
+  "Admin <unit>" tetap **sebaris** dengan nama penandatangan. Kalau jarak ini
+  diubah, `FOOTER_HEIGHT` (pdf-generator) dan ambang pindah halaman 140
+  (handover-pdf-generator) ikut disesuaikan — kalau tidak, blok bisa terpotong
+  atau memicu halaman baru yang tidak perlu.
+  Angka-angka ini **dijaga otomatis** oleh `check:verifikasi`: ia membaca posisi
+  nyata tulisan & gambar di PDF lalu memastikan kotak QR tidak menembus apa pun
+  dan label Admin sebaris dengan nama penandatangan.
+- **Membaca posisi gambar di PDF (untuk uji):** pdf-lib menulis TERJEMAHAN dan
+  SKALA sebagai **dua operator `cm` terpisah** (`1 0 0 1 x y cm` lalu
+  `62 0 0 62 0 0 cm`), operator berlaku **sebelum** matriks terkumpul, dan nama
+  gambarnya mengandung tanda hubung (`/Image-9068155788 Do`). Salah satu saja
+  terlewat → kotak QR tidak ketemu dan penjaganya jadi buta.
+- **Tinggi huruf untuk mendeteksi tumpang-tindih** harus dilacak dari operator
+  `Tf`, bukan angka tetap: keterangan QR hanya 6,5pt, kalau dianggap 10pt
+  pemeriksaannya jadi gagal palsu.
 - Pustaka: `qrcode@1.5.4` + `@types/qrcode` (dev). PDF tetap `pdf-lib`.
-- Penjaga: `npm run check:verifikasi` (`scripts/check-verifikasi.ts`, 33
-  pemeriksaan) — membaca ISI DOKUMEN & halaman. Uji alur:
+- Penjaga: `npm run check:verifikasi` (`scripts/check-verifikasi.ts`, 41
+  pemeriksaan) — membaca ISI DOKUMEN & halaman **beserta tata letaknya**
+  (posisi nyata tulisan & kotak QR: tidak boleh tumpang-tindih, label Admin
+  harus sebaris dengan nama penandatangan). Uji alur:
   `/root/audit-20260930/kerja/uji-kode-qr.ts` (20) ·
   `uji-qr-http.ts` (41) · halaman di Chromium `uji-halaman-qr.mjs` (26) ·
+  tata letak berbagai panjang tabel `uji-layout-panjang.ts` (36) ·
   QR di-decode pembaca sungguhan `/root/audit-20260930/qrcek/pindai-qr.ts`.
-  Verifikasi pasca-deploy: `/root/audit-20260930/qrcek/verif-produksi.ts`.
+  Verifikasi pasca-deploy: `/root/audit-20260930/qrcek/verif-alur-produksi.ts`
+  (peminjaman) & `verif-alur-serah-produksi.ts` (serah terima) — menyetujui
+  pengajuan sungguhan lalu MENGUKUR dokumen yang baru tercetak.
 - **Uji wajib memeriksa hal yang SUNGGUH DILIHAT orang** (isi PDF/halaman),
   bukan meniru query — peniru query bisa "aman" padahal tampilannya bocor.
 

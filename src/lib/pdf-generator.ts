@@ -207,7 +207,7 @@ async function drawFooter(
     } catch { /* Jika gagal load TTD, biarkan kosong */ }
   }
 
-  y -= 70;
+  y -= 103;
 
   // Kolom kiri & tengah: garis DI ATAS tulisan (seperti sebelumnya) — blok digeser ke
   // bawah sehingga garisnya (y-2) sejajar dgn underline nama peminjam di kolom kanan.
@@ -247,8 +247,22 @@ async function drawFooter(
     // Dulu di sini tertulis "Disetujui oleh Admin" — itu justru membocorkan
     // rahasia, karena admin biasa namanya tercetak, jadi tulisan "Admin" saja
     // berarti superadmin. Sekarang ditulis "Admin <unit barang>" + kotak QR.
+    //
+    // JARAK: kotak QR (62pt) + keterangan "Pindai untuk memeriksa" butuh ruang,
+    // dan semuanya harus muat di antara tulisan "Yang menyerahkan," dan tulisan
+    // "Admin <unit>". Jarak lama (70pt) TIDAK cukup — di dokumen produksi
+    // kotaknya menembus "Yang menyerahkan," (kotak sampai y=307,9, tulisannya
+    // di y=301,9). Sekarang jaraknya 103pt dan kotak digambar 91pt di atas
+    // garis, jadi dari bawah ke atas:
+    //   label "Admin <unit>"  y = 0        (8pt, puncak huruf ~8)
+    //   keterangan            y = 20       (7,8pt di atas label)
+    //   bawah kotak           y = 29
+    //   atas kotak            y = 91       (12pt di bawah "Yang menyerahkan,")
+    // Baris tengah ("Divisi Informasi Teknologi") TIDAK ikut turun — ia memakai
+    // `y` yang sama dengan kolom kiri & kanan, jadi ketiganya tetap sejajar.
+    // Label "Admin" pun duduk SEBARIS dengan nama penandatangan di kolom kanan.
     if (kodeVerifikasi) {
-      await tempelQr(pdfDoc, page, kodeVerifikasi, col2X + (colW - 62) / 2, y + 76, 62, font);
+      await tempelQr(pdfDoc, page, kodeVerifikasi, col2X + (colW - 62) / 2, y + 91, 62, font);
     }
     const labelAdm = labelPenyetuju(penyetuju, unit ?? null) ?? 'Admin';
     centerText(labelAdm, col2X, colW, boldFont, ukuranMuat(boldFont, labelAdm, colW), y);
@@ -370,7 +384,7 @@ export async function generateBorrowingPDF(data: TransactionData): Promise<Buffe
   }
 
   // ── Tinggi yang dibutuhkan footer ──
-  const FOOTER_HEIGHT = 220; // catatan + tanda tangan + ketentuan
+  const FOOTER_HEIGHT = 245; // catatan + tanda tangan + ketentuan (naik 25 sejak kotak QR ditambahkan)
   const NOTE_HEIGHT   = 30;
 
   // ── Render header tabel ──
