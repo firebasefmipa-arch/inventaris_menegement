@@ -95,6 +95,9 @@ body {
 /* Varian ber-opasitas (bg-x-50/50 dsb) token CSS-nya BEDA dari bg-x-50,
    jadi aturan di atas TIDAK ikut kena. Tanpa blok ini, kotak berwarna di
    mode gelap tetap memakai warna terang + tulisan gelap = nyaris tak terbaca. */
+/* bg-white/90 dipakai kartu "Lanjut" yang melayang di atas daftar barang —
+   tanpa baris ini, kartunya tetap putih terang di mode gelap. */
+.dark .bg-white\/90     { background-color: rgba(22, 32, 53, 0.92) !important; }
 .dark .bg-gray-50\/50   { background-color: #0f1b2e !important; }
 .dark .bg-gray-50\/70   { background-color: #111d35 !important; }
 .dark .bg-gray-50\/80   { background-color: #111d35 !important; }
@@ -182,11 +185,19 @@ body {
 .dark .divide-gray-200 > * + * { border-color: #1e3050 !important; }
 
 /* ── Shadows ────────────────────────────────────── */
-.dark .shadow-sm { box-shadow: 0 1px 4px rgba(0,0,0,0.4) !important; }
-.dark .shadow    { box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important; }
-.dark .shadow-md { box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important; }
-.dark .shadow-lg { box-shadow: 0 8px 24px rgba(0,0,0,0.55) !important; }
-.dark .shadow-xl { box-shadow: 0 12px 32px rgba(0,0,0,0.6) !important; }
+/* HANYA ganti nilai --tw-shadow, JANGAN tulis `box-shadow` utuh di sini.
+   Tailwind menyusun box-shadow dari beberapa lapis:
+     var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
+     var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)
+   Kalau diganti utuh, lapis cincin (--tw-ring-shadow) ikut terhapus — akibatnya
+   kartu barang yang dipilih kehilangan cincin birunya di mode gelap, dan
+   kartunya tampak tanpa penanda apa pun. Mengganti --tw-shadow saja membiarkan
+   cincin tetap tergambar. */
+.dark .shadow-sm { --tw-shadow: 0 1px 4px rgba(0,0,0,0.4) !important; }
+.dark .shadow    { --tw-shadow: 0 2px 8px rgba(0,0,0,0.5) !important; }
+.dark .shadow-md { --tw-shadow: 0 4px 16px rgba(0,0,0,0.5) !important; }
+.dark .shadow-lg { --tw-shadow: 0 8px 24px rgba(0,0,0,0.55) !important; }
+.dark .shadow-xl { --tw-shadow: 0 12px 32px rgba(0,0,0,0.6) !important; }
 
 /* ── Filter / toolbar bar ───────────────────────── */
 .dark .bg-gray-50.rounded-xl,

@@ -270,7 +270,7 @@ export function UserSerahTerimaFlow({ items }: { items: PublicItem[] }) {
               <p className="text-sm text-gray-500">Barang tidak ditemukan</p>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 pb-32">
+            <div className="animate-slide-in grid sm:grid-cols-2 xl:grid-cols-3 gap-4 pb-32">
               {filtered.map((item) => {
                 const meta = getCategoryMeta(item.category);
                 const pct = Math.round((item.availableQuantity / item.quantity) * 100);

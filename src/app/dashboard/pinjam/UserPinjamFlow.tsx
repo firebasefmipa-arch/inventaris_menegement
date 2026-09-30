@@ -235,7 +235,12 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
 
       {/* ─── STEP 1: PILIH BARANG ─── */}
       {step === "item" && (
-        <div className="animate-slide-in space-y-4">
+        // JANGAN beri animasi pada pembungkus ini. Animasi meninggalkan
+        // `transform` pada elemen, dan `transform` membuat elemen `fixed` di
+        // dalamnya menempel ke pembungkus ini — bukan ke jendela. Akibatnya
+        // tombol "Lanjut" ikut menggulung bersama daftar barang. Animasi
+        // dipindah ke daftar barangnya (aman: tak ada elemen `fixed` di sana).
+        <div className="space-y-4">
           {/* Gate: TTD belum diupload */}
           {hasSignature === false && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
@@ -276,7 +281,7 @@ export function UserPinjamFlow({ items }: { items: PublicItem[] }) {
               <p className="text-sm text-gray-500">Barang tidak ditemukan</p>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 pb-32">
+            <div className="animate-slide-in grid sm:grid-cols-2 xl:grid-cols-3 gap-4 pb-32">
               {filtered.map((item) => {
                 const meta = getCategoryMeta(item.category);
                 const pct = Math.round((item.availableQuantity / item.quantity) * 100);
