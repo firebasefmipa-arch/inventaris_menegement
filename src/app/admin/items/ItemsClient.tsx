@@ -817,8 +817,8 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
                       {/* Spesifikasi */}
                       <div className="flex-1 mt-1">
                         <div className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-1">Spesifikasi</div>
-                        <p className="text-[11px] text-gray-600 leading-relaxed line-clamp-2" title={item.description || 'Tidak ada spesifikasi khusus.'}>
-                          {item.description || 'Tidak ada spesifikasi khusus.'}
+                        <p className="text-[11px] text-gray-600 leading-relaxed line-clamp-2" title={item.description || '-'}>
+                          {item.description || '-'}
                         </p>
                       </div>
                     </div>
@@ -928,7 +928,7 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
                                   {item.category}
                                 </span>
                               )}
-                              <p className="text-xs text-gray-500 truncate">{item.description || 'Tidak ada spesifikasi'}</p>
+                              <p className="text-xs text-gray-500 truncate">{item.description || '-'}</p>
                             </div>
                             <div className="flex flex-wrap items-center gap-1 mt-1.5">
                               {availabilityBadge("Pinjam", item.canBorrow)}
