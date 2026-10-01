@@ -2023,3 +2023,61 @@ DIPERTAHANKAN atas keputusan pemilik produk. Cadangan sebelum penghapusan:
 `/root/audit-20260930/cadangan-bersih2/`.
 
 **Status: SELESAI.**
+
+## Audit #24 — Unit wajib pada tambah barang & impor (1 Okt 2026)
+
+**Permintaan pemilik produk.** Sistem sudah punya unit dan admin sudah dipisah
+per unit, tapi tambah barang & impor belum ikut. Kotak Unit di form tambah
+barang bertulisan "(opsional)" padahal tanpa unit kode barang memakai "LAIN"
+dan barangnya jatuh ke tangan Super Admin saja — pekerjaan admin hilang
+diam-diam. Server memang sudah menolak, tapi layar tak pernah memberi tahu
+lebih dulu.
+
+**Yang dikerjakan.**
+- Admin satu unit: kotak Unit terisi sendiri & terkunci.
+- Admin beberapa unit: hanya unitnya yang muncul, wajib dipilih.
+- Superadmin: bebas, seperti sebelumnya.
+- Impor: kolom "Unit" boleh dikosongkan HANYA kalau pengelolanya satu unit.
+  Berkas campuran banyak unit tetap jalan (disaring per baris). Jendela impor
+  menyebut unit yang dikelola SEBELUM berkas diunggah.
+- Rute baru `/api/unit-saya` untuk memberi tahu layar; pemeriksaan sesungguhnya
+  tetap di setiap penyimpanan.
+
+**Bukti.** 23/23 uji HTTP (termasuk impor yang benar-benar tersimpan — kodenya
+jadi FMIPA-KIM-…), 14/14 uji browser sungguhan, alur lama tetap 50/50, seluruh
+penjaga hijau.
+
+### INSIDEN — skrip pembersih menghapus 408 nomor register
+
+Skrip pembersihan pertama (`hapus-unit.sh`) memakai pola:
+
+    DELETE FROM kode_terpakai k WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.item_code = k.kode)
+
+Maksudnya membuang nomor bekas barang uji. Kenyataannya register memang
+MENYIMPAN nomor yang barangnya sudah tidak ada — itu justru gunanya (nomor
+bekas tidak boleh dipakai ulang). Pola itu menyapu **408 nomor historis**.
+
+Dua kesalahan bertumpuk:
+1. **`DELETE` berbasis "tidak dipakai barang"** pada tabel yang memang
+   menyimpan riwayat. Seharusnya menyasar DAFTAR nomor uji yang eksplisit.
+2. **`item_returns` tidak punya kolom `transaction_id`** (menunjuk lewat
+   `item_id`). Subquery ke kolom yang tak ada membuat seluruh sesi MySQL
+   berhenti di tengah, sehingga baris-baris sesudahnya — termasuk DELETE akun
+   uji — ikut batal. Skrip tampak "berhasil" padahal baru separuh jalan.
+
+**Perbaikan.** Cadangan dari beberapa menit sebelumnya dipakai untuk
+mengembalikan tepat 408 nomor yang hilang (INSERT IGNORE, id & kode sama).
+Register kembali 492. Sisa pembersihan diselesaikan lewat skrip kedua
+(`hapus-unit2.sh`) yang hanya menyasar daftar nomor eksplisit, lalu nomornya
+ditarik lewat **alat resmi** `npm run kode:bebas lepas <KODE>` (satu per satu,
+21 nomor) — bukan DELETE mentah.
+
+**Keadaan akhir (sama seperti sebelum pengujian):** barang 84 · transaksi 2 ·
+serah terima 1 · akun 9 · register 492 · nomor TI tertinggi 403.
+
+**Aturan baru (31).** Skrip pembersih DILARANG memakai pola "hapus yang tidak
+dipakai" pada `kode_terpakai`; nomor hanya ditarik lewat `kode:bebas lepas`
+dengan daftar eksplisit. Setiap `DELETE` pada `kode_terpakai` wajib menyebut
+kode satu per satu. Periksa juga nama kolom tiap tabel sebelum menulis
+subquery — kolom yang salah membuat sesi MySQL berhenti di tengah tanpa
+gagalnya skrip.

@@ -626,7 +626,29 @@ utuh, tiap sel muat atau dipotong rapi, semua header tidak luber.
   dikenal / kosong → `LAIN` (barang tetap punya nomor sah, dua unit tak dikenal
   tak saling menabrak). Kode barang: `FMIPA-<KODE UNIT>-<TAHUN>-<URUT>` — **tiap
   unit punya urutan sendiri**. `buildUnitItemCode()` di `units.ts`.
-- Penjaga: `npm run check:unit` (27 pemeriksaan, murni tanpa DB).
+- Penjaga: `npm run check:unit` (97 pemeriksaan).
+
+**Unit WAJIB di tambah barang, edit barang, dan impor** (Audit #24). Tanpa
+unit, kode barang memakai `LAIN` dan barangnya hanya bisa dikelola Super Admin
+— pekerjaan admin hilang diam-diam. Jadi:
+
+| pemakai | tambah/edit barang | impor |
+|---|---|---|
+| admin 1 unit | kotak terisi sendiri & **terkunci** | kolom "Unit" boleh dikosongkan → diisi unitnya |
+| admin >1 unit | hanya unitnya muncul, **wajib pilih** | kolom "Unit" wajib; berkas boleh campur |
+| superadmin | bebas (boleh kosong) | bebas |
+
+- `UnitSelect` menerima `allowedUnits` (null = superadmin/semua, [] = tak punya).
+  Menyaring juga `optgroup` yang jadi kosong; unit lama di luar daftar tetap
+  ditawarkan kepada yang mengelolanya.
+- Layar mendapat daftarnya dari **`GET /api/unit-saya`** (401 untuk peran user).
+  Ini HANYA kenyamanan layar — **pemeriksaan sesungguhnya tetap di setiap
+  penyimpanan** (`periksaAksesUnit` di route POST/PUT items & impor). Gagal
+  memuat daftar unit → kosongkan, JANGAN buka semua unit.
+- Impor: `unitOtomatis = !unitRaw && batas?.length === 1 ? batas[0] : ""`.
+  Berkas campuran banyak unit tetap disaring per baris (perilaku lama).
+- Halaman edit mengambil daftarnya sendiri lewat `/api/unit-saya`.
+
 
 **Hak kelola — SATU tempat: `src/lib/akses-unit.ts`.** Jangan tulis ulang
 aturannya di route.
