@@ -36,6 +36,14 @@ const TANDA = "ZZ-UJI-KODE";
 /** Semua kode yang DIBUAT uji ini — dihapus lagi saat bersih-bersih. */
 const dibuat: string[] = [];
 
+/** Cegah pembersihan berjalan dua kali (mis. galat + sinyal beruntun). */
+let sedangBersih = false;
+async function bersihAman() {
+  if (sedangBersih) return;
+  sedangBersih = true;
+  await bersihkan().catch(() => {});
+}
+
 /**
  * Bersihkan barang uji + nomor register yang dibuat uji ini.
  *
@@ -53,6 +61,16 @@ async function bersihkan() {
   dibuat.length = 0;
 }
 
+// Dihentikan paksa (Ctrl-C / SIGTERM) tetap membersihkan jejaknya. Tanpa ini,
+// menekan Ctrl-C di tengah pengujian meninggalkan nomor uji di register —
+// dan register bersifat append-only, jadi sisa itu tak akan pernah hilang.
+for (const sinyal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sinyal, () => {
+    console.log(`\n  (${sinyal}) membersihkan jejak uji...`);
+    bersihAman().finally(() => process.exit(1));
+  });
+}
+
 async function main() {
   console.log("check-kode-barang — buku register nomor\n");
   await bersihkan();
@@ -68,7 +86,7 @@ async function main() {
   const adaDiRegister = await db.select().from(kodeTerpakai).where(eq(kodeTerpakai.kode, kodeBaru));
   cek("B3 nomor langsung tercatat saat dibuat (belum tentu ada barangnya)",
       adaDiRegister.length === 1, `kode=${kodeBaru} catatan=${adaDiRegister.length}`);
-  cek("B3 bentuk kode benar", /^FMIPA-TI-\d{4}-\d{3}$/.test(kodeBaru), kodeBaru);
+  cek("B3 bentuk kode benar", /^FMIPA-TI-\d{4}-\d{3,}$/.test(kodeBaru), kodeBaru);
 
   // ══ B7: idempoten ══
   await catatKode(kodeBaru, { sumber: "barang" });
@@ -134,7 +152,7 @@ async function main() {
   );
   cek(
     "B8 semuanya berbentuk kode sah",
-    kodeSerentak.every((k) => /^FMIPA-TI-\d{4}-\d{3}$/.test(k)),
+    kodeSerentak.every((k) => /^FMIPA-TI-\d{4}-\d{3,}$/.test(k)),
     kodeSerentak.join(", ")
   );
   const tercatatSemua = await db
@@ -153,7 +171,7 @@ async function main() {
   // urutan, walau lokasinya ditulis berbeda-beda.
   const kB = await generateItemCode(UNIT); dibuat.push(kB.code);
   const kK = await generateItemCode(UNIT_KIMIA); dibuat.push(kK.code);
-  cek("B9 unit TI memakai kode TI", /^FMIPA-TI-\d{4}-\d{3}$/.test(kB.code), kB.code);
+  cek("B9 unit TI memakai kode TI", /^FMIPA-TI-\d{4}-\d{3,}$/.test(kB.code), kB.code);
   cek("B9 unit Kimia memakai kode KIM", /^FMIPA-KIM-\d{4}-\d{3}$/.test(kK.code), kK.code);
   // B9 harus menguji hal yang SESUNGGUHNYA penting: urutan tiap unit berdiri
   // sendiri. "harus 1" hanya sah kalau database masih kosong — sekarang berisi
@@ -177,23 +195,29 @@ async function main() {
       kNyasar.code.startsWith("FMIPA-LAIN-"), kNyasar.code);
 
   // ══ B1b: register menang atas items ══
-  // Semai nomor tinggi tanpa barangnya → nextSequence harus ikut register
-  const tinggi = formatCode("TI", TAHUN, 950);
+  // Nomor tinggi tanpa barangnya → nextSequence harus ikut register.
+  // Angkanya dihitung dari keadaan NYATA saat ini, bukan dipatok: register
+  // bersifat append-only, jadi nomor tertingginya berbeda tiap kali dijalankan.
+  const sebelumTinggi = await nextSequence("TI", TAHUN);
+  const tinggi = formatCode("TI", TAHUN, sebelumTinggi + 10);
   await catatKode(tinggi, { sumber: "awal" });
   dibuat.push(tinggi);
   const setelahTinggi = await nextSequence("TI", TAHUN);
-  cek("B1b register mengunci walau TAK ADA barangnya", setelahTinggi === 951,
-      `nextSequence=${setelahTinggi} (harus 951)`);
+  cek("B1b register mengunci walau TAK ADA barangnya", setelahTinggi === sebelumTinggi + 11,
+      `nextSequence=${setelahTinggi} (harus ${sebelumTinggi + 11})`);
 
   // ══ B4b: items jadi jaring pengaman kalau register kosong ══
   await db.delete(kodeTerpakai).where(eq(kodeTerpakai.kode, tinggi));
+  // Setelah penyemaian dibuang, register kembali seperti semula.
+  const nomorJaring = (await nextSequence("TI", TAHUN)) + 4;
   const [{ id: idJaring }] = await db.insert(items).values({
     name: `${TANDA} Barang`, category: "Elektronik", unit,
-    quantity: 1, availableQuantity: 1, itemCode: formatCode("TI", TAHUN, 960),
+    quantity: 1, availableQuantity: 1, itemCode: formatCode("TI", TAHUN, nomorJaring),
   }).$returningId();
   const jaring = await nextSequence("TI", TAHUN);
-  cek("B4b barang tanpa catatan register tetap dihitung (tak ditabrak)", jaring === 961,
-      `nextSequence=${jaring} (harus 961)`);
+  cek("B4b barang tanpa catatan register tetap dihitung (tak ditabrak)",
+      jaring === nomorJaring + 1,
+      `nextSequence=${jaring} (harus ${nomorJaring + 1})`);
   await db.delete(items).where(eq(items.id, idJaring));
 
   await bersihkan();
@@ -203,6 +227,6 @@ async function main() {
 
 main().catch(async (e) => {
   console.error("ERROR:", e);
-  await bersihkan().catch(() => {});
+  await bersihAman();
   process.exit(1);
 });

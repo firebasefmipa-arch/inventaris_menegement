@@ -1977,3 +1977,49 @@ bisa diketik manual di address bar. **Keputusan pemilik produk: hapus saja**
   tanpa keperluan (400) — endpoint hidup, bukan 404.
 
 **Status: SELESAI.**
+
+## Audit #23 — Penomoran barang: penjaga mengotori buku register (1 Okt 2026)
+
+**Gejala.** `npm run check:kode` merah: 18 lulus / 4 gagal, dan **gagalnya
+bertambah** tiap kali dijalankan (jalan kedua jadi 6 gagal). Pesannya "harus
+951", "harus 961" — angka yang tidak pernah cocok setelah register terisi.
+
+**Sebab.** Dua hal terpisah:
+
+1. Penjaga memakai **angka mati** (`nextSequence === 951`). Register bersifat
+   append-only, jadi begitu nomor tertingginya bergeser, tuntutan itu otomatis
+   salah — padahal penomorannya sehat. Ini cacat uji, bukan cacat aplikasi.
+2. Penjaga menulis nomor contoh ke **register produksi** dan hanya membersihkan
+   di akhir. Kalau dihentikan paksa (Ctrl-C) atau gagal sebelum baris terakhir,
+   nomor contohnya menempel selamanya.
+
+Ditemukan juga `uji-impor.ts` lama memuat `DELETE FROM kode_terpakai` untuk
+membersihkan — melanggar aturan "register tidak boleh dihapus dalam bentuk apa
+pun" (Aturan #19). Skrip itu **tidak dijalankan** dalam audit ini.
+
+**Perbaikan.**
+- Tuntutan angka mati diganti perbandingan terhadap keadaan nyata saat jalan.
+- `process.on("SIGINT"/"SIGTERM")` -> pembersih dijalankan sebelum keluar, plus
+  penjaga anti-dobel (`bersihAman`).
+- Pola bentuk kode `\d{3}` -> `\d{3,}` (nomor sudah lewat 999).
+
+**Bukti.** 4 kali berturut 22/22. Diuji dengan menyisipkan jeda sementara:
+saat hidup register 530 + 1 barang contoh; setelah Ctrl-C ke proses node-nya
+langsung -> register **517** (balik persis), barang contoh **0**.
+
+**Cacat lain yang ikut ketahuan & dibereskan.** `check-verifikasi.ts` bergantung
+pada berkas `sig_uji_user.png` buatan tangan. Berkas itu ikut terhapus saat data
+uji dibersihkan -> penjaga merah 8 padahal aplikasinya sehat. Sekarang penjaga
+**membuat gambarnya sendiri** (PNG 60x60, setinggi ruang 55pt) lalu membuangnya
+lagi saat selesai. Ukurannya dipilih 60x60 karena keseimbangan "tepi tinta atas
+= bawah" hanya sah diukur dengan tanda tangan setinggi ruangnya.
+
+**Data.** Hasil simulasi audit ini dibersihkan atas perintah pemilik produk:
+37 barang uji + 5 sisa AUDIT19, 32 transaksi, 6 serah terima, 1 pengembalian,
+5 akun uji, 28 berkas. **Nomor register 25 baris ditarik lewat jalur yang sah**
+sehingga penomoran kembali normal (tertinggi 403 -> barang baru dapat 404).
+Data atas nama **Rizky Wibowo** (2 peminjaman + 1 serah terima + 2 berkas)
+DIPERTAHANKAN atas keputusan pemilik produk. Cadangan sebelum penghapusan:
+`/root/audit-20260930/cadangan-bersih2/`.
+
+**Status: SELESAI.**

@@ -14,12 +14,78 @@ import {
 import { generateBorrowingPDF } from "../src/lib/pdf-generator";
 import { generateHandoverPDF } from "../src/lib/handover-pdf-generator";
 import { inflateSync } from "node:zlib";
+import { deflateSync } from "node:zlib";
+import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { config } from "dotenv";
 
 // WAJIB: tanpa ini UPLOAD_DIR kosong, berkas tanda tangan gagal dimuat, dan
 // `catch` di generator menelannya diam-diam — penjaga lalu bilang "lulus"
 // padahal tanda tangan TIDAK tergambar sama sekali.
 config({ path: ".env.local" });
+
+/**
+ * Gambar tanda tangan contoh untuk pengujian, DIBUAT SENDIRI di sini.
+ *
+ * Kenapa tidak memakai berkas tetap: berkas contoh gampang ikut terhapus saat
+ * data uji dibersihkan, dan berkas yang tidak ada membuat seluruh pemeriksaan
+ * tanda tangan GAGAL — padahal aplikasinya sehat. Penjaga merawat bahannya.
+ *
+ * PNG 60x60 putih dengan satu garis mendatar di tengah = bentuk "tanda tangan"
+ * minimal, cukup untuk membuktikan gambarnya benar-benar terbaca & tergambar.
+ *
+ * DIBUAT PERSEGI (bukan 60x24) dengan sengaja: gambar ditempatkan pada `y`
+ * tetap, sedangkan TINGGINYA mengikuti gambar itu sendiri (batas 55pt). Tanda
+ * tangan bermuka tinggi (seperti hasil pindai tanda tangan asli) mengisi ruang
+ * 55pt itu; yang pendek/lebar akan duduk lebih ke atas dan menyisakan celah
+ * lebih lega di atasnya. Jadi keseimbangan "tepi tinta atas = bawah" hanya sah
+ * diukur dengan tanda tangan setinggi ruangnya — dan itulah yang diuji di sini.
+ *
+ * Folder dibaca dari UPLOAD_DIR SETELAH .env.local dimuat — bukan lewat impor
+ * `upload-dir`, karena impor statis berjalan lebih dulu sehingga UPLOAD_DIR
+ * masih kosong dan berkasnya tertulis ke folder yang salah.
+ */
+function siapkanTtdContoh(): string {
+  const L = 60, T = 60;
+  const baris: Buffer[] = [];
+  for (let y = 0; y < T; y++) {
+    const r = Buffer.alloc(1 + L * 3);
+    r[0] = 0;
+    for (let x = 0; x < L; x++) {
+      const tinta = y === Math.floor(T / 2) ? 0 : 255;
+      r[1 + x * 3] = tinta; r[2 + x * 3] = tinta; r[3 + x * 3] = tinta;
+    }
+    baris.push(r);
+  }
+  const mentah = Buffer.concat(baris);
+  const crc = (b: Buffer) => {
+    let c = 0xffffffff;
+    for (const v of b) {
+      c ^= v;
+      for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const potong = (jenis: string, isi: Buffer) => {
+    const p = Buffer.concat([Buffer.from(jenis, "latin1"), isi]);
+    const k = Buffer.alloc(4); k.writeUInt32BE(crc(p));
+    const pj = Buffer.alloc(4); pj.writeUInt32BE(isi.length);
+    return Buffer.concat([pj, p, k]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(L, 0); ihdr.writeUInt32BE(T, 4);
+  ihdr[8] = 8; ihdr[9] = 2;
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    potong("IHDR", ihdr),
+    potong("IDAT", deflateSync(mentah)),
+    potong("IEND", Buffer.alloc(0)),
+  ]);
+  // Folder dibaca dari UPLOAD_DIR SETELAH .env.local dimuat.
+  const akar = process.env.UPLOAD_DIR || `${process.cwd()}/uploads`;
+  mkdirSync(`${akar}/signatures`, { recursive: true });
+  writeFileSync(`${akar}/signatures/ttd_contoh_penjaga.png`, png);
+  return "/uploads/signatures/ttd_contoh_penjaga.png";
+}
 
 let lulus = 0;
 const gagal: string[] = [];
@@ -346,7 +412,7 @@ async function main() {
   // masih ada 36pt kosong — kelihatan tidak di tengah. Sekarang: jarak dari
   // tulisan peran (atas) dan ke nama (bawah) sama-sama {TTD_NAIK}pt.
   // Angka di sourcecode tidak bisa menangkap ini — yang diperiksa jarak NYATA.
-  const TTD = "/uploads/signatures/sig_uji_user.png";
+  const TTD = siapkanTtdContoh();
   const berTtdPinjam = await generateBorrowingPDF({
     borrowerName: "Peminjam Contoh", borrowerId: "12345678", department: "Contoh",
     phone: "0800000000", purpose: "Contoh", notes: "",
@@ -427,6 +493,9 @@ async function main() {
       `atas=${Number.isNaN(atasSerah) ? "?" : atasSerah.toFixed(1)}pt bawah=${Number.isNaN(bawahTintaSerah) ? "?" : bawahTintaSerah.toFixed(1)}pt (selisih harus <=4)`);
 
   console.log(`\n  lulus=${lulus} gagal=${gagal.length}`);
+  // Berkas tanda tangan contoh dibuang lagi — folder unggahan isinya hanya
+  // berkas sungguhan milik pengguna.
+  try { rmSync(`${process.env.UPLOAD_DIR || `${process.cwd()}/uploads`}/signatures/ttd_contoh_penjaga.png`, { force: true }); } catch {}
   if (gagal.length) {
     gagal.forEach((g) => console.log("   - " + g));
     process.exit(1);

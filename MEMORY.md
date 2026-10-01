@@ -1029,11 +1029,15 @@ elektronik bersertifikat** (itu butuh sertifikat BSSN berbayar) — sifatnya han
   `Tf`, bukan angka tetap: keterangan QR hanya 6,5pt, kalau dianggap 10pt
   pemeriksaannya jadi gagal palsu.
 - Pustaka: `qrcode@1.5.4` + `@types/qrcode` (dev). PDF tetap `pdf-lib`.
-- Penjaga: `npm run check:verifikasi` (`scripts/check-verifikasi.ts`, 47
+- Penjaga: `npm run check:verifikasi` (`scripts/check-verifikasi.ts`, 51
   pemeriksaan) — membaca ISI DOKUMEN & halaman **beserta tata letaknya**
   (posisi nyata tulisan, kotak QR, DAN tanda tangan: tidak boleh tumpang-tindih,
   label Admin harus sebaris dengan nama penandatangan, TTD penandatangan harus
-  12pt di atas namanya). Uji alur:
+  duduk di tengah ruangnya). **Penjaga ini membuat gambar tanda tangan
+  contohnya SENDIRI** (PNG 60×60, setinggi ruang 55pt) lalu membuangnya lagi —
+  jangan kembalikan ke berkas tetap `sig_uji_user.png`, berkas itu ikut
+  terhapus saat data uji dibersihkan dan membuat penjaga merah palsu
+  (Audit #23). Uji alur:
   `/root/audit-20260930/kerja/uji-kode-qr.ts` (20) ·
   `uji-qr-http.ts` (41) · halaman di Chromium `uji-halaman-qr.mjs` (26) ·
   tata letak berbagai panjang tabel `uji-layout-panjang.ts` (36) ·
@@ -1233,7 +1237,9 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
       - `npm run kode:bebas lepas --paksa <KODE>` — tembus penolakan (dipakai kalau barangnya sudah terlanjur hilang)
       - `npm run kode:bebas semai` — isi register dari barang yang sudah ada (dipakai sekali saat pemasangan, `--kering` untuk pratinjau)
     - Nomor sisa uji **TIDAK** dibebaskan otomatis; penjaga membersihkan miliknya sendiri.
-    - Penjaga: `scripts/check-kode-barang.ts` (**14 pemeriksaan**) — `npm run check:kode`. Inti: barang A dibuat → dihapus → barang B **tidak** mendapat nomor A.
+    - Penjaga: `scripts/check-kode-barang.ts` (**22 pemeriksaan**) — `npm run check:kode`. Inti: barang A dibuat → dihapus → barang B **tidak** mendapat nomor A.
+    - **Penjaga TIDAK boleh mematok angka** (mis. "harus 951"). Register bersifat append-only, jadi nomor berikutnya berbeda tiap kali dijalankan; angka mati membuat penjaga merah padahal sistemnya sehat (Audit #23). Yang diperiksa: **hubungannya** (`nextSequence` sesudah penyemaian = sebelum + 11), dihitung dari keadaan nyata saat itu.
+    - **Penjaga WAJIB membersihkan walau dihentikan paksa** — `process.on("SIGINT"/"SIGTERM")` memanggil pembersih sebelum keluar. Tanpa itu, Ctrl-C di tengah pengujian meninggalkan nomor uji di register selamanya. Pembersih dijaga agar tak jalan dua kali (`bersihAman`).
     - Tabel dibuat dengan **ALTER manual**, JANGAN `drizzle-kit push` di DB produksi. SQL: `scripts/sql/kode_terpakai.sql`.
     - Konsekuensi yang disadari: kalau admin menambah barang lalu gagal simpan, nomor itu **tetap terpakai** (bolong). Ini disengaja — lebih baik bolong daripada nomor diberikan dua kali.
 
