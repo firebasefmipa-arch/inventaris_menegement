@@ -109,7 +109,10 @@ export const IMPORT_COLUMNS: ImportColumn[] = [
     keterangan:
       "Pemilik barang (divisi/prodi). Kode barang dibuat otomatis dari sini, " +
       "dan unit inilah yang menentukan admin mana yang boleh mengelolanya. " +
-      "Harus salah satu dari daftar unit — kosong berarti \"LAIN\".",
+      "Harus salah satu dari daftar unit. Boleh dikosongkan HANYA kalau Anda " +
+      "mengelola satu unit saja (otomatis diisi unit itu); kalau Anda mengelola " +
+      "beberapa unit, kolom ini wajib diisi. Kosong tanpa unit pengelola berarti " +
+      "\"LAIN\".",
     aliases: ["unit", "unitkerja", "divisi", "prodi", "programstudi"],
   },
   {

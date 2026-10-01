@@ -23,9 +23,14 @@ interface ItemModalProps {
   onClose: () => void;
   existingCategories: string[];
   existingLocations?: string[];
+  /**
+   * Unit yang dikelola pemakai: null = superadmin (semua unit), [] = tak punya.
+   * Admin tak perlu memilih kalau cuma punya satu — kotak Unit terisi sendiri.
+   */
+  unitDikelola?: string[] | null;
 }
 
-export function ItemModal({ isOpen, onClose, existingCategories, existingLocations = [] }: ItemModalProps) {
+export function ItemModal({ isOpen, onClose, existingCategories, existingLocations = [], unitDikelola = null }: ItemModalProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -66,6 +71,15 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
       document.body.style.overflow = "";
     };
   }, [isOpen, onClose]);
+
+  // Admin yang cuma mengelola satu unit tidak perlu memilih: kotak Unit langsung
+  // terisi. Tanpa ini, formulir akan dikirim tanpa unit dan server menolaknya.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (unitDikelola && unitDikelola.length === 1) {
+      setForm((f) => (f.unit ? f : { ...f, unit: unitDikelola[0] }));
+    }
+  }, [isOpen, unitDikelola]);
 
   const resetForm = () => {
     setForm({
@@ -113,6 +127,15 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
 
       if (!form.name) {
         toast("Nama barang wajib diisi", "error");
+        setLoading(false);
+        return;
+      }
+
+      // Unit wajib BAGI ADMIN: unit menentukan kode barang dan siapa yang boleh
+      // mengelolanya. Superadmin bebas (barang tanpa unit memang hanya miliknya).
+      // Terisi sendiri kalau admin cuma punya satu unit.
+      if (!form.unit && unitDikelola !== null) {
+        toast("Unit wajib dipilih — hubungi Super Admin kalau daftarnya kosong", "error");
         setLoading(false);
         return;
       }
@@ -412,6 +435,7 @@ export function ItemModal({ isOpen, onClose, existingCategories, existingLocatio
                 <UnitSelect
                   value={form.unit}
                   onChange={(v) => setForm({ ...form, unit: v })}
+                  allowedUnits={unitDikelola}
                 />
               </div>
 

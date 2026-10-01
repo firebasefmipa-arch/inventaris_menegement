@@ -25,6 +25,8 @@ export default function EditItemPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  /** Unit yang dikelola pemakai: null = superadmin (semua unit). */
+  const [unitDikelola, setUnitDikelola] = useState<string[] | null>(null);
   const [form, setForm] = useState({
     name: "",
     category: "",
@@ -45,6 +47,13 @@ export default function EditItemPage() {
   });
 
   useEffect(() => {
+    fetch("/api/unit-saya")
+      .then((res) => res.json())
+      .then((d) => setUnitDikelola(d.units ?? null))
+      // Gagal memuat daftar unit: kosongkan, JANGAN buka semua unit. Server
+      // tetap menolak, tapi setidaknya layar tak menawarkan yang bukan haknya.
+      .catch(() => setUnitDikelola([]));
+
     fetch(`/api/items/${params.id}`)
       .then((res) => res.json())
       .then((data) => {
@@ -79,6 +88,13 @@ export default function EditItemPage() {
     e.preventDefault();
     if (!form.name) {
       toast("Nama wajib diisi", "error");
+      return;
+    }
+
+    // Unit wajib bagi admin — tanpa ini barangnya dinomori "LAIN" dan jatuh ke
+    // tangan Super Admin saja. Superadmin bebas mengosongkannya.
+    if (!form.unit && unitDikelola !== null) {
+      toast("Unit wajib dipilih — hubungi Super Admin kalau daftarnya kosong", "error");
       return;
     }
 
@@ -330,6 +346,7 @@ export default function EditItemPage() {
             <UnitSelect
               value={form.unit}
               onChange={(v) => setForm({ ...form, unit: v })}
+              allowedUnits={unitDikelola}
             />
           </div>
           <div>

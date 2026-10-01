@@ -10,6 +10,8 @@ import { IMPORT_COLUMNS, IMPORT_AUTO_COLUMNS } from "@/lib/item-import";
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Unit yang dikelola pemakai: null = superadmin (semua unit). */
+  unitDikelola?: string[] | null;
 }
 
 /** Ringkasan hasil impor: berapa masuk, berapa dilewati, dan sebabnya. */
@@ -31,7 +33,7 @@ type HasilImpor = {
   warnings: string[];
 };
 
-export function ImportModal({ isOpen, onClose }: ImportModalProps) {
+export function ImportModal({ isOpen, onClose, unitDikelola = null }: ImportModalProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -276,6 +278,25 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
           {/* Langkah 2 — unggah */}
           <div>
             <p className="text-sm font-semibold text-gray-900 mb-2">2. Unggah file yang sudah diisi</p>
+            {/* Unit yang dikelola: supaya jelas SEBELUM berkas diunggah, bukan
+                sesudah baris-barisnya dilewati. */}
+            {unitDikelola !== null && (
+              <p className="mb-3 rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
+                {unitDikelola.length === 0 ? (
+                  <span className="text-red-600">
+                    Anda belum ditugaskan ke unit mana pun — impor akan ditolak. Hubungi Super Admin.
+                  </span>
+                ) : (
+                  <>
+                    <span className="font-medium text-gray-700">Unit yang Anda kelola:</span>{" "}
+                    {unitDikelola.join(", ")}
+                    {unitDikelola.length === 1 && (
+                      <> — kolom <span className="font-medium">Unit</span> boleh dikosongkan di berkas, otomatis diisi unit ini.</>
+                    )}
+                  </>
+                )}
+              </p>
+            )}
             <div
               onDragOver={(e) => { e.preventDefault(); setSeret(true); }}
               onDragLeave={() => setSeret(false)}

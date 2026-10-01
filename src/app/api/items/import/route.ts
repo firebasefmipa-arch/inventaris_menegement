@@ -235,16 +235,23 @@ async function proses(
       // Harus ada di daftar resmi. Kalau tidak, kode memakai "LAIN" dan
       // barisnya diberi peringatan supaya bisa dibetulkan.
       const unitRaw = teks("Unit");
-      const unit = normalizeUnit(unitRaw);
+      // Kolom "Unit" boleh dikosongkan kalau pengelolanya cuma punya SATU unit —
+      // itu yang dipakai, bukan "LAIN". Kalau unitnya lebih dari satu, kosong
+      // tetap tidak diterima: menebak pemilik di berkas campuran berisiko salah.
+      const unitOtomatis = !unitRaw && batas?.length === 1 ? batas[0] : "";
+      const unit = normalizeUnit(unitRaw || unitOtomatis);
       if (unitRaw && !unitDikenal(unitRaw)) {
         warnings.push(
           `Baris ${barisKe} ("${name}"): unit "${unitRaw}" tidak ada di daftar unit — ` +
           `kode barang memakai "LAIN". Perbaiki ejaannya atau minta Super Admin menambahkannya.`
         );
-      } else if (!unitRaw) {
+      } else if (!unitRaw && !unitOtomatis) {
         warnings.push(
           `Baris ${barisKe} ("${name}"): kolom "Unit" kosong — kode barang memakai "LAIN" ` +
-          `dan hanya Super Admin yang bisa mengelolanya.`
+          `dan hanya Super Admin yang bisa mengelolanya.` +
+          (batas !== null && batas.length > 1
+            ? ` Isi dengan salah satu unit Anda: ${batas.join(", ")}.`
+            : "")
         );
       }
       // Lokasi: tempat/ruangan, bebas diketik → hanya dirapikan kapitalisasinya.

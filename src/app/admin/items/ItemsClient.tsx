@@ -54,9 +54,11 @@ interface Props {
   canSeeHidden: boolean;
   /** Berapa unit yang sedang di luar (diserahkan, belum kembali), per id barang. */
   diLuar: Record<number, number>;
+  /** Unit yang dikelola pemakai: null = superadmin (semua unit). */
+  unitDikelola: string[] | null;
 }
 
-export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) {
+export function ItemsClient({ items, categories, canSeeHidden, diLuar, unitDikelola }: Props) {
   const router = useRouter();
   const [showItemModal, setShowItemModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -1096,11 +1098,13 @@ export function ItemsClient({ items, categories, canSeeHidden, diLuar }: Props) 
         onClose={() => setShowItemModal(false)}
         existingCategories={categories}
         existingLocations={uniqueLocations}
+        unitDikelola={unitDikelola}
       />
 
       <ImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
+        unitDikelola={unitDikelola}
       />
     </div>
     </>

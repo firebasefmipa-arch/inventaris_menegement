@@ -45,6 +45,7 @@ export default async function ItemsPage() {
         categories={categories}
         canSeeHidden={role === "super_admin"}
         diLuar={diLuar}
+        unitDikelola={batas}
       />
     </div>
   );
