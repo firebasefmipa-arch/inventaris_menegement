@@ -1950,3 +1950,30 @@ Ditulis dengan alasannya supaya tidak dikira kelewat.
 | Impor barang belum transaksional (satu INSERT massal) | Risiko kecil untuk file kecil; gagal di tengah bisa menyisakan sebagian baris | Kalau file bisa ratusan baris → bungkus transaksi |
 | Kasus salah PILIH barang (Laptop 10 vs fisik 11) | Diputuskan ditunda 22 Sep 2026; hanya bisa diperbaiki selama `pending_approval` | Kalau muncul lagi |
 | 2 salinan aturan peminjaman (`/api/pinjam` dan `/api/public/borrow`) | Sudah disamakan perilakunya, tapi kodenya masih terpisah | Kalau salah satu diubah, ubah keduanya |
+
+---
+
+## Temuan yang sudah dibereskan (riwayat)
+
+### 1 Okt 2026 — Halaman pencatatan manual admin yang mati
+
+Ditemukan saat menjelaskan alur "admin mencatat transaksi manual" ke pemilik
+produk. Ada **dua pintu** untuk fitur yang sama:
+
+| Pintu | Keadaan |
+|---|---|
+| `BorrowModal` (tombol "Pinjam Barang" di `/admin/transactions`) | Berfungsi — multi-barang, ada `purpose`, kirim `cart` |
+| `/admin/transactions/new` (halaman lama) | **Mati** — kirim `itemId` + `quantity`, tanpa `purpose`; `/api/transactions` mengharapkan `cart` + `purpose` → selalu 400 |
+
+Halaman lama sudah tidak ditautkan dari mana pun sejak modal dibuat, tapi masih
+bisa diketik manual di address bar. **Keputusan pemilik produk: hapus saja**
+(opsi alternatif "perbaiki" ditolak — hanya akan jadi duplikat modal).
+
+- Dihapus: `src/app/admin/transactions/new/` (303 baris).
+- Diuji di browser sungguhan (:3001, admin ber-akun uji): judul "Peminjaman"
+  tampil, tombol "Pinjam Barang" tampil, modal terbuka, kolom pencarian barang
+  dan keperluan ada, halaman lama tidak lagi memuat form. **6/6 lulus.**
+- Diuji lewat HTTP: API pencatatan manual menolak body kosong (400) dan body
+  tanpa keperluan (400) — endpoint hidup, bukan 404.
+
+**Status: SELESAI.**

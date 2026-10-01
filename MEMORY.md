@@ -231,6 +231,36 @@ item_returns.item_id    → items.id   ON DELETE CASCADE   -- catatan kembali ik
 → JWT token dengan role → /admin dashboard
 ```
 
+### Alur Pencatatan Manual oleh Admin
+
+Admin mencatat peminjaman atas nama orang lain (mis. tamu, mahasiswa yang tidak
+punya akun). **Satu-satunya pintu: `BorrowModal`** di `/admin/transactions`
+(tombol "Pinjam Barang"). Tidak ada halaman lain.
+
+```
+/admin/transactions → tombol "Pinjam Barang" → BorrowModal
+→ Isi cart (BISA BANYAK BARANG), tanggal kembali, data peminjam, keperluan
+→ POST /api/transactions
+→ Validasi: peran admin/super_admin (403 bila bukan)
+             hak unit admin atas tiap barang (PALING AWAL, Audit #19)
+             stok cukup, kondisi barang boleh dipinjam, tanggal tidak lewat
+→ Pecah per unit (grup_id) — satu baris per unit barang
+→ Status LANGSUNG 'active' (tanpa persetujuan, tanpa TTD)
+→ Stok dikurangi ATOMIK (syarat stok ada di WHERE; kalah balapan → 409)
+→ Identitas barang di-SNAPSHOT ke transaction_items
+```
+
+**Pencatatan manual TIDAK membuat dokumen PDF.** Dokumen hanya terbit bila
+tombol unduh di daftar ditekan (`/api/transactions/[id]/generate-pdf`), dan itu
+formulir tanpa TTD — peminjam tidak punya akun, jadi tidak ada tanda tangan.
+
+Bedanya dengan jalur user (`/api/pinjam`): user wajib data diri sendiri + TTD +
+persetujuan admin; admin bebas mengisi data siapa pun + langsung aktif.
+
+> `src/app/admin/transactions/new/` (halaman satu-barang lama) **DIHAPUS**
+> — mengirim `itemId`/`quantity` padahal API mengharapkan `cart`/`purpose`,
+> jadi selalu gagal. Jangan dihidupkan kembali; pakai `BorrowModal`.
+
 ---
 
 ## 6. Environment Variables
@@ -1039,8 +1069,9 @@ Titik filter (jangan lupa bila menambah daftar barang baru):
 - `GET /api/items?canBorrow=1` / `?canHandover=1` (query param opsional).
 - Halaman user: `dashboard/pinjam` (`canBorrow`), `dashboard/serah-terima`
   (`canHandover` + `availableQuantity>0` + `quantity>0`).
-- Modal admin: `BorrowModal` (`canBorrow=1`), `HandoverModal` (`canHandover=1`),
-  `CorrectItemsModal` (param ikut prop `type`), `transactions/new`.
+- Modal admin: `BorrowModal` (`canBorrow=1`, SATU-SATUNYA pintu pencatatan
+  manual admin), `HandoverModal` (`canHandover=1`),
+  `CorrectItemsModal` (param ikut prop `type`).
 - Label status di `ItemsClient.tsx` (kartu & list) + `admin/items/[id]`.
 - Filter dropdown "Semua Peminjaman"/"Semua Serah Terima" di `ItemsClient.tsx`.
 

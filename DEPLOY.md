@@ -782,3 +782,15 @@ belum di-ALTER — lihat Langkah 2.
 - Detail sourcecode & konvensi kode (struktur folder, schema, role, alur):
   lihat `MEMORY.md` di root repo.
 - Urusan server (nginx/PM2/DB setup) = dokumen ini saja.
+
+### Halaman `/logistik/admin/transactions/new` balas 404
+
+**Memang begitu — halaman itu sudah DIHAPUS** (1 Okt 2026). Ia halaman lama
+satu-barang yang sakelarnya tidak nyambung dengan API (mengirim `itemId`
+sementara `/api/transactions` mengharapkan `cart` + `purpose`), jadi selalu
+gagal bila dipakai. Pencatatan manual admin sekarang **hanya** lewat tombol
+"Pinjam Barang" di `/logistik/admin/transactions` (`BorrowModal`).
+
+Jangan "memperbaiki" dengan menghidupkan kembali halaman itu — pakai modal.
+Perlu `npm run build` + `pm2 restart pinjam-app --update-env` supaya rute
+lamanya benar-benar hilang dari `.next/server/app/admin/transactions/`.
