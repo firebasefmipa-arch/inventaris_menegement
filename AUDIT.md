@@ -2081,3 +2081,45 @@ dengan daftar eksplisit. Setiap `DELETE` pada `kode_terpakai` wajib menyebut
 kode satu per satu. Periksa juga nama kolom tiap tabel sebelum menulis
 subquery — kolom yang salah membuat sesi MySQL berhenti di tengah tanpa
 gagalnya skrip.
+
+## Audit #25 — Penomoran barang tampak "lompat jauh" (1 Okt 2026)
+
+**Keluhan pemilik produk.** Kode barang yang baru dibuat melompat jauh.
+
+**Keadaan nyata.** Barang yang ada rapi: 84 buah, nomor **145–228 tanpa
+bolong**. Yang lompat hanya nomor untuk barang BARU: diberi **404**, padahal
+barang terakhir 228.
+
+**Sebab.** Buku register menyimpan 285 nomor (1–403) yang tercatat BORONGAN
+pada satu waktu yang sama — 28 Sep 03:05:54 — dari daftar lama yang sekarang
+sudah tidak ada. Karena aturannya "nomor bekas tidak boleh dipakai ulang", dan
+yang tertinggi 403, nomor berikutnya jadi 404.
+
+Bukti bahwa itu catatan borongan, bukan pemakaian sungguhan:
+- 285 baris ber-`created_at` identik (pencatatan manusia tak mungkin sekaligus);
+- `item_id`-nya **kosong semua** (tak pernah terhubung barang);
+- 229–403 tidak dipakai barang mana pun;
+- tidak ada satu pun dokumen (dari 19 PDF yang dipindai) yang menyebutnya.
+
+**Keputusan pemilik produk.** Label fisik tidak ada yang memakai nomor di atas
+228 → nomor bekas 229–403 boleh ditarik.
+
+**Yang dikerjakan.** 175 nomor ditarik lewat **alat resmi**
+`npm run kode:bebas lepas <KODE>` satu per satu (bukan DELETE), dengan daftar
+eksplisit dari query "nomor TI 229–403 yang tidak dipakai barang hidup".
+Register 492 → **317**; nomor TI tertinggi 403 → **228**; nomor berikutnya
+**404 → 229**. Dibuktikan dengan membuat kode sungguhan lewat
+`generateItemCode()` → `FMIPA-TI-2026-229`, lalu jejaknya ditarik kembali.
+
+Ikut dibersihkan: **17 dokumen PDF sisa uji** (nama ber-"Uji"), termasuk
+6 tanda tangan contoh `sig_uji_*.png`. Folder unggahan kini hanya berisi berkas
+asli: 2 dokumen Rizky Wibowo + 5 tanda tangan pengguna asli.
+
+**Keadaan akhir:** barang 84 · transaksi 2 · serah terima 1 · akun 9 ·
+register 317 · nomor TI tertinggi 228 · cadangan di
+`/root/audit-20260930/cadangan-nomor/`.
+
+**Catatan.** Cara membedakan nomor "bekas catatan borongan" dari nomor sungguhan
+TIDAK bisa dari kolom `sumber` (keduanya tertulis "barang"). Yang membedakan:
+`item_id` kosong + `created_at` seragam + tidak dipakai barang hidup + tidak
+disebut dokumen mana pun.
