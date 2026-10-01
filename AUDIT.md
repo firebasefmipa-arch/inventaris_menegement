@@ -2174,3 +2174,66 @@ gelombang jalur HTTP) — semuanya ditarik kembali lewat alat resmi satu per sat
 kembali **228**. 6 akun uji, 8 barang uji, 14 transaksi uji, 2 serah terima uji,
 dan 6 PDF uji dihapus. Data asli utuh: 84 barang, 2 transaksi & 1 serah terima
 Rizky Wibowo, 9 akun, 5 tanda tangan, 7 berkas unggahan.
+
+## Audit #27 — Hapus semua transaksi & reset stok (1 Okt 2026)
+
+**Perintah.** "hapus semua transaksi dan dokument yang ada dan reset stok barang
+yang berkurang" · ditegaskan: "maksudnya reset stok, kembalikan semua barang
+yang di pinjam atau diserah terimakan".
+
+**Yang dikerjakan (data ASLI, bukan data uji).**
+
+    dihapus   2 transaksi · 1 serah terima · 1 catatan pengembalian
+              4 baris pivot pinjam · 1 baris pivot serah terima
+              2 PDF: PB_Rizky_Wibowo_01102026_493.pdf
+                     ST_Rizky_Wibowo_01102026_241.pdf
+    stok       2 in 1 Audio Mic            tersedia 10 → 11  (dipinjam)
+               3 in 1 out Switcher HDMI   tersedia  0 → 1   (dipinjam)
+    tetap      84 barang · 9 akun · 317 nomor register · 5 berkas tanda tangan
+
+**Temuan yang mengubah pekerjaan: dari 5 barang yang terlibat, hanya 2 perlu
+direset.** Tiga lainnya memang sudah penuh:
+
+- `Laptop Asus VivoBook No.6` — serah terima MEMOTONG `quantity`, tetapi
+  pengembalian #111 sudah mengembalikannya lewat jalur resmi. Stok sudah 1.
+- `Enclosure ADATA` & `Donggle TP Link AC 600` — transaksinya berstatus
+  `rejected`; jalur penolakan sudah memanggil `kembalikanKeStok` sendiri.
+- Peminjaman **tidak pernah** memotong `quantity`; ia hanya menahan
+  `available_quantity`. Jadi "stok fisik berkurang" hanya berlaku bagi serah
+  terima, bukan peminjaman.
+
+**CACAT YANG NYARIS LOLOS — ditangkap mode kering.** Versi pertama skrip
+menambahkan `jumlah diserahkan` tanpa mengurangi yang **sudah** dikembalikan.
+Hasil kering: Laptop Asus jadi `tersedia 2` padahal barangnya cuma satu —
+menciptakan stok hantu. Diperbaiki: yang ditambahkan hanyalah **sisanya**
+(`diserahkan − dikembalikan`); kalau sisanya ≤ 0, tidak diapa-apakan. Setelah
+perbaikan tinggal 2 barang, dan laptop tidak ikut.
+
+Pelajaran: mode kering pada perintah perusak **bukan formalitas** — di sinilah
+cacat itu ketahuan. Jangan pernah menjalankan versi "simpan" lebih dulu.
+
+**Jalur resmi, bukan SQL karangan.** Pengembalian stok memakai fungsi
+`kembalikanKeStok` dari `src/lib/pengembalian.ts` — sama persis dengan yang
+dipakai tombol Tolak dan Batal. Bukan `UPDATE items SET ...` buatan sendiri.
+
+**Verifikasi.** `uji-hapus-transaksi.mjs` — 9/9 di browser sungguhan:
+halaman Peminjaman & Pengembalian kosong, kedua barang tampil penuh lewat
+kotak pencarian, halaman pemeriksa dokumen menolak kode lama.
+Sepuluh penjaga hijau. 0 barang tak sinkron (`status='borrowed'` atau
+`available < quantity`).
+
+**Uji PALSU yang tertangkap.** Versi pertama `uji-hapus-transaksi.mjs`
+"lulus" 5 pemeriksaan padahal **login-nya gagal** — ia memeriksa halaman login,
+yang memang tak memuat "Rizky". Ditambahkan penjaga: login gagal → uji
+dihentikan (`process.exit(1)`), bukan lanjut memberi nilai hijau.
+
+**Cadangan.** `/root/audit-20260930/cadangan-transaksi/` (3 MB) —
+`db-lengkap.sql`, seluruh berkas dokumen, dan `stok-sebelum.tsv` (catatan
+stok 84 barang sebelum perubahan, dipakai membandingkan hasil).
+
+**Keputusan nomor register.** Pemilik produk menjawab "tarik juga" untuk nomor
+barang yang terpakai transaksi itu. **Tidak dikerjakan** — nomor tersebut
+(TI-145, TI-208, TI-215, TI-216) masih dipakai barang yang HIDUP sekarang.
+`lepasNomor()` sendiri menolaknya ("masih dipakai barang id=…"), dan memaksa
+lewat `paksa=true` akan membuat penomoran memberi nomor itu kepada barang lain
+→ dua barang berbagi kode. Perlu keputusan terpisah kalau memang dikehendaki.
