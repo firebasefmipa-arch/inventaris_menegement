@@ -79,7 +79,10 @@ export function UnitSelect({
           required={izin !== null}
           className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
         >
-          <option value="">{izin === null ? "Pilih unit (opsional)" : "Pilih unit (wajib)"}</option>
+          {/* Tanpa "(opsional)": bagi admin unit memang WAJIB. Bagi superadmin
+              labelnya cukup "Pilih unit" — jangan ditulisi "(wajib)" karena
+              memang tidak diwajibkan. */}
+          <option value="">{izin === null ? "Pilih unit" : "Pilih unit (wajib)"}</option>
           {grup.map((g) => (
             <optgroup key={g.group} label={`── ${g.group} ──`}>
               {g.options.map((opt) => (

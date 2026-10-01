@@ -2123,3 +2123,54 @@ register 317 · nomor TI tertinggi 228 · cadangan di
 TIDAK bisa dari kolom `sumber` (keduanya tertulis "barang"). Yang membedakan:
 `item_id` kosong + `created_at` seragam + tidak dipakai barang hidup + tidak
 disebut dokumen mana pun.
+
+## Audit #26 — "Superadmin tetap bebas kan?" & sisa tulisan "(opsional)" (1 Okt 2026)
+
+**Pertanyaan pemilik produk.** "tapi superadmin tetap bebas kan, tanpa batasan unit".
+
+**Jawaban: YA — dan dibuktikan, bukan sekadar dibaca dari kode.**
+
+Kode: `batasUnit()` mengembalikan `null` untuk superadmin; `periksaAksesUnit()`
+mengembalikan `null` (artinya "tidak ada penolakan"); `saringUnit()` di
+`api/items/route.ts` juga `return null`. Dipakai seragam di tambah, edit, impor,
+dan daftar barang.
+
+Uji jalur HTTP (`/root/audit-20260930/kerja/uji-superadmin-bebas.mjs`) — 10/10:
+- `/api/unit-saya` → `units: null` (bukan daftar kosong).
+- Tambah barang ke 4 unit berbeda → semuanya **berhasil** (TI, S1 Kimia,
+  S1 Farmasi, S3 Doktor Farmasi).
+- Tambah barang TANPA unit → **berhasil** (khusus superadmin; admin ditolak).
+- Impor berkas berisi 3 unit berbeda → **3 baris masuk**, tak satu pun dilewati.
+
+Uji tampilan browser sungguhan (`uji-superadmin-browser.mjs`) — 5/5:
+- Kotak Unit berupa **daftar**, bukan kotak terkunci.
+- Ke-15 unit resmi tersedia lengkap.
+- Boleh memilih "(kosong)" untuk barang tanpa unit.
+
+**Cacat yang ditemukan: tulisan "(opsional)" masih tertinggal.**
+Permintaan "…'(opsional)'nya dihilangi karena sekarang wajib" dulu hanya
+diterapkan pada **cabang admin** (`UnitSelect.tsx`, `izin !== null`). Cabang
+superadmin masih berbunyi `"Pilih unit (opsional)"`. Kontradiktif: satu sisi
+menyatakan wajib, sisi lain menawarkan kosong.
+
+Perbaikan: label superadmin jadi **"Pilih unit"** (tanpa keterangan apa pun) —
+bukan "(wajib)" karena memang tidak diwajibkan. Sekarang:
+`{izin === null ? "Pilih unit" : "Pilih unit (wajib)"}`.
+
+Diverifikasi di berkas build produksi yang hidup
+(`.next/static/chunks/11tsuscg6wq.~.js`): hanya ada `"Pilih unit"` dan
+`"Pilih unit (wajib)"`; `"Pilih unit (opsional)"` **tidak ada lagi**.
+
+**Dua uji lama diperbarui** karena keduanya memeriksa tulisan yang sudah
+sengaja dihapus — bukan karena ada kerusakan:
+`uji-unit-wajib-browser.mjs` (kini memeriksa "TIDAK ada '(opsional)'" dan
+"TIDAK ada '(wajib)' bagi superadmin") · `uji-superadmin-browser.mjs`.
+
+**Hasil akhir:** 10/10 · 5/5 · 23/23 · 15/15 · 50/50; sepuluh penjaga hijau.
+
+**Catatan pembersihan.** Uji ini menambah 16 nomor register (8 + 8 dari dua
+gelombang jalur HTTP) — semuanya ditarik kembali lewat alat resmi satu per satu
+(`npm run kode:bebas lepas <KODE>`). Register 325 → **317**; nomor TI tertinggi
+kembali **228**. 6 akun uji, 8 barang uji, 14 transaksi uji, 2 serah terima uji,
+dan 6 PDF uji dihapus. Data asli utuh: 84 barang, 2 transaksi & 1 serah terima
+Rizky Wibowo, 9 akun, 5 tanda tangan, 7 berkas unggahan.
