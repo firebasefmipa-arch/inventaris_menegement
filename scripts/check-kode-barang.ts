@@ -220,6 +220,54 @@ async function main() {
       `nextSequence=${jaring} (harus ${nomorJaring + 1})`);
   await db.delete(items).where(eq(items.id, idJaring));
 
+  // Bersihkan DULU. Uji B5 di atas sengaja melakukan hal terlarang
+  // (--paksa melepas nomor yang masih dipakai), jadi sampai di sini ada
+  // "barang hantu" milik penjaga sendiri. B10 memeriksa data SUNGGUHAN,
+  // bukan sisa uji — kalau tidak dibersihkan lebih dulu, ia menuduh data
+  // nyata atas ulah ujinya sendiri.
+  await bersihkan();
+
+  // ══ B10: nomor barang hidup TIDAK BOLEH hilang dari register ══
+  // Ini yang paling berbahaya kalau bocor: nomor yang masih dipakai barang
+  // hidup, tapi tak tercatat → nextSequence menganggapnya bebas dan
+  // memberikannya lagi ke barang baru → DUA BARANG BERBAGI SATU KODE.
+  //
+  // Diperiksa atas SELURUH data nyata (bukan contoh buatan sendiri), dua arah.
+  const yatim = await db.execute(sql`
+    SELECT i.id, i.item_code FROM items i
+    WHERE i.item_code IS NOT NULL AND i.item_code <> ''
+      AND NOT EXISTS (SELECT 1 FROM kode_terpakai k
+                      WHERE k.kode = i.item_code COLLATE utf8mb4_general_ci)
+    LIMIT 5
+  `);
+  const yRows = (Array.isArray(yatim) ? yatim[0] : yatim) as unknown as any[];
+  const daftarYatim = (Array.isArray(yRows) ? yRows : [yRows]).filter(Boolean);
+  cek("B10 tiap barang hidup nomornya tercatat di register",
+      daftarYatim.length === 0,
+      `barang tanpa catatan: ${daftarYatim.map((r: any) => r?.item_code).join(", ")}`);
+
+  const kembar = await db.execute(sql`
+    SELECT item_code, COUNT(*) n FROM items
+    WHERE item_code IS NOT NULL AND item_code <> ''
+    GROUP BY item_code HAVING COUNT(*) > 1 LIMIT 5
+  `);
+  const kRows = (Array.isArray(kembar) ? kembar[0] : kembar) as unknown as any[];
+  const daftarKembar = (Array.isArray(kRows) ? kRows : [kRows]).filter(Boolean);
+  cek("B10 tak ada nomor yang dipakai dua barang",
+      daftarKembar.length === 0,
+      `kembar: ${daftarKembar.map((r: any) => r?.item_code).join(", ")}`);
+
+  const tertinggiHidup = await db.execute(sql`
+    SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(item_code, '-', -1) AS UNSIGNED)), 0) maks
+    FROM items WHERE item_code LIKE 'FMIPA-TI-%'
+  `);
+  const tRows = (Array.isArray(tertinggiHidup) ? tertinggiHidup[0] : tertinggiHidup) as unknown as any[];
+  const tBaris = Array.isArray(tRows) ? tRows[0] : tRows;
+  const berikutnya = await nextSequence("TI", TAHUN);
+  cek("B10 nomor berikutnya tak menabrak nomor barang hidup",
+      berikutnya > Number(tBaris?.maks ?? 0),
+      `berikutnya=${berikutnya} tertinggi-hidup=${tBaris?.maks}`);
+
   await bersihkan();
   console.log(`\n  lulus=${lulus} gagal=${gagal}`);
   process.exit(gagal > 0 ? 1 : 0);

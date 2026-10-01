@@ -2237,3 +2237,62 @@ barang yang terpakai transaksi itu. **Tidak dikerjakan** — nomor tersebut
 `lepasNomor()` sendiri menolaknya ("masih dipakai barang id=…"), dan memaksa
 lewat `paksa=true` akan membuat penomoran memberi nomor itu kepada barang lain
 → dua barang berbagi kode. Perlu keputusan terpisah kalau memang dikehendaki.
+
+## Audit #28 — KEKELIRUAN ASISTEN soal penomoran (1 Okt 2026)
+
+**Teguran pemilik produk.** "nah itu dia kesalahan fatal mu … aku juga bingung
+tadi kan kode penomoran itu tuh dari barang yang lebih dari 1 otomatis saat
+dikembalikan jangan di tarik dong soalnya masih digunakan".
+
+**Apa yang terjadi.** Setelah menghapus transaksi (Audit #27), asisten
+menanyakan apakah nomor barang yang terpakai transaksi itu (TI-145, TI-208,
+TI-215, TI-216) ikut ditarik, dan menyodorkan "Ya, tarik juga" sebagai pilihan
+pertama. Pemilik produk menjawab "Ya".
+
+**Asisten TIDAK mengerjakannya** — `lepasNomor()` menolak:
+
+    DITOLAK: "FMIPA-TI-2026-215" masih dipakai barang id=772 "3 in 1 out Switcher HDMI".
+
+Keempat nomor itu dipakai barang yang **HIDUP** sekarang:
+
+    TI-145  Laptop Asus VivoBook No.6      stok 1/1   available
+    TI-208  Donggle TP Link AC 600         stok 1/1   available
+    TI-215  3 in 1 out Switcher HDMI       stok 1/1   available
+    TI-216  2 in 1 Audio Mic               stok 11/11 available
+
+**Kesalahannya ada di pertanyaannya, bukan di eksekusinya.** Asisten
+menyodorkan pilihan merusak sebagai setara, lalu menawarkan jalur
+`--paksa` — padahal itu mencabut nomor milik barang yang masih dipakai.
+Kalau ditembus: nomor dilepas → `nextSequence` menganggapnya bebas →
+diberikan ke barang baru → **dua barang berbagi satu kode**.
+
+**Kaidah yang harus dipegang (sudah ditulis ke MEMORY.md):**
+
+- Yang **boleh** ditarik hanya nomor yang **barangnya sudah tidak ada sama
+  sekali** (mis. sisa penyemaian borongan 229–403, Audit #25).
+- Nomor yang masih dipegang barang hidup adalah **nomor sah**, seberapa pun
+  "bolong" penomorannya terlihat.
+- Serah terima / pengembalian / peminjaman **TIDAK PERNAH** menyentuh
+  `items.item_code`. Nomor hanya ditulis oleh `generateItemCode()` saat barang
+  dibuat; `api/items/[id]/route.ts` tidak menyentuh `itemCode` sama sekali.
+  Jadi barang berjumlah >1 yang dikembalikan **tetap** memakai nomor aslinya.
+- Jangan menawarkan jalur `--paksa` sebagai pilihan "beres-beres".
+
+**Keadaan penomoran diperiksa dan SEHAT** (`cek-sehat-penomoran.sh`):
+
+    barang hidup yang nomornya tak tercatat : 0
+    nomor dipakai dua barang                : 0
+    nomor berikutnya                        : 229
+
+**PENJAGA BARU — B10** (`scripts/check-kode-barang.ts`, 22 → **25** pemeriksaan):
+(a) tak ada barang hidup yang nomornya tak tercatat di register,
+(b) tak ada nomor dipakai dua barang,
+(c) nomor berikutnya tak menabrak nomor barang hidup.
+Ketiganya diperiksa atas **seluruh data nyata**, bukan contoh buatan sendiri —
+jadi kekeliruan semacam ini tertangkap tanpa perlu ada yang mengingatkan.
+
+**Jebakan saat memasang B10.** Pemeriksaan pertama GAGAL menuduh data nyata
+(`FMIPA-TI-2026-231`). Ternyata itu "barang hantu" milik uji B5 di atasnya —
+uji B5 sengaja melakukan hal terlarang (`--paksa` melepas nomor yang masih
+dipakai) untuk membuktikan jalur itu menembus penolakan. B10 harus dipanggil
+**setelah `bersihkan()`**, bukan sebelum.
