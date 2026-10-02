@@ -2296,3 +2296,65 @@ jadi kekeliruan semacam ini tertangkap tanpa perlu ada yang mengingatkan.
 uji B5 sengaja melakukan hal terlarang (`--paksa` melepas nomor yang masih
 dipakai) untuk membuktikan jalur itu menembus penolakan. B10 harus dipanggil
 **setelah `bersihkan()`**, bukan sebelum.
+
+## Audit #29 — Kode barang ikut berganti saat unit dipindah (1 Okt 2026)
+
+**Pertanyaan pemilik produk.** "bukannya kalau di tambah barang wajib bukankah
+saat diedit sudah ada data unitnya?" — dan sebelumnya "unit wajib di halaman
+edit barang ku terapkan sepihak, bisa dibalik".
+
+**Jawabannya: BENAR.** Diperiksa di layar sungguhan:
+
+    admin 1 unit   kotak Unit TERKUNCI, terisi "Divisi Teknologi Informasi"
+    admin 2 unit   kotak DAFTAR, sudah terisi "Divisi Teknologi Informasi"
+
+Jadi begitu halaman edit dibuka, unitnya **sudah terisi sendiri**. Yang
+ditambahkan di Audit #24 hampir tidak ada gunanya.
+
+**Yang lebih penting: pemeriksaan itu KODE MATI.** Kotak Unit sudah memakai
+atribut `required` sejak awal, jadi peramban menahannya lebih dulu:
+
+    sebelum dikosongkan  required=true   valid=true
+    setelah dikosongkan  required=true   valid=false
+    pesan peramban       "Please select an item in the list."
+    formulir valid?      TIDAK — ditahan peramban
+
+Validasi JavaScript tak pernah tercapai, sehingga pesan yang ditambahkan di
+Audit #24 **tidak pernah muncul**. Dihapus (keputusan pemilik produk).
+
+**CACAT NYATA YANG DITEMUKAN — unit pindah, kode tidak ikut pindah.**
+
+Kode barang memuat kode unit (`FMIPA-TI-2026-145`), tetapi memindahkan unit
+lewat halaman edit **tidak** mengubah kodenya. Akibatnya barang milik Kimia
+tetap berkode TI — kode itu berbohong soal pemiliknya, dan `nextSequence`
+unit Kimia tak pernah tahu nomor itu terpakai.
+
+**Keputusan pemilik produk: kode barang IKUT BERUBAH.**
+
+Diterapkan di `api/items/[id]/route.ts`: kalau unitnya benar-benar berpindah,
+nomor BARU dibuat lewat `generateItemCode(unitBaru)` sebelum update. Nomor LAMA
+tetap terkunci di register (append-only) — tak akan dipakai barang lain.
+
+Urutan pemanggilan: **sebelum** update, mengikuti kaidah register yang sudah
+berlaku (lebih baik nomor hangus/bolong daripada satu nomor dipakai dua
+barang).
+
+**Verifikasi — 11/11 lewat HTTP + 8/8 di layar sungguhan:**
+
+    barang di TI            dapat  FMIPA-TI-2026-229
+    dipindah ke S1 Kimia    dapat  FMIPA-KIM-2026-064   (kode lama ditinggalkan)
+    dipindah ke S1 Farmasi  dapat  FMIPA-FAR-2026-044
+    ganti NAMA saja         kode TIDAK berubah
+    daftar barang           menampilkan KODE BARU
+
+**Catatan yang ditulis ke dalam kode:** riwayat & dokumen lama tetap memakai
+kode LAMA. Baris riwayat hanya disegarkan tepat sebelum barang dihapus
+(`snapshotSebelumHapus`), bukan saat unit atau kode berubah. Kalau admin
+memindahkan unit barang, transaksi lama yang menunjuk barang itu masih
+menampilkan kode lamanya. Ini disengaja: dokumen yang sudah ditandatangani
+tidak boleh berubah sendiri.
+
+**Uji yang salah harap (ditemukan sendiri).** `uji-pindah-unit-tampil.mjs`
+awalnya menuntut halaman edit menampilkan kode barang — padahal halaman edit
+memang **tidak** menampilkan kode sama sekali. Harapannya diperbaiki jadi
+"halaman edit tidak memuat kode apa pun (memang rancangannya)".

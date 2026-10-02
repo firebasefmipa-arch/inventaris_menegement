@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { jsonBody } from "@/lib/json-body";
 import { normalizeLocation, lokasiMirip } from "@/lib/locations";
 import { normalizeUnit } from "@/lib/units";
+import { generateItemCode } from "@/lib/item-code";
 import { cekPanjangTeks, JUMLAH_MAKS } from "@/lib/validasi";
 import { periksaAksesUnit } from "@/lib/akses-unit";
 import { snapshotSebelumHapus } from "@/lib/item-snapshot";
@@ -203,6 +204,20 @@ export async function PUT(
       );
     }
 
+    // ── Kode barang ikut pindah kalau unitnya berpindah ──
+    // Kode memuat kode unit (FMIPA-TI-2026-145). Kalau unitnya jadi Kimia tapi
+    // kodenya tetap TI, kode itu berbohong soal siapa pemiliknya. Jadi nomor
+    // BARU diberikan, dan nomor LAMA tetap terkunci di register (append-only).
+    //
+    // Dijalankan DI SINI — setelah semua pemeriksaan lolos, tepat sebelum
+    // simpan — supaya nomor barunya tidak hangus gara-gara permintaan yang
+    // sebenarnya bakal ditolak (jumlah tak sah, unit tak berhak, dst).
+    let kodeFinal: string | undefined;
+    if (unitFinal !== undefined && (existing.unit ?? "") !== (unitFinal ?? "")) {
+      const { code } = await generateItemCode(unitFinal ?? "");
+      kodeFinal = code;
+    }
+
     await db
       .update(items)
       .set({
@@ -249,6 +264,7 @@ export async function PUT(
           ),
         }),
         ...(unitFinal !== undefined && { unit: unitFinal || null }),
+        ...(kodeFinal !== undefined && { itemCode: kodeFinal }),
         ...(location !== undefined && {
           location: normalizeLocation(lokasiMirip(location) || location) || null,
         }),

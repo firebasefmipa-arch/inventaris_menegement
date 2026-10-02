@@ -91,12 +91,17 @@ export default function EditItemPage() {
       return;
     }
 
-    // Unit wajib bagi admin — tanpa ini barangnya dinomori "LAIN" dan jatuh ke
-    // tangan Super Admin saja. Superadmin bebas mengosongkannya.
-    if (!form.unit && unitDikelola !== null) {
-      toast("Unit wajib dipilih — hubungi Super Admin kalau daftarnya kosong", "error");
-      return;
-    }
+    // Unit tidak diperiksa di sini: kotak Unit memakai atribut `required`
+    // sehingga peramban sudah menahannya, dan bagi superadmin memang boleh
+    // kosong. Pemeriksaan di JavaScript tak akan pernah tercapai — kode mati.
+    //
+    // Kode barang tak dikirim dari sini, jadi tak bisa diubah lewat halaman
+    // ini. Kalau unitnya berpindah, server memberi nomor BARU saat itu juga
+    // (lihat PATCH/PUT api/items/[id]).
+    //
+    // Catatan: riwayat & dokumen lama tetap memakai kode LAMA. Baris riwayat
+    // hanya disegarkan tepat sebelum barang dihapus (snapshotSebelumHapus),
+    // bukan saat unit atau kode berubah.
 
     setLoading(true);
     try {
