@@ -9,6 +9,8 @@
  *   R5. tak boleh mengembalikan lebih banyak daripada yang di luar
  *   R6. barang stok 0 tetap bisa dikembalikan (kode masih ketemu)
  *   R7. kode barang unik — satu kode satu barang
+ *   R10. tak ada stok tersangkut tanpa catatan penahan (mutasi sepihak)
+ *   R11. tak ada catatan barang yang induknya sudah hilang
  *
  * Jalankan: npm run check:kembali
  *
@@ -17,7 +19,7 @@
  */
 import { db } from "@/db";
 import { items, handovers, handoverItems, itemReturns } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { unitDiLuar } from "@/lib/unit-di-luar";
 import { catatPengembalian } from "@/lib/pengembalian";
 
@@ -174,6 +176,73 @@ async function main() {
   cek("R7 kode barang unik (tak ada duplikat)",
       new Set(terisi).size === terisi.length,
       `total=${terisi.length}, unik=${new Set(terisi).size}`);
+
+  // ── R10: TIDAK ADA stok yang tersangkut tanpa catatan ──
+  // Kejadian nyata 2 Okt 2026: skrip uji meminjam barang ASLI lalu menghapus
+  // catatan transaksinya tanpa menaruh stoknya kembali → 15 barang "tersedia 0"
+  // padahal tidak ada yang memegang. Pemeriksaan ini membandingkan selisih stok
+  // dengan catatan yang SUNGGUH menahan (transaksi belum selesai + serah terima
+  // yang belum ditolak), jadi sisa menggantung langsung ketahuan.
+  //
+  // Penjaga ini membuktikan dirinya dulu (bahannya dibuat sendiri): barang palsu
+  // yang sengaja disangkutkan HARUS terdeteksi. Tanpa langkah itu, pemeriksaan
+  // bisa "lulus" hanya karena tidak ada apa-apa di database.
+  async function cariNyangkut() {
+    const hasil = (await db.execute(sql`
+      SELECT i.id, i.item_code AS kode, i.name AS nama,
+             i.quantity AS fisik, i.available_quantity AS tersedia,
+             (i.quantity - i.available_quantity) AS selisih,
+             (SELECT COALESCE(SUM(ti.quantity), 0) FROM transaction_items ti
+                JOIN transactions t ON t.id = ti.transaction_id
+               WHERE ti.item_id = i.id AND t.status IN ('pending_approval','active')) AS tahan_trx,
+             (SELECT COALESCE(SUM(hi.quantity), 0) FROM handover_items hi
+                JOIN handovers h ON h.id = hi.handover_id
+               WHERE hi.item_id = i.id AND h.status <> 'rejected') AS tahan_hv
+        FROM items i
+       HAVING selisih > tahan_trx + tahan_hv
+    `)) as unknown as any[];
+    const baris = Array.isArray(hasil) ? hasil[0] : hasil;
+    return Array.isArray(baris) ? (baris as any[]) : [];
+  }
+
+  const [{ id: idPalsu }] = await db.insert(items).values({
+    name: `${TANDA} Sengaja Disangkutkan`,
+    category: "Elektronik",
+    quantity: 1,
+    availableQuantity: 0, // ← fisik 1 tapi tersedia 0, tanpa catatan apa pun
+    itemCode: `${KODE}-SANGKUT`,
+    location: "Lab TI",
+  }).$returningId();
+
+  const terdeteksi = await cariNyangkut();
+  cek("R10 penjaga SUNGGUH mendeteksi barang tersangkut",
+      terdeteksi.some((r: any) => Number(r.id) === idPalsu),
+      `terdeteksi=${terdeteksi.length}`);
+
+  await db.delete(items).where(eq(items.id, idPalsu));
+
+  const sisaNyangkut = (await cariNyangkut()).filter((r: any) => Number(r.id) !== idPalsu);
+  cek("R10 tak ada stok tersangkut tanpa catatan penahan",
+      sisaNyangkut.length === 0,
+      sisaNyangkut.map((r: any) => `#${r.id} ${r.kode} ${r.nama} (fisik ${r.fisik}, tersedia ${r.tersedia})`).join("; "));
+
+  // ── R11: tak ada catatan barang yang induknya sudah tidak ada ──
+  async function hitungGantung(sqlText: any) {
+    const hasil = (await db.execute(sqlText)) as unknown as any[];
+    const baris = Array.isArray(hasil) ? hasil[0] : hasil;
+    return Number((Array.isArray(baris) ? baris[0] : baris)?.n ?? 0);
+  }
+  const nTrx = await hitungGantung(sql`
+    SELECT COUNT(*) AS n FROM transaction_items ti
+      LEFT JOIN transactions t ON t.id = ti.transaction_id WHERE t.id IS NULL
+  `);
+  cek("R11 tak ada catatan transaksi menggantung", nTrx === 0, `baris=${nTrx}`);
+
+  const nHv = await hitungGantung(sql`
+    SELECT COUNT(*) AS n FROM handover_items hi
+      LEFT JOIN handovers h ON h.id = hi.handover_id WHERE h.id IS NULL
+  `);
+  cek("R11 tak ada catatan serah terima menggantung", nHv === 0, `baris=${nHv}`);
 
   await bersihkan();
   console.log(`\n  lulus=${lulus} gagal=${gagal}`);

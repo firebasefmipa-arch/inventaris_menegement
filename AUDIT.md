@@ -2545,3 +2545,76 @@ gambar hasil cetak dilihat langsung.
 hurufnya disematkan utuh. Untuk cetak label ini tidak masalah, tapi kalau
 sampai mencetak ratusan label sekali jalan, pertimbangkan memuat huruf sekali
 lalu dipakai bersama antar-PDF.
+
+## Audit #33 — Stok tersangkut: 15 barang hilang dari daftar pinjam (2 Okt 2026)
+
+**Laporan pemilik produk (verbatim):**
+> "sebentar sebekum lanjut ke serah terima kolom baru, ini kok ada stock barang yang kosong ya? padahal kemarin sudah ku suruh kembalikan stoknya ke stok penuh"
+
+### Temuan
+
+15 barang unit **Divisi Teknologi Informasi** (11 laptop + 4 PC) ber-`available_quantity = 0`
+padahal `quantity = 1`. Barangnya TIDAK hilang — hanya tidak muncul di daftar pinjam.
+
+Dua barang yang diminta dipulihkan **kemarin** (Audit #27) ternyata **sudah benar**:
+keduanya kembali 1/1. Jadi masalahnya bukan sisa pekerjaan kemarin.
+
+### Penyebab
+
+**Mutasi sepihak oleh skrip uji**, bukan kerusakan aplikasi. Tiga skrip uji
+(`uji-sambung-email.mjs`, `uji-sambung-login.mjs`, `uji-sambung-tampil.mjs`)
+meminjam **barang asli** untuk menguji alur penyambungan peminjam, lalu
+membersihkan jejaknya dengan:
+
+    DELETE FROM transaction_items WHERE transaction_id = ...
+    DELETE FROM transactions     WHERE id = ...
+
+Stok yang **sudah dikurangi saat pencatatan** tidak pernah dikembalikan. Diulang
+lintas beberapa sesi uji → 15 barang tersedot. Sisa 1 baris pivot menggantung
+(transaksi #552, barang #702) jadi buktinya.
+
+### Bukti
+
+    transaksi active          0        ← tidak ada yang benar-benar meminjam
+    handovers                 0
+    item_returns              0
+    pivot menggantung         1 baris  (#582 → transaksi #552 yang sudah tidak ada)
+    available < quantity      15 barang
+
+Stok fisik aman; yang nol hanya kolom "tersedia untuk dipinjam".
+
+### Perbaikan
+
+1. **Stok dipulihkan lewat jalur RESMI** — `kembalikanKeStok()` di
+   `src/lib/pengembalian.ts` (jalur yang sama dipakai saat pengajuan ditolak),
+   bukan tulis angka langsung ke DB. 15 baris, 15 unit. Baris pivot menggantung
+   dibuang. Skrip: `scripts/tmp-pulihkan-stok.ts` (pratinjau → `--terapkan`),
+   sudah dihapus setelah dipakai.
+2. **Kebocoran ditutup** — pembantu bersama `/root/audit-20260930/kerja/bersih-uji.mjs`
+   (`hapusTransaksi` / `hapusSerahTerima`): **stok dikembalikan lebih dulu**, baru
+   catatan dibuang. Ketiga skrip uji diubah memakai pembantu ini.
+3. **Penjaga baru di `check:kembali`** (naik 22 → 26 pemeriksaan):
+   - **R10** — tak ada stok tersangkut tanpa catatan penahan. Membandingkan
+     selisih `quantity − available_quantity` dengan catatan yang SUNGGUH menahan
+     (transaksi `pending_approval`/`active` + serah terima bukan `rejected`).
+     **Penjaga ini membuktikan dirinya dulu**: barang palsu yang sengaja
+     disangkutkan HARUS terdeteksi — kalau tidak, "lulus" cuma karena DB kosong.
+   - **R11** — tak ada catatan menggantung (induknya sudah hilang).
+
+### Pengesahan
+
+    check:kembali      26/26  (naik dari 22)
+    11 penjaga lain    hijau
+    tsc                bersih
+    uji-sambung-email  16/16 → stok tetap 0 tersangkut sesudahnya
+    uji-sambung-login  15/15 → stok tetap 0 tersangkut sesudahnya
+    uji-sambung-tampil  5/5  → stok tetap 0 tersangkut sesudahnya
+
+Keadaan akhir: user 9 · items 84 · kode 317 · trx 0 · tersangkut **0** ·
+catatan gantung **0**. Kode aplikasi **tidak berubah** → tanpa build/restart.
+
+### Pelajaran
+
+Skrip uji yang menyentuh **barang asli** WAJIB mengembalikan stoknya sebelum
+menghapus catatannya. Aturan lama "hapus jejak uji sendiri" ternyata hanya
+menghapus *catatannya*, bukan *konsekuensi stoknya*.

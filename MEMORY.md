@@ -97,7 +97,7 @@ sehingga aman diulang di database produksi):
 | `check-import-fix.ts` | impor Excel: nomor inv 12 digit, lokasi salah ketik, formData |
 | `check-terlambat.ts` | satu definisi "Terlambat" — SQL == klien |
 | `check-barang-habis.ts` | barang habis diserahkan: tetap ada, tersembunyi, terkunci (`npm run check:habis`) |
-| `check-barang-kembali.ts` | pengembalian: "di luar" = keluar−kembali, stok nambah (`npm run check:kembali`) |
+| `check-barang-kembali.ts` | pengembalian: "di luar" = keluar−kembali, stok nambah, **R10/R11 stok tersangkut & catatan menggantung** (`npm run check:kembali`, 26 pemeriksaan) |
 | `check-kode-barang.ts` | buku register: nomor bekas TIDAK dipakai ulang (`npm run check:kode`) |
 | `check-persetujuan.ts` | isi dokumen saat disetujui: TTD+nama admin, superadmin tanpa nama, dokumen lama kosong (`npm run check:setuju`) |
 | `check-berkas-tak-terpakai.ts` | berkas unggahan tanpa rujukan DB (`--hapus` = buang) |
@@ -1202,6 +1202,16 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
 
 3. **Stock management** — stok dikurangi saat `POST /api/pinjam`. Dikembalikan saat: transaksi ditolak, dihapus, atau dikembalikan. Jangan lupa update kedua tabel: `items.availableQuantity` dan `items.status`.
 
+3b. **Skrip uji yang memakai BARANG ASLI WAJIB mengembalikan stoknya sebelum menghapus catatannya** *(pelajaran 2 Okt 2026 — Audit #33)*. `DELETE FROM transactions` / `DELETE FROM handovers` **TIDAK** mengembalikan stok yang sudah dipotong saat pencatatan. Akibatnya barang tetap ada tapi hilang dari daftar pinjam — 15 barang (11 laptop + 4 PC) tersangkut begini.
+
+    **Cara yang benar:** pakai pembantu `/root/audit-20260930/kerja/bersih-uji.mjs` — `hapusTransaksi(ids)` / `hapusSerahTerima(ids)`: stok dikembalikan dulu (satu perintah SQL yang menjumlah per barang), baru catatan dibuang.
+
+    **Bedakan dua pola uji:**
+    - Uji lewat **HTTP/jalur nyata** (`POST /api/transactions`) → stok **SUDAH** terpotong → WAJIB pakai `hapusTransaksi`.
+    - Uji yang **menyisipkan catatan langsung** lewat SQL (`INSERT INTO transactions ...`) → stok **TIDAK PERNAH** terpotong → hapus langsung memang benar (mis. `uji-sambung-tampil.mjs`).
+
+    **Penjaga:** `check:kembali` **R10** membandingkan `quantity − available_quantity` dengan catatan yang sungguh menahan — sisa menggantung ketahuan tanpa perlu ditunggu.
+
 4. **PDF generator** — fungsi `generateBorrowingPDF()` di `src/lib/pdf-generator.ts` sudah support multi-halaman otomatis. Jika menambah kolom baru di tabel PDF, sesuaikan `colWidths` agar total = `CONTENT_W` (483.28px).
 
 5. **Auth callback** — setelah Google OAuth, user selalu diarahkan ke `/auth/callback` yang membaca role dari DB dan redirect ke tempat yang benar.
@@ -1294,7 +1304,7 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - Barang **stok 0 TETAP bisa dikembalikan** (kodenya masih ketemu di DB); begitu stoknya > 0 ia **muncul lagi otomatis** di daftar barang. Ini penutup lingkaran aturan 12 — tanpa fitur ini, barang yang disembunyikan praktis hilang selamanya.
     - **Peminjaman TIDAK disentuh** — `item_returns` hanya mencatat serah terima.
     - Logika di `src/lib/pengembalian.ts` (`catatPengembalian()`), dipisah dari route supaya bisa diuji tanpa sesi HTTP.
-    - Penjaga: `scripts/check-barang-kembali.ts` (22 pemeriksaan) — `npm run check:kembali`.
+    - Penjaga: `scripts/check-barang-kembali.ts` (26 pemeriksaan) — `npm run check:kembali`. Termasuk **R10** (tak ada stok tersangkut tanpa catatan penahan — membandingkan `quantity − available_quantity` dengan transaksi `pending_approval`/`active` + serah terima bukan `rejected`) dan **R11** (tak ada catatan menggantung). R10 **membuktikan dirinya dulu** dengan barang palsu yang sengaja disangkutkan.
     - Tabel `item_returns` dibuat dengan **ALTER manual**, JANGAN `drizzle-kit push` di DB produksi.
     - Kolom "Sedang di Luar" muncul di kartu & baris daftar barang (grid + list desktop); nilainya dikirim dari `admin/items/page.tsx`.
 
