@@ -254,6 +254,43 @@ punya akun). **Satu-satunya pintu: `BorrowModal`** di `/admin/transactions`
 tombol unduh di daftar ditekan (`/api/transactions/[id]/generate-pdf`), dan itu
 formulir tanpa TTD — peminjam tidak punya akun, jadi tidak ada tanda tangan.
 
+### Penyambungan Pemilik lewat Email (Audit #30)
+
+**Email peminjam WAJIB** dan diperiksa bentuknya (`nama@domain.tld`), bukan cuma
+"ada isinya" — salah ketik membuat transaksinya nyangkut tanpa ada yang sadar.
+
+```
+email ada akunnya   → user_id diisi SAAT DICATAT, langsung masuk riwayatnya
+email belum ada     → user_id tetap NULL, lalu MENEMPEL SENDIRI saat ada
+                      yang login pakai email itu (sambungkanTransaksiTertunda)
+```
+
+- `src/lib/sambung-peminjam.ts` — `sambungkanTransaksiTertunda(userId, email)`,
+  dipanggil dari callback `signIn()` di `src/auth.ts`.
+  **Hanya menyentuh `user_id IS NULL`** — transaksi milik orang lain tak akan
+  pernah ikut tertarik. Email dibandingkan `LOWER(TRIM(...))`.
+  Gagal di sini **TIDAK** menggagalkan login.
+- **`user.last_login_at`** (ALTER manual, bukan `drizzle-kit push`) — aplikasi
+  memakai JWT sehingga tabel `session` **selalu kosong**; tanpa kolom ini "akun
+  yang sudah login" mustahil diketahui. Diisi di `signIn()` (BUKAN di `jwt()` —
+  di sana akan tercatat tiap halaman dibuka).
+- **Pencarian pengganti dropdown:** kotak "Nama Peminjam" di `BorrowModal.tsx`
+  jadi kotak pencarian bersaran (jeda 300 ms). Memilih saran mengisi
+  nama/email/hp/nim/divisi. **Ketikan bebas tetap tersimpan apa adanya.**
+  Lokasi sengaja tidak ikut terisi — tidak ada di profil akun.
+- **Aturan daftar saran hanya SATU definisi:** `cariAkunSaran()` di
+  `src/lib/cari-akun-saran.ts`, dipakai bersama rute `/api/cari-user` DAN
+  penjaga `check:sambung`. Syarat: sudah pernah login + hp/nim/divisi terisi +
+  akun aktif. Rute mengembalikan `[]` bila kata kunci < 2 huruf.
+- **`handovers` TIDAK PUNYA kolom email penerima** — serah terima belum ikut
+  tersambung (Tahap 2, perlu ALTER dulu). Jangan menulis predikat yang menyebut
+  `transactions.borrower_email` di UPDATE `handovers` → MySQL menolak dengan
+  `ER_BAD_FIELD_ERROR: Unknown column 'transactions.borrower_email'`.
+- Fitur ini **baru berguna setelah ada yang login lagi** — sebelum itu daftar
+  saran kosong walau akunnya sudah lengkap datanya.
+- Penjaga: `scripts/check-sambung-peminjam.ts` (**9 pemeriksaan**) —
+  `npm run check:sambung`.
+
 Bedanya dengan jalur user (`/api/pinjam`): user wajib data diri sendiri + TTD +
 persetujuan admin; admin bebas mengisi data siapa pun + langsung aktif.
 

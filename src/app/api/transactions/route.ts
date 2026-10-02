@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transactions, transactionItems, items } from "@/db/schema";
+import { transactions, transactionItems, items, users } from "@/db/schema";
 import { eq, desc, and, gte, inArray, sql } from "drizzle-orm";
 import { namaSql, namaSqlLegacy } from "@/lib/item-snapshot";
 import { auth } from "@/auth";
@@ -131,6 +131,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Email peminjam WAJIB: dari situlah transaksi ini bisa nyambung ke akun
+    // orangnya. Terlalu mudah salah ketik / kesandung spasi, dan akibatnya
+    // transaksinya nyangkut — tak muncul di riwayat siapa pun tanpa ada yang
+    // sadar. Jadi diperiksa bentuknya juga, bukan cuma "ada isinya".
+    const emailPeminjam = String(borrowerEmail ?? "").trim().toLowerCase();
+    if (!emailPeminjam) {
+      return NextResponse.json(
+        { error: "Email peminjam wajib diisi — dipakai agar transaksinya masuk ke riwayat akun orangnya" },
+        { status: 400 }
+      );
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailPeminjam)) {
+      return NextResponse.json(
+        { error: "Bentuk email peminjam tidak sah (contoh: nama@uii.ac.id)" },
+        { status: 400 }
+      );
+    }
+
+    // Kalau emailnya sudah punya akun, tautkan SEKARANG supaya langsung muncul
+    // di riwayatnya. Kalau belum, kolomnya tetap kosong dan penyambungan
+    // menyusul otomatis saat ada yang login memakai email ini (lihat
+    // sambungkanTransaksiTertunda()).
+    const [akunPeminjam] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, emailPeminjam))
+      .limit(1);
+
     if (!purpose?.trim()) {
       return NextResponse.json(
         { error: "Keperluan peminjaman wajib diisi" },
@@ -220,13 +248,13 @@ export async function POST(request: NextRequest) {
       const [{ id: txId }] = await db
         .insert(transactions)
         .values({
-          userId: null, // transaksi dari admin, bukan user terdaftar
+          userId: akunPeminjam?.id ?? null, // nyambung ke akun kalau emailnya sudah terdaftar
           itemId: null, // multi-item, pakai transaction_items
           grupId,
           unit: unit || null,
           borrowerName,
           borrowerDepartment: borrowerDepartment || null,
-          borrowerEmail: borrowerEmail || null,
+          borrowerEmail: emailPeminjam,
           borrowerPhone: borrowerPhone || null,
           borrowerNim: borrowerNim || null,
           borrowerLocation: borrowerLocation || null,

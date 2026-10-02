@@ -53,7 +53,61 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
   const [notes, setNotes] = useState("");
   const [purpose, setPurpose] = useState("");
 
+  // ── Saran penerima ──────────────────────────────────────────────────────
+  // Kotak Nama berlaku sebagai kotak pencarian: sambil diketik, muncul akun
+  // yang cocok. Memilih salah satu mengisi seluruh form; kalau tidak dipilih,
+  // ketikan bebas tetap tersimpan apa adanya.
+  type AkunSaran = {
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    nim: string | null;
+    department: string | null;
+  };
+  const [saran, setSaran] = useState<AkunSaran[]>([]);
+  const [saranTerbuka, setSaranTerbuka] = useState(false);
+  // Diisi waktu admin memilih dari saran. Dipakai untuk MEMPERINGATKAN kalau
+  // nama pilihan tadi kemudian diubah manual — supaya admin sadar bahwa
+  // transaksinya tidak lagi nyambung ke akun yang tadi dipilih.
+  const [pilihAkun, setPilihAkun] = useState(false);
+
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // Pencarian saran ditunda 300 ms supaya tidak menembak server tiap ketukan.
+  const timerSaran = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cariAkun = (kata: string) => {
+    if (timerSaran.current) clearTimeout(timerSaran.current);
+    const q = kata.trim();
+    if (q.length < 2) {
+      setSaran([]);
+      setSaranTerbuka(false);
+      return;
+    }
+    timerSaran.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/cari-user?cari=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        const daftar: AkunSaran[] = Array.isArray(data?.akun) ? data.akun : [];
+        setSaran(daftar);
+        setSaranTerbuka(daftar.length > 0);
+      } catch {
+        setSaran([]);
+        setSaranTerbuka(false);
+      }
+    }, 300);
+  };
+
+  const pakaiAkun = (a: AkunSaran) => {
+    setBorrowerName(a.name ?? "");
+    setBorrowerEmail(a.email ?? "");
+    if (a.phone) setBorrowerPhone(a.phone);
+    if (a.nim) setBorrowerNim(a.nim);
+    if (a.department) setBorrowerDepartment(a.department);
+    setPilihAkun(true);
+    setSaranTerbuka(false);
+    setSaran([]);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -359,18 +413,47 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
               </h3>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="relative">
                   <label className="block text-xs font-medium text-gray-600 mb-1">
                     Nama Peminjam <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={borrowerName}
-                    onChange={(e) => setBorrowerName(e.target.value)}
+                    onChange={(e) => {
+                      setBorrowerName(e.target.value);
+                      setPilihAkun(false);
+                      cariAkun(e.target.value);
+                    }}
+                    onFocus={() => { if (saran.length) setSaranTerbuka(true); }}
                     required
-                    placeholder="Masukkan nama"
+                    autoComplete="off"
+                    placeholder="Ketik nama atau email akun… (boleh diketik bebas)"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   />
+
+                  {/* Daftar saran: akun yang sudah pernah login & data dirinya
+                      lengkap. Memilih salah satu mengisi seluruh form; kalau
+                      tidak dipilih, ketikan bebas tetap tersimpan apa adanya. */}
+                  {saranTerbuka && saran.length > 0 && (
+                    <ul className="absolute z-20 mt-1 w-full max-h-56 overflow-auto bg-white border border-gray-200 rounded-xl shadow-lg">
+                      {saran.map((a) => (
+                        <li key={a.id}>
+                          <button
+                            type="button"
+                            onClick={() => pakaiAkun(a)}
+                            className="w-full text-left px-3 py-2 hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none"
+                          >
+                            <div className="text-sm font-medium text-gray-800">{a.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {a.email}
+                              {a.department ? ` · ${a.department}` : ""}
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 <div>
@@ -415,15 +498,23 @@ export function BorrowModal({ isOpen, onClose }: BorrowModalProps) {
 
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Email
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
                     value={borrowerEmail}
                     onChange={(e) => setBorrowerEmail(e.target.value)}
-                    placeholder="Email (opsional)"
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    required
+                    placeholder="nama@uii.ac.id"
+                    className={`w-full px-3 py-2 bg-gray-50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 ${
+                      pilihAkun ? "border-emerald-300" : "border-gray-200"
+                    }`}
                   />
+                  {pilihAkun && (
+                    <p className="text-[11px] text-emerald-600 mt-1">
+                      Terhubung ke akun — transaksinya masuk riwayat orang ini.
+                    </p>
+                  )}
                 </div>
 
                 <div>

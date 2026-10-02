@@ -22,7 +22,8 @@
     "check:kode": "tsx scripts/check-kode-barang.ts",
     "check:unit": "tsx scripts/check-unit.ts",
     "check:setuju": "tsx scripts/check-persetujuan.ts",
-    "check:verifikasi": "tsx scripts/check-verifikasi.ts"
+    "check:verifikasi": "tsx scripts/check-verifikasi.ts",
+    "check:sambung": "tsx scripts/check-sambung-peminjam.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",

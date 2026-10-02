@@ -2358,3 +2358,91 @@ tidak boleh berubah sendiri.
 awalnya menuntut halaman edit menampilkan kode barang — padahal halaman edit
 memang **tidak** menampilkan kode sama sekali. Harapannya diperbaiki jadi
 "halaman edit tidak memuat kode apa pun (memang rancangannya)".
+
+## Audit #30 — Penyambungan peminjam lewat email (2 Okt 2026)
+
+**Permintaan pemilik produk (verbatim).** "untuk kasus transaksi manual oleh
+admin, tambahkan system matching otomatis, jadi ketika menambahkan transaksi
+manual oleh admin, admin wajib menginputkan email penerima, nah email tersebut
+digunakan saat penerima login pakai akun tersebut transaksi yang ditambahkan
+manual oleh admin tadi masuk ke riwayat user si penerima tersebut. Dan tambahkan
+juga ketika admin menambahkan transaksi manual input namanya tetap custom tapi
+terdapat dorp down opsi user yang sudah login, kalau admin memilih salah satu
+opsi tersebut, data diri user tersebut otomatis ter tempel di formnya."
+
+Lalu diklarifikasi: "nah untuk drop downnya sendiri itu bukan buat lagi tapi
+diinput nama peminjam, jadi kayak fitur searching gitu" — dan: "pilih dari
+saran terisi otomatis, dan ketik bebas disimpan dan jika emailnya matching
+riwayatnya masuk ke akun user tersebut".
+
+**Akar masalahnya.** `POST /api/transactions` sengaja mengisi `userId: null`
+dengan komentar "transaksi dari admin, bukan user terdaftar". Halaman riwayat
+user menyaring dengan `eq(transactions.userId, userId)` — jadi catatan admin
+**tidak pernah** nyambung ke riwayat siapa pun. Kolom `borrower_email` sudah ada
+sejak dulu, tapi opsional dan tidak dipakai menautkan apa pun.
+
+**Fondasi — pencatat login.** Aplikasi memakai strategi JWT, sehingga tabel
+`session` **selalu kosong** dan jejak login tak ada di mana pun. Tanpa ini,
+"akun yang sudah login" mustahil diketahui. Ditambah kolom `user.last_login_at`
+(ALTER manual, bukan `drizzle-kit push`), diisi di callback `signIn()` — ditaruh
+di situ, bukan di `jwt()`, supaya hanya tercatat saat BENAR-BENAR masuk, bukan
+tiap halaman dibuka.
+
+**Penyambungan.** `sambungkanTransaksiTertunda(userId, email)` di
+`src/lib/sambung-peminjam.ts`, dipanggil dari `signIn()`:
+  - hanya menyentuh baris `user_id IS NULL` (milik orang lain tak akan tertarik)
+  - email dibandingkan `LOWER(TRIM(...))` — huruf besar/spasi pinggir aman
+  - gagal di sini TIDAK menggagalkan login
+Saat admin mencatat, email juga sudah dicek lebih dulu: kalau akunnya ada,
+`userId` langsung diisi; kalau belum, dibiarkan kosong dan menyusul saat login.
+
+**Pencarian pengganti dropdown.** Kotak "Nama Peminjam" berlaku sebagai kotak
+pencarian (saran muncul sambil diketik, jeda 300 ms). Memilih saran mengisi
+nama/email/hp/nim/divisi sekaligus. Ketikan bebas tetap tersimpan apa adanya —
+persis permintaan pemilik produk. Lokasi sengaja TIDAK ikut terisi: kolom itu
+tidak ada di profil akun.
+
+**Email jadi WAJIB**, diperiksa bentuknya juga (`nama@domain.tld`) — bukan cuma
+"ada isinya". Alasannya: salah ketik membuat transaksi nyangkut tanpa ada yang
+sadar.
+
+**Aturan daftar saran ada di SATU tempat** — `cariAkunSaran()` di
+`src/lib/cari-akun-saran.ts`, dipakai bersama oleh rute `/api/cari-user` dan
+penjaga `check:sambung`. Kalau aturannya ditulis dua kali, keduanya bisa
+melenceng diam-diam. Syaratnya: sudah pernah login + hp/nim/divisi terisi +
+akun aktif. Rute mengembalikan `[]` bila kata kuncinya di bawah 2 huruf, supaya
+tak ada yang bisa menyedot seluruh daftar akun hanya dengan membuka alamatnya.
+
+**BUG NYATA YANG DITANGKAP PENJAGA BARU.** Versi pertama
+`sambungkanTransaksiTertunda()` ikut memperbarui tabel `handovers` memakai
+predikat yang menyebut `transactions.borrower_email`. MySQL menolaknya:
+`Unknown column 'transactions.borrower_email' in 'where clause'`. Serah terima
+memang **tidak punya kolom email penerima** sama sekali. Baris itu dibuang;
+serah terima menunggu Tahap 2 (perlu kolom baru dulu).
+
+**Verifikasi.**
+  - `uji-sambung-email.mjs` **16/16** (jalur HTTP): email wajib & bentuk
+    diperiksa · email berakun langsung tertaut · email belum berakun tetap
+    tersimpan · huruf besar + spasi tetap nyambung · saran menyembunyikan akun
+    yang belum pernah login & data diri kosong · rute menolak tanpa login (401)
+  - `uji-sambung-login.mjs` **15/15**: transaksi MENEMPEL SENDIRI saat pemilik
+    emailnya login, MUNCUL DI RIWAYAT-nya, ikut terhitung di ringkasan, dan
+    TIDAK bocor ke riwayat akun lain
+  - `uji-cari-nama-browser.mjs` **10/10** (layar sungguhan): saran muncul saat
+    diketik · memilih mengisi form · tanda "Terhubung ke akun" · ketikan bebas
+    tetap jalan · email ditandai wajib
+  - `uji-sambung-tampil.mjs` **5/5** (layar sungguhan): transaksi catatan admin
+    benar-benar tampil di halaman riwayat pemiliknya
+  - Penjaga BARU `check:sambung` **9/9** — ikut di `penjaga-akhir.sh`
+  - Penjaga lama semua hijau; `uji-skenario.ts` 50/50
+
+**Yang SENGAJA tidak diubah.** Transaksi berstatus `active` tetap tanpa tombol
+"Batalkan" di riwayat user (memang begitu aturannya — pengembaliannya lewat
+admin). Nama peminjam & keperluan tetap tidak dikirim API riwayat user: itu
+riwayat miliknya sendiri, jadi namanya tak perlu diulang.
+
+**Sisa untuk Tahap 2.** Serah terima belum ikut tersambung — tabel `handovers`
+tak punya kolom email penerima. Perlu ALTER dulu.
+
+**Catatan operasional.** Fitur ini baru berguna setelah ada yang LOGIN lagi:
+sebelum itu daftar saran masih kosong walau akunnya sudah lengkap datanya.

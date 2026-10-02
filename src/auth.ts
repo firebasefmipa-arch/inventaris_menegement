@@ -7,6 +7,7 @@ import { users, accounts, sessions, verificationTokens } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import bcrypt from "bcryptjs"
 import { bp } from "@/lib/basepath"
+import { sambungkanTransaksiTertunda } from "@/lib/sambung-peminjam"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -78,6 +79,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async signIn({ user, account }) {
+      // Catat waktu login — dipakai untuk mengenali "akun yang sudah pernah
+      // masuk" (mis. daftar saran penerima di form pinjam admin). Login pakai
+      // JWT, jadi tak ada baris `session` yang bisa diandalkan.
+      // Ditaruh di sini (bukan di `jwt`) supaya hanya tercatat saat benar-benar
+      // masuk, bukan tiap halaman dibuka.
+      if (user?.email) {
+        try {
+          await db
+            .update(users)
+            .set({ lastLoginAt: new Date() })
+            .where(eq(users.email, user.email))
+
+          // Kalau admin pernah mencatat pinjam/serah-terima memakai email ini
+          // SEBELUM akunnya ada, transaksinya masih menggantung tanpa pemilik.
+          // Sekarang pemiliknya muncul — tempelkan supaya masuk riwayatnya.
+          const [akun] = await db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.email, user.email))
+            .limit(1)
+          if (akun?.id) await sambungkanTransaksiTertunda(akun.id, user.email)
+        } catch {
+          // Jangan gagalkan login hanya karena pencatatan/penyambungan gagal
+        }
+      }
+
       // Credentials (super_admin) — langsung lolos, authorize() sudah validasi
       if (account?.provider === "credentials") return true
 

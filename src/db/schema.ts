@@ -71,6 +71,11 @@ export const users = mysqlTable("user", {
   // daftar unit yang DIKELOLA tetap tabel `user_unit`.
   unitUtama: varchar("unit_utama", { length: 255 }),
   signatureUrl: varchar("signature_url", { length: 500 }),
+  // Waktu login terakhir. Dipakai untuk mengenali "akun yang sudah pernah
+  // masuk" — mis. daftar saran penerima di form pinjam admin. Login memakai
+  // JWT (bukan tabel `session`), jadi tanpa kolom ini jejak login tak ada.
+  // Akun lama bernilai NULL sampai benar-benar ada yang login lagi.
+  lastLoginAt: datetime("last_login_at"),
   status: mysqlEnum("status", ["pending", "active", "suspended"])
     .default("active"),
   role: mysqlEnum("role", ["user", "admin", "super_admin"])
