@@ -92,7 +92,7 @@ sehingga aman diulang di database produksi):
 
 | Skrip | Yang dijaga |
 |---|---|
-| `check-label-layout.ts` | geometri + isi label barang (`npm run check:label`) |
+| `check-label-layout.ts` | geometri + isi label barang, **60 pemeriksaan** (`npm run check:label`) |
 | `check-item-snapshot.ts` | tiap pemakaian `namaSql*` punya tabel sumber (`npm run check:snapshot`) |
 | `check-import-fix.ts` | impor Excel: nomor inv 12 digit, lokasi salah ketik, formData |
 | `check-terlambat.ts` | satu definisi "Terlambat" — SQL == klien |
@@ -876,20 +876,35 @@ Pemakai: impor barang, TTD user, unggah transaksi, unggah serah terima.
   (`handover-pdf-generator.ts`). Pencarian barang ikut mencocokkan kode.
 
 ### Label Barang (cetak fisik)
-- Generator: `src/lib/label-pdf-generator.ts` (pdf-lib, tanpa dependency baru).
-  Mengikuti template "Pelabelan Barang": A4 **landscape**, 2 kolom x 3 baris,
-  **5 label per halaman** (baris terakhir sengaja 1 label, sama seperti template).
+- Generator: `src/lib/label-pdf-generator.ts` (pdf-lib + `@pdf-lib/fontkit`).
+  **Mengikuti berkas template pemilik produk** `/root/backup-repo/template-20260921/Pelabelan Barang-1.docx`
+  — semua angka di `LABEL_GEO` disalin dari XML template (twips → cm), bukan dikira-kira:
+  A4 **mendatar** · tabel **17,74 cm dipusatkan** (mulai 5,98 cm) · kolom
+  **0,50 | 8,61 | 0,40 | 8,23 cm** · tinggi baris **4,03 / 4,15 / 4,57 cm** ·
+  tabel mulai **0,93 cm** dari tepi atas · logo **3,10 x 0,84 cm** kiri atas ·
+  **5 label per halaman** (baris ke-3 sengaja cuma 1 — begitu di template).
+- **Huruf: Calibri 12pt SEMUA baris, tanpa tebal.** Server tak punya Calibri →
+  dipasang `fonts-crosextra-carlito`; `assets/fonts/Carlito-Regular.ttf`
+  disematkan ke PDF (`muatFontLabel`). Kalau berkas hilang, jatuh ke Helvetica.
+  **WAJIB `subset: false`** — dengan `subset: true` huruf tampil RUSAK saat
+  dilihat/dicetak (teks masih bisa disalin, jadi uji teks lolos palsu; hanya
+  ketahuan lewat gambar). PDF jadi ~770 KB karena itu, memang begitu.
 - API: `POST /api/items/labels` body `{ ids: number[] }` (guard admin/super_admin).
   Balas PDF + header `X-Label-Count` dan `X-Label-Skipped`.
 - UI: mode pilih (`selectMode`) di `ItemsClient.tsx` → tombol "Cetak Label (n)"
   di bilah aksi bawah. Menu ini SUDAH ADA sebelumnya (dipakai hapus massal).
-- Isi label (urut atas→bawah): Kode Barang (bold) · Nama · Spesifikasi ·
-  `No. Inventaris: ...` (**hanya kalau ada**) · `Tanggal Cek: ...` · `Kondisi ...`.
-  Logo FMIPA di kanan atas; baris kode dipotong agar tidak menabrak logo.
+- Isi label (urut atas→bawah): Kode Barang · Nama · Spesifikasi ·
+  `Tanggal Cek: ...` · `Kondisi ...`. **Nomor inventaris TIDAK dicetak** —
+  di template memang tidak ada (dibuktikan: kata "Inventaris" 0x di XML).
+  Logo FMIPA di kiri atas; teks selalu mulai di bawah logo.
+- **Tinggi teks dihitung dari tinggi kotak.** Kotak baris 1 (4,03 cm) hanya
+  muat 4 baris 12pt, padahal isi penuh 5 baris → yang dikurangi lebih dulu
+  **SPESIFIKASI**, baru nama barang. Kode, tanggal cek, kondisi SELALU ikut.
 - **Barang tanpa Kode Barang DILEWATI** — kode TIDAK dibuat otomatis saat cetak
   (keputusan user; barang lama akan dibersihkan/dikosongkan kodenya).
-- Uji: `npm run check:label` — geometri (tidak keluar sel / tidak menabrak logo)
-  + baca ulang teks PDF nyata (parser content-stream sama seperti `check:pdf`).
+- Uji: `npm run check:label` — **60 pemeriksaan**, termasuk patokan angka
+  template, huruf Calibri benar-benar tertanam, dan jumlah tulisan di PDF cocok
+  dengan jumlah baris label.
 - Layout dihitung fungsi murni `planLabels()` supaya bisa diuji tanpa menggambar.
   `ponytail:` kalau perlu ukuran label/stiker khusus (bukan A4), tambahkan preset
   ukuran di `LABEL_GEO` — sekarang hanya A4 landscape.

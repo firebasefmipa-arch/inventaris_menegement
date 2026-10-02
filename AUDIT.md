@@ -2482,3 +2482,66 @@ Sampai 5 digit, penomoran jadi tidak sama panjang (`...-999` di sebelah
 setelah 1000 barang dalam satu unit dalam satu tahun (TI sekarang baru 228).
 
 Tidak ada kode yang disentuh pada audit ini.
+
+## Audit #32 — Label barang disamakan dengan berkas template (2 Okt 2026)
+
+**Permintaan pemilik produk (verbatim):** "perbaiki format pelabelannya, font,
+ukuran, jarak, dan layout sesuaikan dengan templete yang ku beri dulu"
+
+**Berkas template:** `/root/backup-repo/template-20260921/Pelabelan Barang-1.docx`
+(dibaca langsung dari XML di dalamnya — bukan dikira-kira).
+
+**Angka template (twips → cm):**
+
+| Bagian | Template | Sebelum | Sekarang |
+|---|---|---|---|
+| Kertas | A4 mendatar 29,7 x 21 cm | sama | sama |
+| Lebar tabel | 17,74 cm dipusatkan (mulai 5,98 cm) | 24,62 cm penuh halaman | 17,74 cm dipusatkan |
+| Kolom | 0,50 \| 8,61 \| 0,40 \| 8,23 cm | 2 kolom sama lebar | mengikuti template |
+| Tinggi baris | 4,03 / 4,15 / 4,57 cm | dibagi rata 3 baris | mengikuti template |
+| Mulai dari atas | 0,93 cm | mengikuti margin 2,54 cm | 0,93 cm |
+| Huruf | Calibri | Helvetica | Calibri (berkas Carlito) |
+| Ukuran huruf | 12pt SEMUA baris | kode 12 tebal, nama 12, spek 11, sisanya 10 | 12pt semua |
+| Tebal | tidak ada | kode tebal | tidak ada |
+| Jarak baris | 1,08 x tinggi huruf | 1pt | 1,08 x tinggi huruf (ikut huruf) |
+| Garis kotak | Table Grid (semua sisi) | abu-abu 0,5pt | hitam 0,5pt |
+| Isi | kode · nama · spek · tanggal cek · kondisi | + No. Inventaris | mengikuti template |
+
+**Temuan yang menentukan:**
+
+1. **Template TIDAK memuat baris "No. Inventaris"** — dibuktikan dengan
+   menghitung kemunculan kata di XML: `Inventaris` 0x, `No.` 0x, `Asset` 0x.
+   Baris itu dibuang dari label (mengikuti arahan "sesuaikan dengan template").
+2. **Huruf Calibri tidak ada di server.** Dipasang `fonts-crosextra-carlito`;
+   berkas `Carlito-Regular.ttf` disimpan di `assets/fonts/` dan disematkan ke
+   dalam PDF, jadi label tetap benar walau dibuka di komputer tanpa Calibri.
+   Carlito adalah kembaran Calibri dengan ukuran huruf identik.
+3. **Subset huruf MERUSAK tampilan.** `embedFont(bytes, {subset:true})` membuat
+   teks bisa disalin tapi bentuk hurufnya berantakan saat dilihat/dicetak
+   (terbukti lewat perbandingan gambar: subset rusak, penuh benar). Dipakai
+   `subset:false` — PDF jadi ~770 KB, tapi hurufnya benar. Kalau nanti ada
+   banyak label sekaligus, ukuran ini perlu ditimbang ulang.
+4. **Tinggi kotak baris 3 lebih besar** (4,57 cm) tapi isi labelnya bisa sampai
+   5 baris, jadi baris teks dihitung dari tinggi kotak. Karena 12pt + jarak
+   1,08 hanya muat 4 baris di kotak baris 1, bagian yang dikurangi lebih dulu
+   adalah SPESIFIKASI, baru nama barang. Kode, tanggal cek, dan kondisi selalu ikut.
+
+**Bukti:** penjaga `check:label` **60/60** (naik dari 44), termasuk pemeriksaan
+angka template itu sendiri, huruf Calibri benar-benar tertanam, dan jumlah
+tulisan di PDF cocok dengan jumlah baris label. Diperiksa juga lewat jalur
+nyata: login admin → `POST /api/items/labels` → PDF diperiksa dengan PyMuPDF
+(3 label, semua 12pt Carlito, posisi x=6,63/15,64 cm, kotak mulai 0,93 cm) dan
+gambar hasil cetak dilihat langsung.
+
+**Berkas:**
+- `src/lib/label-pdf-generator.ts` — ditulis ulang mengikuti angka template;
+  `LABEL_GEO` sekarang memuat lebar tabel/kolom/tinggi baris asli; `buildLines`
+  menerima batas baris dari tinggi kotak; `muatFontLabel` menyematkan Carlito.
+- `scripts/check-label-layout.ts` — 60 pemeriksaan (termasuk patokan template).
+- `assets/fonts/Carlito-Regular.ttf` — berkas huruf (613 KB).
+- `package.json` — tambah `@pdf-lib/fontkit` (wajib untuk menyematkan huruf).
+
+**Catatan untuk lain kali:** ukuran PDF naik dari ~500 KB ke ~770 KB karena
+hurufnya disematkan utuh. Untuk cetak label ini tidak masalah, tapi kalau
+sampai mencetak ratusan label sekali jalan, pertimbangkan memuat huruf sekali
+lalu dipakai bersama antar-PDF.

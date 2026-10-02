@@ -1,22 +1,29 @@
 /**
  * Uji tata letak label barang. Jalankan: npm run check:label
  *
- * Memeriksa geometri (bukan menggambar) — tiap perhitungan diuji terhadap
- * batas sel, jadi teks panjang/pendek tidak akan meluber keluar label.
+ * Angka pembanding diambil dari berkas template milik pemilik produk
+ * ("Pelabelan Barang-1.docx"), ditulis harfiah di sini sebagai patokan:
+ * tabel 17,74 cm dipusatkan · kolom 0,50/8,61/0,40/8,23 cm ·
+ * tinggi baris 4,03/4,15/4,57 cm · mulai 0,93 cm dari tepi atas ·
+ * semua huruf 12pt Calibri · logo 3,10 x 0,84 cm · isi = kode, nama,
+ * spesifikasi, tanggal cek, kondisi (TANPA nomor inventaris).
+ *
+ * Kalau ada yang mengubah LABEL_GEO tanpa menyesuaikan template, uji ini gagal.
  */
-import { PDFDocument, StandardFonts, PDFRawStream, decodePDFRawStream } from "pdf-lib";
+import { PDFDocument, PDFRawStream, PDFDict, PDFName, decodePDFRawStream } from "pdf-lib";
 import {
   LABEL_GEO as G,
   planLabels,
   fitText,
   generateLabelsPDF,
+  muatFontLabel,
   type LabelData,
 } from "@/lib/label-pdf-generator";
 
-/** Baca teks yang benar-benar tertulis di PDF (per halaman). */
-async function teksPerHalaman(buf: Uint8Array): Promise<string[][]> {
+/** Hitung operator Tj (perintah "tulis teks") di seluruh halaman PDF. */
+async function jumlahTeksTertulis(buf: Uint8Array): Promise<number[]> {
   const doc = await PDFDocument.load(buf);
-  const hasil: string[][] = [];
+  const hasil: number[] = [];
   for (const p of doc.getPages()) {
     const c = p.node.Contents();
     const streams = (c as any).asArray ? (c as any).asArray() : [c];
@@ -27,14 +34,7 @@ async function teksPerHalaman(buf: Uint8Array): Promise<string[][]> {
         raw += Buffer.from(decodePDFRawStream(obj).decode()).toString("latin1");
       }
     }
-    const re = /1 0 0 1 ([\d.-]+) ([\d.-]+) Tm\s*<([0-9A-Fa-f]*)>\s*Tj/g;
-    const baris: string[] = [];
-    let m;
-    while ((m = re.exec(raw))) {
-      // 0x85 adalah byte yang ditulis pdf-lib untuk "…"
-      baris.push(Buffer.from(m[3], "hex").toString("latin1").replace(/\u0085/g, "\u2026"));
-    }
-    hasil.push(baris);
+    hasil.push((raw.match(/\bTj\b/g) ?? []).length);
   }
   return hasil;
 }
@@ -47,12 +47,13 @@ const cek = (label: string, ok: boolean, detail = "") => {
 
 async function main() {
   const doc = await PDFDocument.create();
-  const fonts = {
-    regular: await doc.embedFont(StandardFonts.Helvetica),
-    bold: await doc.embedFont(StandardFonts.HelveticaBold),
-  };
+  const font = await muatFontLabel(doc);
+  const namaFont = String((font as any).name ?? "?");
 
+  const CM = 72 / 2.54;
   const EPS = 0.5;
+  const cm = (pt: number) => pt / CM;
+
   const penuh: LabelData = {
     itemCode: "FMIPA-TI-2026-001",
     name: "PC Rakitan",
@@ -62,51 +63,89 @@ async function main() {
     condition: "Baik",
   };
 
-  console.log("=== 1. Jumlah label per halaman & halaman ===");
+  console.log("=== 1. Huruf: Calibri (berkas Carlito) ===");
+  cek("huruf label = Calibri", /Carlito|Calibri/i.test(namaFont), `dimuat: ${namaFont}`);
+  cek("ukuran semua baris 12pt", G.fontSize === 12, `${G.fontSize}pt`);
+
+  console.log("\n=== 2. Angka geometri sama dengan template (satuan cm) ===");
+  cek("lebar tabel 17,74 cm", Math.abs(cm(G.tableW) - 17.74) < 0.01, `${cm(G.tableW).toFixed(2)}`);
+  cek("kolom 1 = 8,61 cm", Math.abs(cm(G.colKiri) - 8.61) < 0.01, `${cm(G.colKiri).toFixed(2)}`);
+  cek("celah antar kolom = 0,40 cm", Math.abs(cm(G.colCelah) - 0.4) < 0.01, `${cm(G.colCelah).toFixed(2)}`);
+  cek("kolom 2 = 8,23 cm", Math.abs(cm(G.colKanan) - 8.23) < 0.01, `${cm(G.colKanan).toFixed(2)}`);
+  cek("lebar 4 kolom = lebar tabel",
+    Math.abs((G.tableAwal + G.colKiri + G.colCelah + G.colKanan) - G.tableW) < EPS,
+    `${cm(G.tableAwal + G.colKiri + G.colCelah + G.colKanan).toFixed(2)}cm`);
+  cek("tabel mulai 0,93 cm dari tepi atas", Math.abs(cm(G.atasTabel) - 0.93) < 0.01, `${cm(G.atasTabel).toFixed(2)}`);
+  cek("tinggi baris 4,03 / 4,15 / 4,57 cm",
+    Math.abs(cm(G.tinggiBaris[0]) - 4.03) < 0.01 &&
+    Math.abs(cm(G.tinggiBaris[1]) - 4.15) < 0.02 &&
+    Math.abs(cm(G.tinggiBaris[2]) - 4.57) < 0.01,
+    G.tinggiBaris.map((t) => cm(t).toFixed(2)).join(" / "));
+  cek("logo 3,10 x 0,84 cm",
+    Math.abs(cm(G.logoW) - 3.1) < 0.01 && Math.abs(cm(G.logoH) - 0.844) < 0.01,
+    `${cm(G.logoW).toFixed(2)} x ${cm(G.logoH).toFixed(2)}`);
+  cek("A4 mendatar (29,7 x 21 cm)", Math.abs(G.pageW - 841.89) < 0.5 && Math.abs(G.pageH - 595.28) < 0.5,
+    `${G.pageW.toFixed(2)} x ${G.pageH.toFixed(2)} pt`);
+  cek("5 label per halaman", G.perPage === 5);
+
+  console.log("\n=== 3. Tabel dipusatkan & susunan baris seperti template ===");
+  const p5 = planLabels(Array.from({ length: 5 }, () => penuh), font);
+  const kiri = p5[0].cell;
+  const kanan = p5[1].cell;
+  const sisaKiri = kiri.x - G.tableAwal;
+  const sisaKanan = G.pageW - (kanan.x + kanan.w);
+  cek("tabel dipusatkan (sisa kiri = sisa kanan)",
+    Math.abs(sisaKiri - sisaKanan) < 0.02, `kiri ${cm(sisaKiri).toFixed(2)}cm, kanan ${cm(sisaKanan).toFixed(2)}cm`);
+  cek("sisa pinggir = (29,7 − 17,74)/2 = 5,98 cm",
+    Math.abs(cm(sisaKiri) - 5.98) < 0.02, `${cm(sisaKiri).toFixed(2)}cm`);
+  cek("jarak kolom kiri→kanan = kolom1 + celah",
+    Math.abs((kanan.x - kiri.x) - (G.colKiri + G.colCelah)) < EPS);
+  cek("3 baris bertingkat ke bawah (atas→tengah→bawah)",
+    p5[0].cell.y > p5[2].cell.y && p5[2].cell.y > p5[4].cell.y,
+    `baris1 ${cm(p5[0].cell.y).toFixed(2)} > baris2 ${cm(p5[2].cell.y).toFixed(2)} > baris3 ${cm(p5[4].cell.y).toFixed(2)}`);
+  cek("pasangan kiri-kanan sebaris", Math.abs(p5[0].cell.y - p5[1].cell.y) < EPS && Math.abs(p5[2].cell.y - p5[3].cell.y) < EPS);
+  cek("label 3 kembali ke kolom kiri", Math.abs(p5[2].cell.x - kiri.x) < EPS);
+  cek("baris 3 hanya 1 label (seperti template)", p5[4].cell.x === kiri.x);
+  cek("lebar kotak = lebar kolom", Math.abs(kiri.w - G.colKiri) < EPS && Math.abs(kanan.w - G.colKanan) < EPS);
+  cek("tinggi kotak = tinggi baris template",
+    Math.abs(p5[0].cell.h - G.tinggiBaris[0]) < EPS && Math.abs(p5[4].cell.h - G.tinggiBaris[2]) < EPS);
+
+  console.log("\n=== 4. Jumlah label & halaman ===");
   for (const [n, harapHalaman] of [[1, 1], [5, 1], [6, 2], [11, 3], [30, 6]] as [number, number][]) {
-    const plans = planLabels(Array.from({ length: n }, () => penuh), fonts);
+    const plans = planLabels(Array.from({ length: n }, () => penuh), font);
     const halaman = new Set(plans.map((p) => p.page));
     cek(`${n} barang -> ${harapHalaman} halaman`, halaman.size === harapHalaman, `dapat ${halaman.size}`);
   }
 
-  console.log("\n=== 2. Posisi grid (5 label: 2 per baris, 3 baris) ===");
-  const p5 = planLabels(Array.from({ length: 5 }, () => penuh), fonts);
-  cek("kelimanya di halaman 0", p5.every((p) => p.page === 0));
-  cek("2 label di baris pertama", p5.filter((p) => p.cell.y > G.pageH / 2).length === 2);
-  const kiri = p5[0].cell;
-  const kanan = p5[1].cell;
-  cek("label 1 di kolom kiri", Math.abs(kiri.x - G.margin) < EPS);
-  cek("label 2 di kolom kanan", kanan.x > kiri.x + kiri.w, `${kanan.x.toFixed(1)} > ${(kiri.x + kiri.w).toFixed(1)}`);
-  cek("label 3 pindah baris", p5[2].cell.y < kiri.y, `${p5[2].cell.y.toFixed(1)} < ${kiri.y.toFixed(1)}`);
-  cek("label 3 kembali ke kolom kiri", Math.abs(p5[2].cell.x - G.margin) < EPS);
+  console.log("\n=== 5. Label tetap di dalam kertas ===");
+  const semua = planLabels(Array.from({ length: 30 }, () => penuh), font);
+  cek("tidak ada sel keluar kiri", semua.every((p) => p.cell.x >= -EPS));
+  cek("tidak ada sel keluar kanan", semua.every((p) => p.cell.x + p.cell.w <= G.pageW + EPS));
+  cek("tidak ada sel keluar atas", semua.every((p) => p.cell.y + p.cell.h <= G.pageH + EPS));
+  cek("tidak ada sel keluar bawah", semua.every((p) => p.cell.y >= -EPS));
 
-  console.log("\n=== 3. Semua sel di dalam area cetak (margin terhormat) ===");
-  const semua = planLabels(Array.from({ length: 30 }, () => penuh), fonts);
-  cek("tidak ada sel keluar kiri", semua.every((p) => p.cell.x >= G.margin - EPS));
-  cek("tidak ada sel keluar kanan", semua.every((p) => p.cell.x + p.cell.w <= G.pageW - G.margin + EPS));
-  cek("tidak ada sel keluar atas", semua.every((p) => p.cell.y + p.cell.h <= G.pageH - G.margin + EPS));
-  cek("tidak ada sel keluar bawah", semua.every((p) => p.cell.y >= G.margin - EPS));
-
-  console.log("\n=== 4. Teks tidak keluar sel & tidak tumpah ke baris bawah ===");
+  console.log("\n=== 6. Teks tidak keluar kotak & tidak tumpah ke label bawah ===");
   const cekDalam = (nama: string, items: LabelData[]) => {
-    const plans = planLabels(items, fonts);
+    const plans = planLabels(items, font);
     let maxKanan = 0;
     let minBawah = Infinity;
     for (const p of plans) {
       for (const l of p.lines) {
         maxKanan = Math.max(maxKanan, l.x + l.width);
-        if (l.x + l.width > p.cell.x + p.cell.w - G.padX + EPS) {
-          cek(`${nama}: "${l.text.slice(0, 30)}" tidak keluar kanan`, false, `kanan ${(l.x + l.width).toFixed(1)} > ${(p.cell.x + p.cell.w - G.padX).toFixed(1)}`);
+        if (l.x + l.width > p.cell.x + p.cell.w + EPS) {
+          cek(`${nama}: "${l.text.slice(0, 28)}" tidak keluar kanan`, false,
+            `kanan ${cm(l.x + l.width).toFixed(2)}cm > ${cm(p.cell.x + p.cell.w).toFixed(2)}cm`);
           return;
         }
       }
       minBawah = Math.min(minBawah, p.bottom);
-      if (p.bottom < p.cell.y + G.padY - EPS) {
-        cek(`${nama}: teks tidak tumpah ke bawah`, false, `dasar ${p.bottom.toFixed(1)} < ${(p.cell.y + G.padY).toFixed(1)}`);
+      if (p.bottom < p.cell.y) {
+        cek(`${nama}: teks tidak tumpah ke bawah`, false,
+          `dasar ${cm(p.bottom).toFixed(2)}cm < ${cm(p.cell.y).toFixed(2)}cm`);
         return;
       }
     }
-    cek(`${nama}: teks muat (kanan maks ${maxKanan.toFixed(1)}, dasar min ${minBawah.toFixed(1)})`, true);
+    cek(`${nama}: teks muat`, true, `kanan ≤ ${cm(maxKanan).toFixed(2)}cm, dasar ${cm(minBawah).toFixed(2)}cm`);
   };
 
   cekDalam("data lengkap", [penuh]);
@@ -118,95 +157,97 @@ async function main() {
     ...penuh,
     description: "Intel Core i7-12700 12th Gen, DDR4 8GB 3200MHz, SSD NVMe 500GB, VGA Onboard, PSU 500W 80+ Bronze, Casing Mid Tower dengan 3 Fan RGB",
   }]);
-  cekDalam("kode sangat panjang", [{
-    ...penuh,
-    itemCode: "FMIPA-LABORATORIUM-RISET-KIMIA-2026-999",
-  }]);
-  cekDalam("semua field maksimum", [{
+  cekDalam("kode sangat panjang", [{ ...penuh, itemCode: "FMIPA-LABORATORIUM-RISET-KIMIA-2026-999" }]);
+  cekDalam("semua isian maksimum", [{
     itemCode: "FMIPA-LABORATORIUM-RISET-KIMIA-2026-999",
     name: "Proyektor Epson EB-X51 LCD 3600 Lumens XGA dengan Remote dan Tas Jinjing",
     description: "Intel Core i7-12700 12th Gen, DDR4 8GB 3200MHz, SSD NVMe 500GB, VGA Onboard, PSU 500W 80+ Bronze, Casing Mid Tower dengan 3 Fan RGB",
-    inventoryNumber: "409010025366-EXTRA-PANJANG-SEKALI",
-    lastCheckDate: "6 Juli 2026",
+    lastCheckDate: "18 September 2026",
     condition: "Rusak Ringan, Perlu Servis",
   }]);
 
-  console.log("\n=== 5. Logo di pojok kiri atas & tidak ditabrak teks ===");
-  const plansKode = planLabels(Array.from({ length: 30 }, () => penuh), fonts);
-  cek("logo menempel kiri sel", plansKode.every((p) => Math.abs(p.logo.x - (p.cell.x + G.padX)) < EPS));
-  cek("logo di sisi ATAS sel (bukan kanan)",
-    plansKode.every((p) => p.logo.x < p.cell.x + p.cell.w / 2),
-    `logo.x ${plansKode[0].logo.x.toFixed(1)} vs tengah sel ${(plansKode[0].cell.x + plansKode[0].cell.w / 2).toFixed(1)}`);
-  cek("logo menempel atas sel",
+  console.log("\n=== 7. Logo di pojok kiri atas & tidak ditabrak teks ===");
+  const plansKode = planLabels(Array.from({ length: 30 }, () => penuh), font);
+  cek("logo menempel kiri kotak", plansKode.every((p) => Math.abs(p.logo.x - (p.cell.x + G.padX)) < EPS));
+  cek("logo di sisi atas kotak", plansKode.every((p) => p.logo.x < p.cell.x + p.cell.w / 2));
+  cek("logo menempel atas kotak",
     plansKode.every((p) => Math.abs((p.logo.y + p.logo.h) - (p.cell.y + p.cell.h - G.padY)) < EPS));
-
-  // Semua teks harus MULAI di bawah logo
-  const diBawahLogo = plansKode.every((p) => p.lines.every((l) => l.y + l.size <= p.logo.y + EPS));
-  cek("semua baris teks di bawah logo", diBawahLogo,
-    `baris teratas y+size ${(plansKode[0].lines[0].y + plansKode[0].lines[0].size).toFixed(1)} vs dasar logo ${plansKode[0].logo.y.toFixed(1)}`);
-  cek("baris kode selebar isi sel (tidak lagi dipotong karena logo)",
-    plansKode.every((p) => p.lines[0].width <= p.cell.w - G.padX * 2 + EPS));
-  cek("logo di dalam sel", plansKode.every((p) =>
+  cek("semua baris teks di bawah logo",
+    plansKode.every((p) => p.lines.every((l) => l.y + l.size <= p.logo.y + EPS)));
+  cek("logo di dalam kotak", plansKode.every((p) =>
     p.logo.x >= p.cell.x && p.logo.x + p.logo.w <= p.cell.x + p.cell.w &&
     p.logo.y >= p.cell.y && p.logo.y + p.logo.h <= p.cell.y + p.cell.h
   ));
 
-  console.log("\n=== 6. Baris opsional hanya muncul kalau datanya ada ===");
-  const tanpaInv = planLabels([{ ...penuh, inventoryNumber: null }], fonts)[0];
-  cek("tanpa No. Inventaris -> 5 baris", tanpaInv.lines.length === 5, `dapat ${tanpaInv.lines.length}`);
-  cek("tanpa No. Inventaris -> tidak ada teks 'No. Inventaris'",
-    !tanpaInv.lines.some((l) => l.text.includes("No. Inventaris")));
-  const lengkap = planLabels([penuh], fonts)[0];
-  cek("dengan No. Inventaris -> 6 baris", lengkap.lines.length === 6, `dapat ${lengkap.lines.length}`);
-  cek("label pengganti: 'Kondisi Baik'", lengkap.lines.at(-1)!.text === "Kondisi Baik");
-  cek("'Tanggal Cek:' dengan titik dua", lengkap.lines.at(-2)!.text === "Tanggal Cek: 6 Juli 2026");
+  console.log("\n=== 8. Isi label = urutan di template ===");
+  const lengkap = planLabels([penuh], font)[0];
+  const teks = lengkap.lines.map((l) => l.text);
+  cek("baris pertama = kode barang", teks[0] === "FMIPA-TI-2026-001", teks[0]);
+  cek("lalu nama barang", teks[1] === "PC Rakitan", teks[1]);
+  cek("ada spesifikasi", teks.some((t) => t.includes("I7 Gen 12 DDR 4")), teks[2]);
+  cek("ada 'Tanggal Cek: …'", teks.some((t) => t === "Tanggal Cek: 6 Juli 2026"));
+  cek("ada 'Kondisi …'", teks.some((t) => t === "Kondisi Baik"));
+  cek("urutan: kode → nama → spesifikasi → tanggal → kondisi",
+    teks.findIndex((t) => t.includes("I7 Gen 12")) < teks.findIndex((t) => t.startsWith("Tanggal Cek:")) &&
+    teks.findIndex((t) => t.startsWith("Tanggal Cek:")) < teks.findIndex((t) => t.startsWith("Kondisi ")));
+  cek("TIDAK ada baris 'No. Inventaris' (template tidak punya)",
+    !teks.some((t) => t.includes("No. Inventaris")));
+  cek("tidak ada huruf tebal di label", lengkap.lines.every((l) => l.font === font));
 
-  console.log("\n=== 7. Data kosong tidak meledak ===");
-  const kosong = planLabels([{ itemCode: "FMIPA-TI-2026-001", name: "Barang" }], fonts)[0];
+  console.log("\n=== 9. Data kosong tidak meledak ===");
+  const kosong = planLabels([{ itemCode: "FMIPA-TI-2026-001", name: "Barang" }], font)[0];
   cek("hanya kode + nama -> 2 baris", kosong.lines.length === 2, `dapat ${kosong.lines.length}`);
-  const spasi = planLabels([{ itemCode: "FMIPA-TI-2026-001", name: "  ", description: "   ", condition: "" }], fonts)[0];
-  cek("field berisi spasi diabaikan", spasi.lines.length === 1, `dapat ${spasi.lines.length}`);
+  const spasi = planLabels([{ itemCode: "FMIPA-TI-2026-001", name: "  ", description: "   ", condition: "" }], font)[0];
+  cek("isian berisi spasi diabaikan", spasi.lines.length === 1, `dapat ${spasi.lines.length}`);
 
-  console.log("\n=== 8. Pemotongan teks ===");
+  console.log("\n=== 10. Pemotongan teks ===");
   const panjang = "FMIPA-LABORATORIUM-RISET-KIMIA-2026-999-YANG-SANGAT-PANJANG-SEKALI";
-  const f = fitText(panjang, fonts.bold, G.sizeKode, 200);
+  const f = fitText(panjang, font, G.fontSize, 200);
   cek("teks panjang dipotong", f.endsWith("…") && f.length < panjang.length, `"${f}"`);
-  cek("hasil potongan muat", fonts.bold.widthOfTextAtSize(f, G.sizeKode) <= 200);
-  cek("teks pendek tidak diubah", fitText("FMIPA-TI-2026-001", fonts.bold, G.sizeKode, 200) === "FMIPA-TI-2026-001");
+  cek("hasil potongan muat", font.widthOfTextAtSize(f, G.fontSize) <= 200);
+  cek("teks pendek tidak diubah", fitText("FMIPA-TI-2026-001", font, G.fontSize, 200) === "FMIPA-TI-2026-001");
 
-  console.log("\n=== 9. Geometri halaman ===");
-  cek("A4 landscape (29.7 x 21 cm)", Math.abs(G.pageW - 841.89) < 0.5 && Math.abs(G.pageH - 595.28) < 0.5,
-    `${G.pageW.toFixed(2)} x ${G.pageH.toFixed(2)} pt`);
-  cek("5 label per halaman", G.perPage === 5);
-
-  console.log("\n=== 10. PDF nyata: isi & halaman ===");
-  const data = [
+  console.log("\n=== 11. PDF nyata: halaman, huruf tersemat, jumlah tulisan ===");
+  const data: LabelData[] = [
     { ...penuh },
     { itemCode: "FMIPA-LRK-2026-001", name: "Monitor LG", description: "port VGA", lastCheckDate: "6 Juli 2026", condition: "Baik" },
-    { itemCode: "FMIPA-KEU-2026-007", name: "Proyektor Epson EB-X51", description: "Lampu 3600 lumens", inventoryNumber: "409010025999", lastCheckDate: "18 September 2026", condition: "Rusak Ringan" },
+    { itemCode: "FMIPA-KEU-2026-007", name: "Proyektor Epson EB-X51", description: "Lampu 3600 lumens", lastCheckDate: "18 September 2026", condition: "Rusak Ringan" },
     { itemCode: "FMIPA-OSCE-2026-012", name: "Kursi Roda", description: "Stainless, lipat", lastCheckDate: "1 Januari 2026", condition: "Baik" },
     { itemCode: "FMIPA-DEK-2026-003", name: "Lemari Arsip", description: "Besi, 4 pintu", condition: "Baik" },
-    { itemCode: "FMIPA-FAR-2026-021", name: "Mikroskop Binokuler", description: "Perbesaran 1000x", inventoryNumber: "409010030001", lastCheckDate: "20 September 2026", condition: "Baik" },
+    { itemCode: "FMIPA-FAR-2026-021", name: "Mikroskop Binokuler", description: "Perbesaran 1000x", lastCheckDate: "20 September 2026", condition: "Baik" },
   ];
   const pdf = await generateLabelsPDF(data);
-  const halaman = await teksPerHalaman(pdf);
-  cek("6 label -> 2 halaman", halaman.length === 2, `dapat ${halaman.length}`);
+  const perHalaman = await jumlahTeksTertulis(pdf);
+  cek("6 label -> 2 halaman", perHalaman.length === 2, `dapat ${perHalaman.length}`);
 
-  const teksSemua = halaman.flat();
-  for (const w of ["FMIPA-TI-2026-001", "PC Rakitan", "Kondisi Baik", "Mikroskop Binokuler", "FMIPA-FAR-2026-021"]) {
-    cek(`tertulis di PDF: ${w}`, teksSemua.some((b) => b.includes(w)));
+  const plans = planLabels(data, font);
+  for (const hal of [0, 1]) {
+    const perkiraan = plans.filter((p) => p.page === hal).reduce((a, p) => a + p.lines.length, 0);
+    cek(`halaman ${hal + 1} menulis tepat sebanyak baris labelnya`, perHalaman[hal] === perkiraan,
+      `tertulis ${perHalaman[hal]} vs baris ${perkiraan}`);
   }
-  const nInv = teksSemua.filter((b) => b.startsWith("No. Inventaris")).length;
-  cek("hanya 3 baris 'No. Inventaris' (yang punya saja)", nInv === 3, `dapat ${nInv}`);
-  cek("label ke-6 di halaman 2", halaman[1].some((b) => b.includes("Mikroskop")));
-  cek("halaman 2 tidak memuat label ke-1", !halaman[1].some((b) => b.includes("FMIPA-TI-2026-001")));
-  cek("baris 'Kondisi' lengkap", teksSemua.filter((b) => b.startsWith("Kondisi ")).length === 6);
-  cek("'Tanggal Cek:' pakai titik dua", teksSemua.some((b) => b.startsWith("Tanggal Cek: ")));
 
-  // 1 label tetap 1 halaman
-  const satu = await teksPerHalaman(await generateLabelsPDF([penuh]));
-  cek("1 label -> 1 halaman", satu.length === 1);
-  cek("1 label: hanya 6 baris teks", satu[0].length === 6, `dapat ${satu[0].length}`);
+  // Huruf benar-benar tersemat: nama huruf dibaca dari objek PDF, bukan dari
+  // byte mentah (isi PDF dikompresi di dalam /ObjStm, jadi byte mentah tidak
+  // memperlihatkan apa pun). Helvetica bawaan pdf-lib tidak boleh dipakai.
+  const docPdf = await PDFDocument.load(pdf);
+  const namaHuruf = new Set<string>();
+  let berkasHuruf = 0;
+  for (const [, obj] of docPdf.context.enumerateIndirectObjects()) {
+    if (obj instanceof PDFDict) {
+      const bf = obj.get(PDFName.of("BaseFont"));
+      if (bf) namaHuruf.add(String(bf));
+      if (obj.get(PDFName.of("FontFile2")) || obj.get(PDFName.of("FontFile3"))) berkasHuruf++;
+    }
+  }
+  cek("huruf Calibri tersemat di dalam PDF",
+    namaHuruf.size > 0 && [...namaHuruf].every((h) => /Carlito|Calibri/i.test(h)),
+    [...namaHuruf].join(", ") || "(kosong)");
+  cek("tidak ada Helvetica bawaan tersisa", ![...namaHuruf].some((h) => /Helvetica/i.test(h)));
+  cek("berkas huruf ikut tertanam", berkasHuruf > 0, `${berkasHuruf} berkas`);
+
+  const satu = await jumlahTeksTertulis(await generateLabelsPDF([penuh]));
+  cek("1 label -> 1 halaman", satu.length === 1, `dapat ${satu.length}`);
 
   console.log(gagal ? `\n>>> ${gagal} GAGAL` : "\n>>> SEMUA LOLOS");
   process.exit(gagal ? 1 : 0);

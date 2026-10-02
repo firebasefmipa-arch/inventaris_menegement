@@ -1,16 +1,26 @@
 import { PDFDocument, PDFFont, StandardFonts, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import fs from "fs";
 import path from "path";
 
 /**
- * Label barang fisik — PDF siap cetak, mengikuti template "Pelabelan Barang":
- * A4 landscape, 2 kolom x 3 baris, maksimum 5 label per halaman
- * (baris terakhir sengaja cuma 1 label, sama seperti template).
+ * Label barang fisik — PDF siap cetak, mengikuti berkas template
+ * "Pelabelan Barang-1.docx" milik pemilik produk. Semua angka di LABEL_GEO
+ * disalin dari ukuran template (twips → cm), bukan dikira-kira:
  *
- * Bilah teks per label (urut dari atas):
- *   logo FMIPA (pojok kiri atas) · Kode Barang · Nama · Spesifikasi ·
- *   [No. Inventaris] · Tanggal Cek · Kondisi
- * Baris dalam [] hanya muncul kalau datanya ada.
+ *   kertas     A4 mendatar 29,7 x 21 cm
+ *   tabel      17,74 cm, dipusatkan → mulai 5,98 cm dari tepi kiri
+ *   kolom      0,50 (kosong) | 8,61 | 0,40 (kosong) | 8,23  cm
+ *   tinggi      4,03 / 4,15 / 4,57 cm — baris ke-3 sengaja cuma 1 label
+ *              (total 5 label per halaman, sama seperti template)
+ *   atas       0,93 cm dari tepi atas kertas
+ *   logo       3,10 x 0,84 cm di pojok kiri atas tiap kotak
+ *   huruf      Calibri 12pt untuk SEMUA baris, tanpa tebal, jarak baris tunggal
+ *   garis      seluruh kotak bergaris hitam (setelan "Table Grid" di template)
+ *
+ * Isi tiap kotak (urut atas→bawah): logo FMIPA · Kode Barang · Nama ·
+ * Spesifikasi · Tanggal Cek · Kondisi. Nomor inventaris TIDAK dicetak —
+ * di template memang tidak ada (dikonfirmasi 2 Okt 2026).
  */
 
 export type LabelData = {
@@ -25,26 +35,27 @@ export type LabelData = {
 const CM = 72 / 2.54;
 
 export const LABEL_GEO = {
-  pageW: 29.7 * CM, // A4 landscape
+  pageW: 29.7 * CM,
   pageH: 21 * CM,
-  margin: 2.54 * CM,
-  colGap: 20,
-  rowGap: 10,
+  tableW: 17.74 * CM,
+  tableAwal: 0.5 * CM, // kolom kosong tipis di kiri tabel (ada di template)
+  colKiri: 8.61 * CM,
+  colCelah: 0.4 * CM,
+  colKanan: 8.23 * CM,
+  atasTabel: 0.927 * CM, // tepi atas kertas → tepi atas tabel
+  tinggiBaris: [4.031 * CM, 4.154 * CM, 4.571 * CM],
   perRow: 2,
   perPage: 5,
-  padX: 10,
-  padY: 7,
-  logoW: 87.75,
-  logoH: 23.93,
-  logoGap: 4, // jarak logo ke baris teks pertama
-  lineGap: 1, // jarak antar baris teks
-  sizeKode: 12,
-  sizeNama: 12,
-  sizeSpesifikasi: 11,
-  sizeKecil: 10,
+  padX: 0.15 * CM,
+  padY: 0.12 * CM,
+  logoW: 3.1 * CM,
+  logoH: 0.844 * CM,
+  logoGap: 0.06 * CM, // jarak logo ke baris teks pertama
+  fontSize: 12,
 };
 
-type Fonts = { regular: PDFFont; bold: PDFFont };
+/** Nama huruf di berkas font — Carlito adalah kembaran Calibri (ukuran sama). */
+const BERKAS_FONT = "Carlito-Regular.ttf";
 
 /** Potong teks agar muat dalam maxW, tambahkan "…" kalau terpotong. */
 export function fitText(text: string, font: PDFFont, size: number, maxW: number): string {
@@ -85,7 +96,6 @@ function wrapText(
   if (cur && lines.length < maxLines) lines.push(cur);
 
   if (lines.length === maxLines && (truncated || cur)) {
-    // masih ada kata tersisa → tandai terpotong
     const last = lines[maxLines - 1];
     lines[maxLines - 1] = last === cur && !truncated
       ? fitText(last, font, size, maxW)
@@ -96,55 +106,49 @@ function wrapText(
 
 type Line = { text: string; size: number; font: PDFFont; width: number };
 
-/** Susun baris teks satu label (belum ada koordinat). */
-function buildLines(item: LabelData, fonts: Fonts, innerW: number, firstW: number): Line[] {
-  const out: Line[] = [];
-  const add = (text: string, size: number, font: PDFFont, width: number) => {
-    const w = font.widthOfTextAtSize(text, size);
-    out.push({ text, size, font, width: Math.min(w, width) });
-  };
+/**
+ * Susun baris teks satu label. Jumlah baris DIBATASI oleh tinggi kotak
+ * (`maxLines`) supaya tidak pernah tumpah ke label di bawahnya — kalau
+ * sempit, nama/spesifikasi yang dikurangi lebih dulu; kode, tanggal cek,
+ * dan kondisi selalu ikut.
+ */
+function buildLines(item: LabelData, font: PDFFont, innerW: number, maxLines: number): Line[] {
+  const size = LABEL_GEO.fontSize;
 
-  // Baris 1: kode barang (satu baris, dipotong kalau perlu, tidak boleh kena logo)
-  add(fitText(item.itemCode, fonts.bold, LABEL_GEO.sizeKode, firstW), LABEL_GEO.sizeKode, fonts.bold, firstW);
+  // Tiap bagian: teks, batas baris wajar, dan apakah boleh dikurangi.
+  const bagian = [
+    { teks: item.itemCode, maks: 1, bolehKurang: false },
+    { teks: item.name?.trim() ?? "", maks: 2, bolehKurang: true },
+    { teks: item.description?.trim() ?? "", maks: 2, bolehKurang: true },
+    { teks: item.lastCheckDate?.trim() ? `Tanggal Cek: ${item.lastCheckDate}` : "", maks: 1, bolehKurang: false },
+    { teks: item.condition?.trim() ? `Kondisi ${item.condition}` : "", maks: 1, bolehKurang: false },
+  ].filter((b) => b.teks);
 
-  // Nama barang — maksimum 2 baris
-  for (const l of wrapText(item.name, fonts.regular, LABEL_GEO.sizeNama, innerW, 2)) {
-    add(l, LABEL_GEO.sizeNama, fonts.regular, innerW);
-  }
-
-  // Spesifikasi — maksimum 2 baris
-  if (item.description?.trim()) {
-    for (const l of wrapText(item.description, fonts.regular, LABEL_GEO.sizeSpesifikasi, innerW, 2)) {
-      add(l, LABEL_GEO.sizeSpesifikasi, fonts.regular, innerW);
+  // Kalau lebih longgar dari kebutuhan, pakai batas wajar. Yang dikurangi lebih
+  // dulu adalah SPESIFIKASI (paling kurang penting dibaca), baru nama barang.
+  let maks = bagian.map((b) => b.maks);
+  while (maks.reduce((a, b) => a + b, 0) > maxLines) {
+    let pilih = -1;
+    for (let i = bagian.length - 1; i >= 0; i--) {
+      if (!bagian[i].bolehKurang || maks[i] <= 1) continue;
+      if (pilih === -1 || maks[i] > maks[pilih]) pilih = i;
     }
+    if (pilih === -1) break; // tidak ada yang bisa dikurangi lagi
+    maks[pilih]--;
   }
 
-  // Nomor inventaris — hanya kalau ada
-  if (item.inventoryNumber?.trim()) {
-    add(
-      fitText(`No. Inventaris: ${item.inventoryNumber}`, fonts.regular, LABEL_GEO.sizeKecil, innerW),
-      LABEL_GEO.sizeKecil,
-      fonts.regular,
-      innerW
-    );
-  }
-
-  if (item.lastCheckDate?.trim()) {
-    add(
-      fitText(`Tanggal Cek: ${item.lastCheckDate}`, fonts.regular, LABEL_GEO.sizeKecil, innerW),
-      LABEL_GEO.sizeKecil,
-      fonts.regular,
-      innerW
-    );
-  }
-
-  if (item.condition?.trim()) {
-    add(
-      fitText(`Kondisi ${item.condition}`, fonts.regular, LABEL_GEO.sizeKecil, innerW),
-      LABEL_GEO.sizeKecil,
-      fonts.regular,
-      innerW
-    );
+  const out: Line[] = [];
+  for (let i = 0; i < bagian.length; i++) {
+    const b = bagian[i];
+    const bolehBaris = Math.max(1, Math.min(maks[i], maxLines - out.length));
+    if (out.length >= maxLines) break;
+    const isi = b.maks === 1
+      ? [fitText(b.teks, font, size, innerW)]
+      : wrapText(b.teks, font, size, innerW, bolehBaris);
+    for (const t of isi) {
+      if (out.length >= maxLines) break;
+      out.push({ text: t, size, font, width: Math.min(font.widthOfTextAtSize(t, size), innerW) });
+    }
   }
 
   return out;
@@ -163,40 +167,60 @@ export type LabelPlan = {
  * Hitung posisi semua label. Murni geometri (tanpa menggambar) supaya bisa
  * diperiksa `scripts/check-label-layout.ts`.
  */
-export function planLabels(items: LabelData[], fonts: Fonts): LabelPlan[] {
+export function planLabels(items: LabelData[], font: PDFFont): LabelPlan[] {
   const g = LABEL_GEO;
-  const gridW = g.pageW - g.margin * 2;
-  const gridH = g.pageH - g.margin * 2;
-  const cellW = (gridW - g.colGap * (g.perRow - 1)) / g.perRow;
-  const cellH = (gridH - g.rowGap * 2) / 3;
-  const innerW = cellW - g.padX * 2;
+  const tabelX = (g.pageW - g.tableW) / 2;
+  const kolomX = [tabelX + g.tableAwal, tabelX + g.tableAwal + g.colKiri + g.colCelah];
+  const kolomW = [g.colKiri, g.colKanan];
+
   return items.map((item, i) => {
     const onPage = i % g.perPage;
     const row = Math.floor(onPage / g.perRow);
     const col = onPage % g.perRow;
 
-    const x = g.margin + col * (cellW + g.colGap);
-    const yTop = g.pageH - g.margin - row * (cellH + g.rowGap);
-    const cell = { x, y: yTop - cellH, w: cellW, h: cellH };
+    const w = kolomW[col];
+    const h = g.tinggiBaris[row];
+    let yTop = g.pageH - g.atasTabel;
+    for (let r = 0; r < row; r++) yTop -= g.tinggiBaris[r];
+    const cell = { x: kolomX[col], y: yTop - h, w, h };
 
-    // Logo di pojok KIRI ATAS sel (sama seperti template), teks mulai di bawahnya.
     const logo = {
       x: cell.x + g.padX,
-      y: cell.y + cellH - g.padY - g.logoH,
+      y: cell.y + h - g.padY - g.logoH,
       w: g.logoW,
       h: g.logoH,
     };
 
-    const lines = buildLines(item, fonts, innerW, innerW);
+    // Tinggi yang tersisa untuk teks (di bawah logo, di atas garis kotak).
+    const lineAdvance = font.heightAtSize(g.fontSize);
+    const tersisa = h - g.padY * 2 - g.logoH - g.logoGap;
+    const maxLines = Math.max(1, Math.floor(tersisa / lineAdvance));
+
+    const innerW = w - g.padX * 2;
+    const lines = buildLines(item, font, innerW, maxLines);
 
     let cursor = logo.y - g.logoGap;
     const placed = lines.map((l) => {
-      cursor -= l.size + g.lineGap;
+      cursor -= lineAdvance;
       return { ...l, x: cell.x + g.padX, y: cursor };
     });
 
     return { item, page: Math.floor(i / g.perPage), cell, logo, lines: placed, bottom: cursor };
   });
+}
+
+/** Huruf label: Calibri (berkas Carlito). Kalau hilang, jatuh ke Helvetica. */
+export async function muatFontLabel(doc: PDFDocument): Promise<PDFFont> {
+  try {
+    const bytes = fs.readFileSync(path.join(process.cwd(), "assets", "fonts", BERKAS_FONT));
+    doc.registerFontkit(fontkit);
+    // subset: false — dengan subset: true, huruf-huruf di PDF tampil rusak
+    // (teks bisa disalin tapi bentuknya berantakan saat dilihat/dicetak).
+    // Berkas penuh 613 KB masih wajar untuk label.
+    return await doc.embedFont(bytes, { subset: false });
+  } catch {
+    return doc.embedFont(StandardFonts.Helvetica);
+  }
 }
 
 /** Logo FMIPA untuk label. Kalau berkas hilang, label tetap dicetak tanpa logo. */
@@ -211,11 +235,9 @@ function readLogo(): Buffer | null {
 /** Bangun PDF label. `items` sudah harus punya itemCode. */
 export async function generateLabelsPDF(items: LabelData[]): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const fonts = { regular, bold };
+  const font = await muatFontLabel(doc);
 
-  const plans = planLabels(items, fonts);
+  const plans = planLabels(items, font);
   const logoBytes = readLogo();
   const logoImg = logoBytes ? await doc.embedPng(logoBytes) : null;
 
@@ -223,13 +245,13 @@ export async function generateLabelsPDF(items: LabelData[]): Promise<Uint8Array>
   for (let p = 0; p < pages; p++) {
     const page = doc.addPage([LABEL_GEO.pageW, LABEL_GEO.pageH]);
     for (const plan of plans.filter((x) => x.page === p)) {
-      // Garis potong tipis (bukan bagian dari template, tapi memudahkan gunting)
+      // Garis kotak tiap label — di template semua sel bergaris (Table Grid).
       page.drawRectangle({
         x: plan.cell.x,
         y: plan.cell.y,
         width: plan.cell.w,
         height: plan.cell.h,
-        borderColor: rgb(0.8, 0.8, 0.8),
+        borderColor: rgb(0, 0, 0),
         borderWidth: 0.5,
       });
 
