@@ -2618,3 +2618,66 @@ catatan gantung **0**. Kode aplikasi **tidak berubah** → tanpa build/restart.
 Skrip uji yang menyentuh **barang asli** WAJIB mengembalikan stoknya sebelum
 menghapus catatannya. Aturan lama "hapus jejak uji sendiri" ternyata hanya
 menghapus *catatannya*, bukan *konsekuensi stoknya*.
+
+## Audit #34 — Label: spesifikasi panjang tak lagi dipotong "…" (2 Okt 2026)
+
+**Permintaan pemilik produk (verbatim):**
+> "kita perbaiki pelabelannya dulu, untuk pelabelan sudah bagus tapi untuk baris speknya karena terlalu panjang malah kepotong jadi \"...\", nah saranku untuk kusus kotak barang yang speknya melebihi 1 baris tambahkan barisnya dan font semua tulisan di 1 kotak itu dikecilan sampai muat"
+
+### Keadaan sebelum
+
+`buildLines()` membatasi tiap bagian dengan **batas baris mati** (kode 1 · nama 2 ·
+spesifikasi 2 · tanggal 1 · kondisi 1 = 7 baris maksimum), lalu memotong sisanya
+dengan "…". Padahal kotak sebenarnya muat **5 baris @12pt** (baris 1 & 2) dan
+**6 baris** (baris 3) — batas 7 itulah yang memaksa spesifikasi terpotong, bukan
+ruangnya habis.
+
+### Perbaikan (`src/lib/label-pdf-generator.ts`)
+
+- **`wrapSemua()`** — bungkus teks tanpa batas baris; **tidak ada "…"**.
+- **`susunIsi()`** — seluruh isi (kode, nama, spesifikasi, tanggal cek, kondisi)
+  dipecah jadi baris, urutan tetap seperti template.
+- **`buildLines()`** — ukuran huruf dikecilkan bertahap **12 → 7pt** (langkah 0,5pt)
+  sampai **seluruh** isi muat, dinilai dari dua hal: jumlah baris muat pada ukuran
+  ITU (`dayaTampung(size)`) **dan** lebar tiap baris. **Satu kotak satu ukuran
+  seragam** — bukan campur. Pemotongan "…" hanya tersisa untuk keadaan darurat
+  (kode satu kata yang bahkan pada 7pt tak muat).
+- **Jarak baris ikut ukuran kotak** (`heightAtSize(lines[0].size)`) — kotak yang
+  hurufnya mengecil tidak menyisakan celah menganga.
+- Tetapan baru: `fontMin: 7`, `fontStep: 0.5`.
+
+### Angka nyata (data sungguhan, 30 barang ber-spesifikasi)
+
+    sebaran ukuran huruf   12pt: 22 barang · 11,5pt: 3 · 11pt: 5
+    bertanda potong "…"    0
+    label pendek            tetap 12pt (tidak mengecil tanpa alasan)
+
+Contoh yang mengecil ke 11pt: `Laptop Asus VivoBook` (I7 Gen 11 DDR4 RAM 8GB SSD
+NVMe 500GB GPU NVDIA GeForce MX330), `PC 3` (I9 Gen 11 DDR4 RAM 32GB …).
+
+### Pengesahan
+
+    check:label        60 -> 75 pemeriksaan, SEMUA LOLOS
+                       (bagian 12 & 13 baru: nol "…", semua kata ikut tercetak,
+                        baris bertambah, huruf mengecil, satu kotak satu ukuran,
+                        tak pernah < 7pt, label pendek tetap 12pt, kotak kepepet
+                        tidak keluar kotak/tumpah ke bawah)
+    tsc                bersih
+    jalur nyata        login admin → POST /api/items/labels → PDF diperiksa
+                       (nol "…") + DILIHAT gambarnya
+    build + restart    produksi HTTP 200
+
+### TEMUAN SAMPINGAN — tanggal cek 28 barang tersimpan sebagai ANGKA MENTAH
+
+Saat memeriksa label nyata terlihat `Tanggal Cek: 46288` — itu **nomor urut tanggal
+Excel**, bukan tanggal. Sebaran di DB:
+
+    46288   11 barang
+    46289   11 barang
+    46290    6 barang
+    NULL    56 barang
+
+Artinya impor lama mengambil tanggal dari Excel **tanpa mengubahnya jadi tanggal**
+(`src/app/api/items/import/route.ts:330` → `teks("Tanggal Cek")`, dan `teks()` di
+`src/lib/item-import.ts` mengembalikan isi sel apa adanya). 46288 → 3 Okt 2026.
+**Belum diperbaiki** — menunggu keputusan pemilik produk (lihat Audit #35).

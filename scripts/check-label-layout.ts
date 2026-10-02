@@ -249,6 +249,85 @@ async function main() {
   const satu = await jumlahTeksTertulis(await generateLabelsPDF([penuh]));
   cek("1 label -> 1 halaman", satu.length === 1, `dapat ${satu.length}`);
 
+  console.log("\n=== 12. Huruf mengecil & baris bertambah supaya TIDAK ada \"…\" ===");
+  // Permintaan pemilik produk 2 Okt 2026: spesifikasi panjang jangan dipotong
+  // "...", melainkan TAMBAH BARISNYA lalu kecilkan huruf SATU KOTAK itu sampai muat.
+  const spekPanjang =
+    "Intel Core i7-12700 12th Gen, DDR4 8GB 3200MHz, SSD NVMe 500GB, VGA Onboard, " +
+    "PSU 500W 80+ Bronze, Casing Mid Tower dengan 3 Fan RGB";
+
+  const pendek = planLabels([penuh], font)[0];
+  const labPanjang = planLabels([{ ...penuh, description: spekPanjang }], font)[0];
+
+  const ukuranKotak = (p: typeof pendek) => new Set(p.lines.map((l) => l.size));
+  const semuaKata = (teks: string) => teks.trim().split(/\s+/).filter(Boolean);
+
+  cek("spesifikasi panjang TIDAK memakai \"…\"",
+    labPanjang.lines.every((l) => !l.text.includes("…")),
+    labPanjang.lines.map((l) => l.text).join(" | "));
+
+  const gabung = labPanjang.lines.map((l) => l.text).join(" ");
+  cek("seluruh kata spesifikasi ikut tercetak (tak ada yang hilang)",
+    semuaKata(spekPanjang).every((k) => gabung.includes(k)),
+    `kata hilang: ${semuaKata(spekPanjang).filter((k) => !gabung.includes(k)).join(", ") || "(tidak ada)"}`);
+
+  cek("barisnya BERTAMBAH dari label biasa (bukan tetap)",
+    labPanjang.lines.length > pendek.lines.length,
+    `${pendek.lines.length} -> ${labPanjang.lines.length} baris`);
+
+  cek("huruf kotak itu MENGEcil", labPanjang.lines[0].size < G.fontSize,
+    `${G.fontSize}pt -> ${labPanjang.lines[0].size}pt`);
+  cek("satu kotak satu ukuran huruf (tidak campur)",
+    ukuranKotak(labPanjang).size === 1, [...ukuranKotak(labPanjang)].join(", "));
+  cek("huruf tidak pernah lebih kecil dari batas bawah (7pt)",
+    labPanjang.lines[0].size >= G.fontMin, `${labPanjang.lines[0].size}pt`);
+  cek("label pendek tetap 12pt (tidak mengecil tanpa alasan)",
+    pendek.lines.every((l) => l.size === G.fontSize),
+    `${[...ukuranKotak(pendek)].join(", ")}pt`);
+
+  // Semua isi harus tetap ada walau hurufnya dikecilkan.
+  for (const [nama, t] of [
+    ["kode", penuh.itemCode],
+    ["nama barang", penuh.name],
+    ["tanggal cek", `Tanggal Cek: ${penuh.lastCheckDate}`],
+    ["kondisi", `Kondisi ${penuh.condition}`],
+  ] as [string, string][]) {
+    cek(`label panjang tetap memuat ${nama}`,
+      t.split(/\s+/).every((k) => gabung.includes(k)), t);
+  }
+
+  // Kotak "kepepet": spesifikasi yang bahkan pada 7pt tak muat — tetap tidak
+  // boleh memakai "…" untuk spesifikasi selama pemotongan masih bisa dihindari
+  // lewat jumlah baris; yang dijamin adalah teksnya tidak keluar kotak.
+  const kepepet = planLabels([{
+    ...penuh,
+    description: Array.from({ length: 40 }, (_, i) => `spesifikasi${i + 1}`).join(" "),
+  }], font)[0];
+  cek("kotak kepepet: teks tidak keluar kotak",
+    kepepet.lines.every((l) => l.x + l.width <= kepepet.cell.x + kepepet.cell.w + EPS),
+    `kanan ${cm(Math.max(...kepepet.lines.map((l) => l.x + l.width))).toFixed(2)}cm`);
+  cek("kotak kepepet: teks tidak tumpah ke bawah",
+    kepepet.bottom >= kepepet.cell.y - EPS,
+    `dasar ${cm(kepepet.bottom).toFixed(2)}cm >= ${cm(kepepet.cell.y).toFixed(2)}cm`);
+
+  console.log("\n=== 13. PDF nyata dengan huruf mengecil ===");
+  const pdfCampur = await generateLabelsPDF([
+    penuh,
+    { ...penuh, itemCode: "FMIPA-TI-2026-002", description: spekPanjang },
+    { itemCode: "FMIPA-TI-2026-003", name: "PC Rakitan", description: spekPanjang, lastCheckDate: "6 Juli 2026", condition: "Baik" },
+  ]);
+  const halamanCampur = await jumlahTeksTertulis(pdfCampur);
+  cek("3 label campur -> 1 halaman", halamanCampur.length === 1, `dapat ${halamanCampur.length}`);
+
+  const plansCampur = planLabels([
+    penuh,
+    { ...penuh, itemCode: "FMIPA-TI-2026-002", description: spekPanjang },
+    { itemCode: "FMIPA-TI-2026-003", name: "PC Rakitan", description: spekPanjang, lastCheckDate: "6 Juli 2026", condition: "Baik" },
+  ], font);
+  cek("PDF menulis tepat sebanyak baris yang direncanakan",
+    halamanCampur[0] === plansCampur.reduce((a, p) => a + p.lines.length, 0),
+    `tertulis ${halamanCampur[0]} vs baris ${plansCampur.reduce((a, p) => a + p.lines.length, 0)}`);
+
   console.log(gagal ? `\n>>> ${gagal} GAGAL` : "\n>>> SEMUA LOLOS");
   process.exit(gagal ? 1 : 0);
 }

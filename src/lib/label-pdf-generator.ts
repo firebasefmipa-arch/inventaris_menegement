@@ -15,12 +15,16 @@ import path from "path";
  *              (total 5 label per halaman, sama seperti template)
  *   atas       0,93 cm dari tepi atas kertas
  *   logo       3,10 x 0,84 cm di pojok kiri atas tiap kotak
- *   huruf      Calibri 12pt untuk SEMUA baris, tanpa tebal, jarak baris tunggal
+ *   huruf      Calibri, ukuran TERBESAR 12pt — dikecilkan bertahap (batas bawah
+ *              7pt) sampai SEMUA baris muat dalam kotak; satu kotak satu ukuran
  *   garis      seluruh kotak bergaris hitam (setelan "Table Grid" di template)
  *
  * Isi tiap kotak (urut atas→bawah): logo FMIPA · Kode Barang · Nama ·
  * Spesifikasi · Tanggal Cek · Kondisi. Nomor inventaris TIDAK dicetak —
  * di template memang tidak ada (dikonfirmasi 2 Okt 2026).
+ *
+ * Spesifikasi yang panjang TIDAK dipotong "…" — huruf seluruh kotak dikecilkan
+ * supaya jumlah barisnya muat (permintaan pemilik produk, 2 Okt 2026).
  */
 
 export type LabelData = {
@@ -51,7 +55,9 @@ export const LABEL_GEO = {
   logoW: 3.1 * CM,
   logoH: 0.844 * CM,
   logoGap: 0.06 * CM, // jarak logo ke baris teks pertama
-  fontSize: 12,
+  fontSize: 12,       // ukuran TERBESAR; tiap kotak boleh memakai lebih kecil
+  fontMin: 7,         // batas bawah pengecilan huruf
+  fontStep: 0.5,      // besar langkah pengecilan (pt)
 };
 
 /** Nama huruf di berkas font — Carlito adalah kembaran Calibri (ukuran sama). */
@@ -65,93 +71,85 @@ export function fitText(text: string, font: PDFFont, size: number, maxW: number)
   return t + "…";
 }
 
-/** Bungkus teks jadi beberapa baris, maksimum maxLines (baris terakhir dipotong). */
-function wrapText(
-  text: string,
-  font: PDFFont,
-  size: number,
-  maxW: number,
-  maxLines: number
-): string[] {
+/** Bungkus teks jadi beberapa baris TANPA batas jumlah (tidak ada "…"). */
+function wrapSemua(text: string, font: PDFFont, size: number, maxW: number): string[] {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
 
   const lines: string[] = [];
   let cur = "";
-  let truncated = false;
-
-  for (let i = 0; i < words.length; i++) {
-    const next = cur ? `${cur} ${words[i]}` : words[i];
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w;
     if (font.widthOfTextAtSize(next, size) <= maxW) {
       cur = next;
       continue;
     }
     if (cur) lines.push(cur);
-    cur = words[i];
-    if (lines.length === maxLines) {
-      truncated = true;
-      break;
-    }
+    cur = w;
   }
-  if (cur && lines.length < maxLines) lines.push(cur);
+  if (cur) lines.push(cur);
+  return lines;
+}
 
-  if (lines.length === maxLines && (truncated || cur)) {
-    const last = lines[maxLines - 1];
-    lines[maxLines - 1] = last === cur && !truncated
-      ? fitText(last, font, size, maxW)
-      : fitText(`${last} …`, font, size, maxW);
-  }
-  return lines.slice(0, maxLines);
+/** Semua baris satu label pada ukuran huruf tertentu (isi lengkap, tanpa potong). */
+function susunIsi(item: LabelData, font: PDFFont, size: number, innerW: number): string[] {
+  const bagian = [
+    item.itemCode,
+    item.name?.trim() ?? "",
+    item.description?.trim() ?? "",
+    item.lastCheckDate?.trim() ? `Tanggal Cek: ${item.lastCheckDate}` : "",
+    item.condition?.trim() ? `Kondisi ${item.condition}` : "",
+  ].filter(Boolean);
+
+  // Urutan sama seperti template: kode · nama · spesifikasi · tanggal cek · kondisi.
+  // Kode & tanggal & kondisi dipecah juga (bukan dipotong) supaya tidak ada "…"
+  // sama sekali selama masih muat.
+  return bagian.flatMap((t) => wrapSemua(t, font, size, innerW));
 }
 
 type Line = { text: string; size: number; font: PDFFont; width: number };
 
 /**
- * Susun baris teks satu label. Jumlah baris DIBATASI oleh tinggi kotak
- * (`maxLines`) supaya tidak pernah tumpah ke label di bawahnya — kalau
- * sempit, nama/spesifikasi yang dikurangi lebih dulu; kode, tanggal cek,
- * dan kondisi selalu ikut.
+ * Susun baris teks satu label.
+ *
+ * Ukuran huruf dikecilkan bertahap (12 → 7pt) sampai SELURUH isi muat, baik
+ * dari jumlah baris (dihitung dari tinggi yang tersisa pada ukuran ITU) maupun
+ * lebar. Satu kotak memakai SATU ukuran seragam — bukan campur. Pemotongan "…"
+ * hanya dipakai kalau bahkan ukuran terkecil masih tidak muat (mis. kode
+ * barang satu kata yang sangat panjang).
  */
-function buildLines(item: LabelData, font: PDFFont, innerW: number, maxLines: number): Line[] {
-  const size = LABEL_GEO.fontSize;
+function buildLines(item: LabelData, font: PDFFont, innerW: number, tersisa: number): Line[] {
+  const g = LABEL_GEO;
 
-  // Tiap bagian: teks, batas baris wajar, dan apakah boleh dikurangi.
-  const bagian = [
-    { teks: item.itemCode, maks: 1, bolehKurang: false },
-    { teks: item.name?.trim() ?? "", maks: 2, bolehKurang: true },
-    { teks: item.description?.trim() ?? "", maks: 2, bolehKurang: true },
-    { teks: item.lastCheckDate?.trim() ? `Tanggal Cek: ${item.lastCheckDate}` : "", maks: 1, bolehKurang: false },
-    { teks: item.condition?.trim() ? `Kondisi ${item.condition}` : "", maks: 1, bolehKurang: false },
-  ].filter((b) => b.teks);
+  // Berapa baris yang muat pada ukuran tertentu — huruf lebih kecil, muat lebih
+  // banyak. Dipakai untuk menilai apakah isi sudah masuk.
+  const dayaTampung = (size: number) => Math.max(1, Math.floor(tersisa / font.heightAtSize(size)));
 
-  // Kalau lebih longgar dari kebutuhan, pakai batas wajar. Yang dikurangi lebih
-  // dulu adalah SPESIFIKASI (paling kurang penting dibaca), baru nama barang.
-  let maks = bagian.map((b) => b.maks);
-  while (maks.reduce((a, b) => a + b, 0) > maxLines) {
-    let pilih = -1;
-    for (let i = bagian.length - 1; i >= 0; i--) {
-      if (!bagian[i].bolehKurang || maks[i] <= 1) continue;
-      if (pilih === -1 || maks[i] > maks[pilih]) pilih = i;
-    }
-    if (pilih === -1) break; // tidak ada yang bisa dikurangi lagi
-    maks[pilih]--;
+  let ukuran = g.fontSize;
+  for (; ukuran > g.fontMin; ukuran -= g.fontStep) {
+    const isi = susunIsi(item, font, ukuran, innerW);
+    const muatBaris = isi.length <= dayaTampung(ukuran);
+    const muatLebar = isi.every((t) => font.widthOfTextAtSize(t, ukuran) <= innerW);
+    if (muatBaris && muatLebar) break;
   }
 
-  const out: Line[] = [];
-  for (let i = 0; i < bagian.length; i++) {
-    const b = bagian[i];
-    const bolehBaris = Math.max(1, Math.min(maks[i], maxLines - out.length));
-    if (out.length >= maxLines) break;
-    const isi = b.maks === 1
-      ? [fitText(b.teks, font, size, innerW)]
-      : wrapText(b.teks, font, size, innerW, bolehBaris);
-    for (const t of isi) {
-      if (out.length >= maxLines) break;
-      out.push({ text: t, size, font, width: Math.min(font.widthOfTextAtSize(t, size), innerW) });
-    }
+  let isi = susunIsi(item, font, ukuran, innerW);
+
+  // Kepepet: bahkan pada ukuran terkecil belum muat.
+  const maks = dayaTampung(ukuran);
+  if (isi.length > maks) isi = isi.slice(0, maks);
+  if (isi.some((t) => font.widthOfTextAtSize(t, ukuran) > innerW)) {
+    isi = isi.map((t) =>
+      font.widthOfTextAtSize(t, ukuran) > innerW ? fitText(t, font, ukuran, innerW) : t
+    );
   }
 
-  return out;
+  return isi.map((t) => ({
+    text: t,
+    size: ukuran,
+    font,
+    width: Math.min(font.widthOfTextAtSize(t, ukuran), innerW),
+  }));
 }
 
 export type LabelPlan = {
@@ -192,12 +190,14 @@ export function planLabels(items: LabelData[], font: PDFFont): LabelPlan[] {
     };
 
     // Tinggi yang tersisa untuk teks (di bawah logo, di atas garis kotak).
-    const lineAdvance = font.heightAtSize(g.fontSize);
     const tersisa = h - g.padY * 2 - g.logoH - g.logoGap;
-    const maxLines = Math.max(1, Math.floor(tersisa / lineAdvance));
 
     const innerW = w - g.padX * 2;
-    const lines = buildLines(item, font, innerW, maxLines);
+    const lines = buildLines(item, font, innerW, tersisa);
+
+    // Jarak antar baris mengikuti ukuran huruf kotak ini (kotak yang hurufnya
+    // dikecilkan juga jadi lebih rapat, tidak menyisakan celah menganga).
+    const lineAdvance = font.heightAtSize(lines[0]?.size ?? g.fontSize);
 
     let cursor = logo.y - g.logoGap;
     const placed = lines.map((l) => {
