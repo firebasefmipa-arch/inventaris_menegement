@@ -1288,7 +1288,8 @@ supaya "bisa dilabeli" tak ikut membatasi hapus massal:
     - **Sumber nomor sekarang:** tabel `kode_terpakai` (buku register). **TIDAK PERNAH dihapus barisnya.**
     - **SENGAJA TANPA foreign key** ke `items` — kalau dikasih FK, catatan nomor ikut terhapus bersama barangnya dan fiturnya batal. Ini beda dari `item_returns` yang pakai `ON DELETE CASCADE`.
     - Kapan dicatat: `generateItemCode()` mencatat **saat kode dibuat** (bukan saat barang tersimpan), jadi nomor yang gagal dipakai tetap terkunci. Impor massal → `catatKodeMassal()`.
-    - Bentuk kode: `FMIPA-<KODE LOKASI>-<TAHUN>-<URUT 3 digit>`; urut per (lokasi, tahun) — `FMIPA-TI-2026-001` dan `FMIPA-D-2026-001` berdampingan tanpa bentrok.
+    - Bentuk kode: `FMIPA-<KODE UNIT>-<TAHUN>-<URUT>`; urut per (unit, tahun) — `FMIPA-TI-2026-001` dan `FMIPA-KIM-2026-001` berdampingan tanpa bentrok.
+      - **Digit memanjang SENDIRI di atas 999** (`String(seq).padStart(3,"0")` → 1000 jadi `FMIPA-TI-2026-1000`). Kolomnya `varchar(255)`, dan `kode_terpakai.urut` bertipe angka — jadi urutan tertinggi tetap terbaca sebagai angka, bukan diurut sebagai huruf. **Diputuskan 2 Okt 2026: dibiarkan begini**, tidak diubah ke 4 digit. 999 bukan tembok, cuma angka kebetulan 3 digit.
     - Perintah perawatan (**super admin, dijalankan manual di server**):
       - `npm run kode:bebas daftar` — lihat semua nomor yang terkunci
       - `npm run kode:bebas cek` — periksa kesehatan register (kode ganda / nomor hidup belum tercatat)

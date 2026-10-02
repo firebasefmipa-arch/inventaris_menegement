@@ -2446,3 +2446,39 @@ tak punya kolom email penerima. Perlu ALTER dulu.
 
 **Catatan operasional.** Fitur ini baru berguna setelah ada yang LOGIN lagi:
 sebelum itu daftar saran masih kosong walau akunnya sudah lengkap datanya.
+
+## Audit #31 — Digit nomor barang di atas 999 (2 Okt 2026)
+
+**Pertanyaan pemilik produk.** "apakah jika jumlah daftar barang atau jumlah
+barang yang masuk lebih dari 999, digitnya otomatis ekspand"
+
+**Jawaban: YA, memanjang sendiri. Tidak ada yang perlu diubah.**
+
+Kuncinya satu baris di `src/lib/item-code.ts:50`:
+
+```ts
+String(seq).padStart(3, "0")
+```
+
+`padStart` hanya MENAMBAH nol di depan bila kurang dari 3 digit. Bila sudah 3
+digit atau lebih, angkanya dibiarkan utuh — tidak dipotong.
+
+```
+urut 1     -> FMIPA-TI-2026-001
+urut 999   -> FMIPA-TI-2026-999
+urut 1000  -> FMIPA-TI-2026-1000    <- memanjang sendiri
+urut 10000 -> FMIPA-TI-2026-10000
+```
+
+**Kenapa aman:**
+  - `items.item_code` bertipe `varchar(255)` — bukan angka 3 digit.
+  - `kode_terpakai.urut` bertipe `int`, jadi nomor tertinggi tetap dibaca
+    sebagai ANGKA (bukan diurut sebagai huruf oleh `MAX()`).
+  - `bacaKode()` memakai pola `(\d+)` — jumlah digit bebas.
+
+**Pemilik produk memutuskan: DIBIARKAN begini** — tidak diubah ke 4 digit.
+Sampai 5 digit, penomoran jadi tidak sama panjang (`...-999` di sebelah
+`...-1000`); itu cuma soal rapi dilihat, bukan kerusakan, dan baru terjadi
+setelah 1000 barang dalam satu unit dalam satu tahun (TI sekarang baru 228).
+
+Tidak ada kode yang disentuh pada audit ini.
